@@ -1,0 +1,55 @@
+#################################
+# Pipeline distribue : PC hote (source) -> Jetson (traitement) -> PC operateur (affichage)
+#################################
+#
+# Architecture complete :
+#
+#   PC hote (192.168.1.50)              Jetson Orin Nano (192.168.1.10)
+#   #########################           ##################################
+#   [Video source]                      [NetworkFrameReader]  <- port 9090
+#   tools/frame_sender.py ->  frames    pipeline MOT+SOT
+#                                       [MJPEGServer]  ->
+#                                                           port 8080
+#   [tools/mjpeg_receiver.py] <- frames annotees #####################
+#   [POST /click, /key]        <- clics + touches #####################
+#
+# Etapes de demarrage :
+#
+#   1. Sur le PC hote - envoyer la video vers la Jetson :
+#      python tools/frame_sender.py --input data/sequences/video.mp4 --fps 10
+#
+#   2. Sur la Jetson - lancer le pipeline avec ce scenario :
+#      python main.py --config config_examples/distributed_pc_jetson.yaml
+#
+#   3. Sur le PC operateur - affichage interactif :
+#      python tools/mjpeg_receiver.py --host 192.168.1.10 --port 8080
+#      OU navigateur : http://192.168.1.10:8080/
+#################################
+
+run_name: "distributed_pc_jetson"
+
+#####Sequence (entree reseau depuis PC hote) ###########
+# Le PC hote doit lancer tools/frame_sender.py AVANT ce pipeline.
+# Remplacer l'IP par celle du PC hote sur le reseau.
+sequence_dir:    "http://192.168.1.50:9090/stream"
+annotation_file: ""        # Pas de GT disponible depuis flux reseau
+camera_name:     ""        # Pas de metadonnees LDV depuis le reseau
+
+#####Pipeline #####################
+tracker_mot: "bytetrack"
+tracker_sot: "csrt"
+n_targets:   2
+
+mode: "interactive"   # Clics via POST /click (mjpeg_receiver -> click_handler.inject)
+
+#####Rendu #######################
+light_render:  true    # bboxes seules -> rapide sur Jetson
+show_gt:       false   # pas de GT en mode flux reseau
+
+#####Streaming sortie -> PC operateur ##############
+# Lancer : python tools/mjpeg_receiver.py --host 192.168.1.10 --port 8080
+stream_mode: "mjpeg"
+
+#####CMC / Reprojection #####################
+# Pas de LDV depuis flux reseau -> CMC via H image (ORB) uniquement
+homography_method_image: ""

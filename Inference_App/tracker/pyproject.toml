@@ -1,0 +1,86 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = [
+    "trackers/mot/bytetrack/",
+    "trackers/mot/botsort/",
+    "trackers/mot/boosttrack/",
+    "trackers/mot/custom_kalman/mot/",
+    "trackers/sot/dimp/",
+    "trackers/sot/ostrack/",
+    "trackers/sot/sam2/",
+    "optional_format_adapter/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = false
+exclude = [
+    "trackers/mot/bytetrack/",
+    "trackers/mot/botsort/",
+    "trackers/mot/boosttrack/",
+    "trackers/mot/custom_kalman/mot/",
+    "trackers/sot/dimp/",
+    "trackers/sot/ostrack/",
+    "trackers/sot/sam2/",
+    "optional_format_adapter/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["quality/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+data_file = "quality/.coverage"
+source = [
+    "pipeline",
+    "data",
+    "utils",
+    "trackers/sot/csrt",
+    "trackers/sot/tracking_tophat",
+]
+omit = [
+    "trackers/mot/bytetrack/*",
+    "trackers/mot/botsort/*",
+    "trackers/mot/boosttrack/*",
+    "trackers/mot/custom_kalman/mot/*",
+    "trackers/sot/dimp/*",
+    "trackers/sot/ostrack/*",
+    "trackers/sot/sam2/*",
+    "optional_format_adapter/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+skip_covered = false
+
+[tool.bandit]
+targets = ["pipeline", "data", "utils", "trackers/sot/csrt", "trackers/sot/tracking_tophat"]
+severity = "medium"
+confidence = "medium"
+exclude_dirs = [
+    "trackers/mot/bytetrack",
+    "trackers/mot/botsort",
+    "trackers/mot/boosttrack",
+    "trackers/mot/custom_kalman/mot",
+    "trackers/sot/dimp",
+    "trackers/sot/ostrack",
+    "trackers/sot/sam2",
+    "optional_format_adapter",
+    "tests",
+]

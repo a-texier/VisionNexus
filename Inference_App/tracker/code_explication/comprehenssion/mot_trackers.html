@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trackers - MOT &amp; SOT</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.15);
+    --text: #e8eaed;
+    --muted: #6b7280;
+    --byte: #22d3ee;
+    --bot: #a78bfa;
+    --boost: #f59e0b;
+    --good: #34d399;
+    --warn: #f87171;
+    --orange: #fb923c;
+    --sot-classic: #94a3b8;
+    --sot-cnn: #38bdf8;
+    --sot-found: #e879f9;
+    --pipe: #4ade80;
+    --pipe-dim: rgba(74,222,128,.12);
+    --pipe-border: rgba(74,222,128,.22);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  html { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; }
+  body { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  a { text-decoration: none; }
+
+  header { margin-bottom: 36px; }
+  .top-label { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+  h1 { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.2; margin-bottom: 8px; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  .subtitle { color: var(--muted); font-size: 13px; max-width: 560px; line-height: 1.6; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 36px; border-bottom: 1px solid var(--border-strong); }
+  .tab-btn { font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 10px 22px; cursor: pointer; border: none; background: none; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--text); }
+  .tab-btn.active.mot      { border-bottom-color: var(--byte);      color: var(--byte); }
+  .tab-btn.active.sot      { border-bottom-color: var(--sot-found); color: var(--sot-found); }
+  .tab-btn.active.pipeline { border-bottom-color: var(--pipe);      color: var(--pipe); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .pill { display: inline-block; font-size: 10px; font-family: var(--mono); padding: 2px 7px; border-radius: 3px; font-weight: 500; border: 1px solid; }
+  .pill-green { background: rgba(52,211,153,.12); color: var(--good); border-color: rgba(52,211,153,.2); }
+  .pill-blue  { background: rgba(34,211,238,.12); color: var(--byte); border-color: rgba(34,211,238,.2); }
+  .pill-gold  { background: rgba(245,158,11,.12);  color: var(--boost); border-color: rgba(245,158,11,.2); }
+
+  .src-link { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; border: 1px solid; transition: opacity .15s; }
+  .src-link:hover { opacity: .7; }
+  .src-link-gh    { color: var(--muted); border-color: var(--border-strong); background: rgba(255,255,255,.03); }
+  .src-link-paper { color: #60a5fa; border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.05); }
+  .src-links { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; }
+
+  .row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .row:last-child { border-bottom: none; }
+  .row-k { color: var(--muted); }
+  .row-v { font-family: var(--mono); font-size: 11px; color: var(--text); text-align: right; }
+  .row-v.good { color: var(--good); }
+  .row-v.warn { color: var(--orange); }
+  .row-v.bad  { color: var(--warn); }
+
+  /* MOT cards */
+  .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 40px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; position: relative; overflow: hidden; }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .card.byte::before  { background: var(--byte); }
+  .card.bot::before   { background: var(--bot); }
+  .card.boost::before { background: var(--boost); }
+  .card.boost { border-color: rgba(245,158,11,.22); }
+  .card-name { font-family: var(--mono); font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  .card.byte .card-name  { color: var(--byte); }
+  .card.bot .card-name   { color: var(--bot); }
+  .card.boost .card-name { color: var(--boost); }
+  .card-year { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  .bench-wrap { margin-bottom: 36px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 500; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-strong); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .t-byte  { color: var(--byte); }
+  .t-bot   { color: var(--bot); }
+  .t-boost { color: var(--boost); }
+  .t-best  { font-weight: 600; }
+  td.num { text-align: right; }
+  .mini-bar { height: 4px; border-radius: 2px; margin-top: 4px; opacity: .65; }
+
+  .tech-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 36px; }
+  .tech-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .tech-title { font-family: var(--mono); font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+  .tech-card.byte  .tech-title { color: var(--byte); }
+  .tech-card.bot   .tech-title { color: var(--bot); }
+  .tech-card.boost .tech-title { color: var(--boost); }
+  .tech-item { font-size: 12px; color: var(--muted); padding: 4px 0; display: flex; gap: 8px; line-height: 1.5; }
+  .tech-item::before { content: '->'; color: var(--border-strong); flex-shrink: 0; }
+  .tech-item b { color: var(--text); font-weight: 500; }
+
+  .cost-block { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 36px; }
+  .cost-row { display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .cost-row:last-child { border-bottom: none; }
+  .cost-name { font-family: var(--mono); font-size: 12px; width: 148px; flex-shrink: 0; }
+  .cost-bar-bg { flex: 1; height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; }
+  .cost-bar-fill { height: 100%; border-radius: 3px; }
+  .cost-label { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 84px; text-align: right; }
+
+  .usage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 40px; }
+  .usage-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .usage-title { font-family: var(--mono); font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+  .usage-card.byte  .usage-title { color: var(--byte); }
+  .usage-card.bot   .usage-title { color: var(--bot); }
+  .usage-card.boost .usage-title { color: var(--boost); }
+  .usage-tag { display: inline-block; font-size: 10px; font-family: var(--mono); padding: 2px 6px; border-radius: 3px; margin: 2px; background: rgba(255,255,255,.04); border: 1px solid var(--border); color: var(--muted); }
+
+  /* SOT */
+  .sot-banner { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; display: flex; gap: 20px; align-items: flex-start; }
+  .sot-banner-icon { font-size: 26px; flex-shrink: 0; margin-top: 2px; }
+  .sot-banner-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--sot-found); margin-bottom: 6px; }
+  .sot-banner-text { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .sot-banner-text b { color: var(--text); font-weight: 500; }
+
+  .sot-family { margin-bottom: 40px; }
+  .family-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .family-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-classic { background: var(--sot-classic); }
+  .dot-cnn     { background: var(--sot-cnn); }
+  .dot-found   { background: var(--sot-found); }
+  .family-name { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .family-name.classic { color: var(--sot-classic); }
+  .family-name.cnn     { color: var(--sot-cnn); }
+  .family-name.found   { color: var(--sot-found); }
+  .family-desc { font-size: 12px; color: var(--muted); flex: 1; }
+
+  .sot-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .sot-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; position: relative; overflow: hidden; }
+  .sot-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .sot-card.classic::before { background: var(--sot-classic); }
+  .sot-card.cnn::before     { background: var(--sot-cnn); }
+  .sot-card.found::before   { background: var(--sot-found); }
+  .sot-card.featured { border-color: rgba(232,121,249,.28); }
+  .sot-name { font-family: var(--mono); font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .sot-card.classic .sot-name { color: var(--sot-classic); }
+  .sot-card.cnn     .sot-name { color: var(--sot-cnn); }
+  .sot-card.found   .sot-name { color: var(--sot-found); }
+  .sot-year { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .sot-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+  .sot-desc b { color: var(--text); font-weight: 500; }
+
+  .t-classic { color: var(--sot-classic); }
+  .t-cnn     { color: var(--sot-cnn); }
+  .t-found   { color: var(--sot-found); }
+
+  .bridge { background: var(--surface); border: 1px solid rgba(232,121,249,.2); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; }
+  .bridge-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--sot-found); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px; }
+  .bridge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .bridge-col-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .bridge-item { font-size: 12px; color: var(--muted); padding: 3px 0; display: flex; gap: 6px; line-height: 1.5; }
+  .bridge-item::before { content: '·'; flex-shrink: 0; }
+  .bridge-item b { color: var(--text); font-weight: 500; }
+
+  /* Pipeline tab */
+  .pipe-banner { background: var(--pipe-dim); border: 1px solid var(--pipe-border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; display: flex; gap: 20px; align-items: flex-start; }
+  .pipe-banner-icon { font-size: 26px; flex-shrink: 0; margin-top: 2px; color: var(--pipe); }
+  .pipe-banner-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--pipe); margin-bottom: 6px; }
+  .pipe-banner-text { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .pipe-banner-text b { color: var(--text); font-weight: 500; }
+
+  .flow-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; overflow-x: auto; }
+  .flow-pre { font-family: var(--mono); font-size: 12px; color: var(--muted); line-height: 1.8; white-space: pre; margin: 0; }
+  .flow-pre .hl-green  { color: var(--pipe); }
+  .flow-pre .hl-cyan   { color: var(--byte); }
+  .flow-pre .hl-purple { color: var(--bot); }
+  .flow-pre .hl-pink   { color: var(--sot-found); }
+  .flow-pre .hl-amber  { color: var(--boost); }
+  .flow-pre .hl-text   { color: var(--text); }
+
+  .sm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 36px; }
+  .sm-state { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .sm-state.mot { border-color: rgba(34,211,238,.2); }
+  .sm-state.sot { border-color: rgba(232,121,249,.2); }
+  .sm-label { font-family: var(--mono); font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .sm-state.mot .sm-label { color: var(--byte); }
+  .sm-state.sot .sm-label { color: var(--sot-found); }
+  .sm-item { font-size: 12px; color: var(--muted); padding: 3px 0; display: flex; gap: 8px; line-height: 1.6; }
+  .sm-item::before { content: '-'; flex-shrink: 0; color: var(--border-strong); }
+  .sm-item b { color: var(--text); font-weight: 500; }
+
+  .sm-transition { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 36px; }
+  .sm-transition-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--pipe); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px; }
+  .sm-trans-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .sm-trans-row:last-child { border-bottom: none; }
+  .sm-trans-from { font-family: var(--mono); font-size: 11px; width: 90px; flex-shrink: 0; }
+  .sm-trans-arrow { color: var(--border-strong); flex-shrink: 0; }
+  .sm-trans-to { font-family: var(--mono); font-size: 11px; width: 90px; flex-shrink: 0; }
+  .sm-trans-cond { color: var(--muted); font-size: 11px; flex: 1; }
+  .sm-trans-cond b { color: var(--text); }
+
+  .combo-wrap { margin-bottom: 36px; overflow-x: auto; }
+
+  .cmd-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; }
+  .cmd-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--pipe); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px; }
+  .cmd-format { font-family: var(--mono); font-size: 12px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 12px; color: var(--text); }
+  .cmd-comment { color: var(--muted); }
+  .cmd-row { display: flex; gap: 10px; padding: 4px 0; font-size: 12px; font-family: var(--mono); }
+  .cmd-field { color: var(--byte); width: 120px; flex-shrink: 0; }
+  .cmd-desc  { color: var(--muted); }
+
+  .reid-wrap { margin-bottom: 36px; overflow-x: auto; }
+
+  footer { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 28px; border-top: 1px solid var(--border); }
+  .footer-sources { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 10px; }
+  .footer-src { display: flex; align-items: center; gap: 5px; }
+  .footer-src a { color: var(--muted); border-bottom: 1px solid var(--border-strong); padding-bottom: 1px; transition: color .15s; }
+  .footer-src a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="top-label">Computer Vision · Tracking Survey</p>
+  <h1>Trackers vidéo <span>/ MOT &amp; SOT - 2010–2024</span></h1>
+  <p class="subtitle">Comparaison technique des approches multi-objets (MOT) et suivi mono-cible par clic (SOT) - architecture, coût, performances et cas d'usage.</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active mot" onclick="switchTab('mot',this)">&#x2B21; MOT &mdash; Multi-Object</button>
+  <button class="tab-btn sot" onclick="switchTab('sot',this)">&#9678; SOT &mdash; Clic &amp; Track</button>
+  <button class="tab-btn pipeline" onclick="switchTab('pipeline',this)">&#9651; Pipeline VisionNexus</button>
+</div>
+
+<!-- ## TAB MOT ## -->
+<div id="tab-mot" class="tab-panel active">
+
+  <p class="section-label">Vue d'ensemble</p>
+  <div class="cards3">
+
+    <div class="card byte">
+      <div class="card-name">ByteTrack</div>
+      <div class="card-year">ECCV 2022 · ifzhang</div>
+      <div class="src-links">
+        <a class="src-link src-link-gh" href="https://github.com/ifzhang/ByteTrack" target="_blank">⬡ GitHub</a>
+        <a class="src-link src-link-paper" href="https://arxiv.org/abs/2110.06864" target="_blank">↗ arXiv</a>
+      </div>
+      <span class="pill pill-green">Le plus rapide</span>
+      <div class="row"><span class="row-k">Filtre de Kalman</span><span class="row-v">Standard (IoU)</span></div>
+      <div class="row"><span class="row-k">ReID apparence</span><span class="row-v bad">Non</span></div>
+      <div class="row"><span class="row-k">Comp. caméra</span><span class="row-v bad">Non</span></div>
+      <div class="row"><span class="row-k">Association</span><span class="row-v">2 passes IoU</span></div>
+      <div class="row"><span class="row-k">Vitesse (V100)</span><span class="row-v good">~30 FPS</span></div>
+      <div class="row"><span class="row-k">Complexité</span><span class="row-v good">Faible</span></div>
+    </div>
+
+    <div class="card bot">
+      <div class="card-name">BOT-SORT</div>
+      <div class="card-year">arXiv Jun 2022 · NirAharon</div>
+      <div class="src-links">
+        <a class="src-link src-link-gh" href="https://github.com/NirAharon/BoT-SORT" target="_blank">⬡ GitHub</a>
+        <a class="src-link src-link-paper" href="https://arxiv.org/abs/2206.14651" target="_blank">↗ arXiv</a>
+      </div>
+      <span class="pill pill-blue">Caméra mobile</span>
+      <div class="row"><span class="row-k">Filtre de Kalman</span><span class="row-v warn">Amélioré (w,h)</span></div>
+      <div class="row"><span class="row-k">ReID apparence</span><span class="row-v warn">Optionnel (FastReID)</span></div>
+      <div class="row"><span class="row-k">Comp. caméra</span><span class="row-v good">Oui (GMC)</span></div>
+      <div class="row"><span class="row-k">Association</span><span class="row-v">IoU + cosine ReID</span></div>
+      <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~15–20 FPS</span></div>
+      <div class="row"><span class="row-k">Complexité</span><span class="row-v warn">Moyenne–Haute</span></div>
+    </div>
+
+    <div class="card boost">
+      <div class="card-name">BoostTrack++</div>
+      <div class="card-year">MVA 2024 / Filomat 2025</div>
+      <div class="src-links">
+        <a class="src-link src-link-gh" href="https://github.com/vukasin-stanojevic/BoostTrack" target="_blank">⬡ GitHub</a>
+        <a class="src-link src-link-paper" href="https://arxiv.org/abs/2408.13003" target="_blank">↗ arXiv</a>
+        <a class="src-link src-link-paper" href="https://doi.org/10.1007/s00138-024-01531-5" target="_blank">↗ DOI</a>
+      </div>
+      <span class="pill pill-gold">SOTA MOT17 &amp; MOT20</span>
+      <div class="row"><span class="row-k">Filtre de Kalman</span><span class="row-v warn">+ Mahalanobis</span></div>
+      <div class="row"><span class="row-k">ReID apparence</span><span class="row-v warn">Optionnel</span></div>
+      <div class="row"><span class="row-k">Comp. caméra</span><span class="row-v good">Oui</span></div>
+      <div class="row"><span class="row-k">Association</span><span class="row-v">IoU+Mahal.+Forme+Conf.</span></div>
+      <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~20–25 FPS</span></div>
+      <div class="row"><span class="row-k">Complexité</span><span class="row-v warn">Moyenne–Haute</span></div>
+    </div>
+
+  </div>
+
+  <p class="section-label">Performances - MOT17 test set</p>
+  <div class="bench-wrap">
+    <table>
+      <thead><tr><th>Tracker</th><th>HOTA ↑</th><th style="width:90px"></th><th>MOTA ↑</th><th>IDF1 ↑</th><th style="width:90px"></th><th>IDSW ↓</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="t-byte">ByteTrack</td><td class="num t-byte">63.1</td>
+          <td><div class="mini-bar" style="width:71%;background:var(--byte)"></div></td>
+          <td class="num">80.3</td><td class="num t-byte">77.3</td>
+          <td><div class="mini-bar" style="width:86%;background:var(--byte)"></div></td>
+          <td class="num">~2196</td>
+        </tr>
+        <tr>
+          <td class="t-bot">BOT-SORT</td><td class="num t-bot">65.0</td>
+          <td><div class="mini-bar" style="width:73%;background:var(--bot)"></div></td>
+          <td class="num">80.5</td><td class="num t-bot">80.2</td>
+          <td><div class="mini-bar" style="width:89%;background:var(--bot)"></div></td>
+          <td class="num">~1212</td>
+        </tr>
+        <tr>
+          <td class="t-boost">BoostTrack++</td><td class="num t-boost t-best">66.6</td>
+          <td><div class="mini-bar" style="width:75%;background:var(--boost)"></div></td>
+          <td class="num t-best">80.7</td><td class="num t-boost t-best">82.2</td>
+          <td><div class="mini-bar" style="width:91%;background:var(--boost)"></div></td>
+          <td class="num t-best">1 062</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="section-label">Performances - MOT20 test set</p>
+  <div class="bench-wrap">
+    <table>
+      <thead><tr><th>Tracker</th><th>HOTA ↑</th><th style="width:90px"></th><th>MOTA ↑</th><th>IDF1 ↑</th><th>IDSW ↓</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="t-byte">ByteTrack</td><td class="num t-byte">61.3</td>
+          <td><div class="mini-bar" style="width:69%;background:var(--byte)"></div></td>
+          <td class="num">77.8</td><td class="num t-byte">75.2</td><td class="num">~2284</td>
+        </tr>
+        <tr>
+          <td class="t-bot">BOT-SORT</td><td class="num t-bot">63.3</td>
+          <td><div class="mini-bar" style="width:71%;background:var(--bot)"></div></td>
+          <td class="num">77.8</td><td class="num t-bot">77.5</td><td class="num">~1313</td>
+        </tr>
+        <tr>
+          <td class="t-boost">BoostTrack++</td><td class="num t-boost t-best">66.4</td>
+          <td><div class="mini-bar" style="width:74%;background:var(--boost)"></div></td>
+          <td class="num t-best">77.7</td><td class="num t-boost t-best">82.0</td><td class="num t-best">762</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="section-label">Innovations techniques clés</p>
+  <div class="tech-grid">
+    <div class="tech-card byte">
+      <div class="tech-title">// ByteTrack</div>
+      <div class="tech-item"><b>BYTE</b> - associer toutes les boîtes, même faible confiance</div>
+      <div class="tech-item"><b>2 passes</b> - haute conf. d'abord, puis basses vs tracklets perdus</div>
+      <div class="tech-item"><b>Kalman standard</b> - état = (x, y, a, h) + vélocités</div>
+      <div class="tech-item"><b>Pas de ReID</b> - IoU seul pour l'association</div>
+      <div class="tech-item"><b>Post-proc.</b> - interpolation linéaire des tracklets manquants</div>
+    </div>
+    <div class="tech-card bot">
+      <div class="tech-title">// BOT-SORT</div>
+      <div class="tech-item"><b>Kalman modifié</b> - état = (x, y, w, h) au lieu du ratio d'aspect</div>
+      <div class="tech-item"><b>GMC</b> - compensation globale mouvement caméra (ECC/ORB)</div>
+      <div class="tech-item"><b>Fusion IoU+ReID</b> - min(dist_IoU, dist_cosine) comme coût</div>
+      <div class="tech-item"><b>Rejet cosine</b> - seuil sur la similarité d'apparence</div>
+      <div class="tech-item"><b>FastReID</b> - réseau léger d'embeddings (optionnel)</div>
+    </div>
+    <div class="tech-card boost">
+      <div class="tech-title">// BoostTrack++</div>
+      <div class="tech-item"><b>Score conf. DT</b> - pondère la similarité détection-tracklet</div>
+      <div class="tech-item"><b>Mahalanobis</b> - lève les ambiguïtés que l'IoU ne résout pas</div>
+      <div class="tech-item"><b>Similarité de forme</b> - pénalise les changements de ratio w/h</div>
+      <div class="tech-item"><b>Boost confiance</b> - rehausse les détections faibles pertinentes</div>
+      <div class="tech-item"><b>Association 1 passe</b> - toutes les mesures fusionnées</div>
+    </div>
+  </div>
+
+  <p class="section-label">Coût calculatoire (tracker seul, hors détecteur)</p>
+  <div class="cost-block">
+    <div class="cost-row">
+      <div class="cost-name t-byte">ByteTrack</div>
+      <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:18%;background:var(--byte)"></div></div>
+      <div class="cost-label">Très faible</div>
+    </div>
+    <div class="cost-row">
+      <div class="cost-name t-bot">BOT-SORT</div>
+      <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:42%;background:var(--bot)"></div></div>
+      <div class="cost-label">Moyen</div>
+    </div>
+    <div class="cost-row">
+      <div class="cost-name t-bot">BOT-SORT + ReID</div>
+      <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:68%;background:var(--bot);opacity:.7"></div></div>
+      <div class="cost-label">Élevé</div>
+    </div>
+    <div class="cost-row">
+      <div class="cost-name t-boost">BoostTrack</div>
+      <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:30%;background:var(--boost)"></div></div>
+      <div class="cost-label">Faible–Moyen</div>
+    </div>
+    <div class="cost-row">
+      <div class="cost-name t-boost">BoostTrack++ ReID</div>
+      <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:72%;background:var(--boost);opacity:.7"></div></div>
+      <div class="cost-label">Élevé</div>
+    </div>
+    <p style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:14px;">Note : le coût dominant reste le détecteur (YOLOX-X). Le module CMC ajoute ~5–10 ms/frame. Le réseau ReID double grossièrement le coût tracker.</p>
+  </div>
+
+  <p class="section-label">Quand utiliser lequel ?</p>
+  <div class="usage-grid">
+    <div class="usage-card byte">
+      <div class="usage-title">-> Choisir ByteTrack</div>
+      <span class="usage-tag">Temps réel strict</span><span class="usage-tag">Caméra fixe</span>
+      <span class="usage-tag">Edge / embarqué</span><span class="usage-tag">Pipeline YOLO</span>
+      <span class="usage-tag">Prototype rapide</span><span class="usage-tag">Pas de GPU fort</span>
+    </div>
+    <div class="usage-card bot">
+      <div class="usage-title">-> Choisir BOT-SORT</div>
+      <span class="usage-tag">Caméra mobile</span><span class="usage-tag">Drone / véhicule</span>
+      <span class="usage-tag">ReID nécessaire</span><span class="usage-tag">Scènes piétonnes</span>
+      <span class="usage-tag">GPU disponible</span>
+    </div>
+    <div class="usage-card boost">
+      <div class="usage-title">-> Choisir BoostTrack++</div>
+      <span class="usage-tag">Précision maximale</span><span class="usage-tag">Benchmark académique</span>
+      <span class="usage-tag">Scènes denses</span><span class="usage-tag">Peu d'ID switches</span>
+      <span class="usage-tag">GPU haut de gamme</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ## TAB SOT ## -->
+<div id="tab-sot" class="tab-panel">
+
+  <div class="sot-banner">
+    <div class="sot-banner-icon">◎</div>
+    <div>
+      <div class="sot-banner-title">Single Object Tracking - initialisation par clic</div>
+      <div class="sot-banner-text">
+        L'utilisateur <b>clique une fois</b> sur la cible (ou dessine une bbox) pour initialiser le tracker - pas de détecteur externe nécessaire.
+        Le tracker apprend l'apparence de la cible à partir de ce seul exemple et la suit frame par frame.
+        Cas typiques : <b>suivre P0 dans un pipeline MOT hybride</b>, annotateur vidéo, suivi d'acteur, drone FPV.
+        Trois familles coexistent : trackers classiques sans IA, réseaux siamois CNN, et modèles de fondation récents basés transformers.
+      </div>
+    </div>
+  </div>
+
+  <!-- Famille 1 : Classique -->
+  <div class="sot-family">
+    <div class="family-header">
+      <div class="family-dot dot-classic"></div>
+      <div class="family-name classic">Classique - sans apprentissage profond</div>
+      <div class="family-desc">Filtres de corrélation, sans GPU, ultra-légers. Idéal embarqué / temps réel contraint.</div>
+    </div>
+    <div class="sot-cards">
+      <div class="sot-card classic">
+        <div class="sot-name">MOSSE</div>
+        <div class="sot-year">CVPR 2010 · Bolme et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-paper" href="https://www.cs.colostate.edu/~draper/papers/bolme_cvpr10.pdf" target="_blank">↗ PDF</a>
+        </div>
+        <div class="sot-desc"><b>Filtre de corrélation</b> dans le domaine fréquentiel (FFT). Apprend un filtre adaptatif sur le patch initial. Pas de GPU, pas de deep learning.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v good">~700 FPS (CPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v bad">Faible</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v">Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v good">Non</span></div>
+      </div>
+      <div class="sot-card classic">
+        <div class="sot-name">KCF / CSRT</div>
+        <div class="sot-year">OpenCV built-in · 2014–2017</div>
+        <div class="src-links">
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/1404.7584" target="_blank">↗ KCF arXiv</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/1611.08461" target="_blank">↗ CSRT arXiv</a>
+        </div>
+        <div class="sot-desc"><b>KCF</b> (kernelisé) - rapide et précis sur objets rigides. <b>CSRT</b> (channel + spatial reliability) - plus robuste aux déformations, légèrement plus lent.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v good">60–200 FPS (CPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v warn">Moyenne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v">Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v good">Non</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Famille 2 : CNN -->
+  <div class="sot-family">
+    <div class="family-header">
+      <div class="family-dot dot-cnn"></div>
+      <div class="family-name cnn">CNN - réseaux siamois discriminatifs</div>
+      <div class="family-desc">Apprend une similarité template/search. Robuste, temps réel GPU. Standard du domaine 2016–2022.</div>
+    </div>
+    <div class="sot-cards">
+      <div class="sot-card cnn">
+        <div class="sot-name">SiamFC / SiamRPN++</div>
+        <div class="sot-year">ECCV 2016 / CVPR 2019 · Bertinetto, Li et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/STVIR/pysot" target="_blank">⬡ pysot</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/1606.09549" target="_blank">↗ SiamFC</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/1812.11703" target="_blank">↗ SiamRPN++</a>
+        </div>
+        <div class="sot-desc">Réseau siamois : une branche traite le <b>template</b> (patch du clic), l'autre la <b>search region</b>. Cross-corrélation donne la carte de similarité. SiamRPN++ ajoute la régression multi-échelle.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v good">~35–160 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v warn">Moyenne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v">Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui</span></div>
+      </div>
+      <div class="sot-card cnn">
+        <div class="sot-name">DiMP / PrDiMP</div>
+        <div class="sot-year">ICCV 2019 / CVPR 2020 · Bhat et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/visionml/pytracking" target="_blank">⬡ pytracking</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/1904.07220" target="_blank">↗ DiMP arXiv</a>
+        </div>
+        <div class="sot-desc">Optimise en ligne un <b>filtre discriminatif</b> via meta-learning (quelques itérations de gradient par frame). PrDiMP ajoute une distribution probabiliste sur la réponse pour robustesse aux distracteurs.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~40 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v good">Bonne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v">Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Famille 3 : Fondation -->
+  <div class="sot-family">
+    <div class="family-header">
+      <div class="family-dot dot-found"></div>
+      <div class="family-name found">Fondation - transformers &amp; segmentation</div>
+      <div class="family-desc">Modèles pré-entraînés massifs. Renvoient des masques, gèrent les longues occlusions, zéro-shot.</div>
+    </div>
+    <div class="sot-cards">
+      <div class="sot-card found">
+        <div class="sot-name">OSTrack / MixFormer</div>
+        <div class="sot-year">ECCV 2022 · Ye et al. / Cui et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/botaoye/OSTrack" target="_blank">⬡ OSTrack</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/2203.11082" target="_blank">↗ arXiv</a>
+        </div>
+        <div class="sot-desc">Transformer <b>one-stream</b> : template et search region traités ensemble via self-attention - pas de cross-corrélation séparée. Meilleure interaction contexte/cible. SOTA sur TrackingNet &amp; LaSOT.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~105 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v good">Bonne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v">Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui</span></div>
+      </div>
+      <div class="sot-card found featured">
+        <div class="sot-name">SAM 2</div>
+        <div class="sot-year">Meta AI 2024 · Ravi et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/facebookresearch/sam2" target="_blank">⬡ GitHub</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/2408.00714" target="_blank">↗ arXiv</a>
+        </div>
+        <div class="sot-desc"><b>Segment Anything 2</b> - clic -> <b>masque</b> + propagation temporelle via mémoire de frames clés. Gère les réapparitions après occlusion. Renvoie un masque précis au pixel, pas juste une bbox.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~30–45 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v good">Très bonne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v good">Masque + Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui 8 GB+</span></div>
+      </div>
+      <div class="sot-card found">
+        <div class="sot-name">Cutie / XMem</div>
+        <div class="sot-year">NeurIPS 2023 / ECCV 2022 · Cheng et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/hkchengrex/Cutie" target="_blank">⬡ Cutie</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/2310.05705" target="_blank">↗ arXiv</a>
+        </div>
+        <div class="sot-desc">VOS avec <b>mémoire longue terme</b>. Cutie améliore XMem avec un mécanisme d'attention objet-query. Très robuste aux longues séquences et multi-objets. Init par masque ou bbox.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v warn">~20–40 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v good">Excellente</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v good">Masque + Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui</span></div>
+      </div>
+      <div class="sot-card found">
+        <div class="sot-name">DEVA / Grounded-SAM 2</div>
+        <div class="sot-year">ICCV 2023 / 2024 · Cheng, Ren et al.</div>
+        <div class="src-links">
+          <a class="src-link src-link-gh" href="https://github.com/hkchengrex/DEVA" target="_blank">⬡ DEVA</a>
+          <a class="src-link src-link-paper" href="https://arxiv.org/abs/2309.03903" target="_blank">↗ arXiv</a>
+        </div>
+        <div class="sot-desc">Pont <b>SOT->MOT</b> : combine un détecteur open-vocab (DINO/Grounding) + SAM 2 pour tracker n'importe quel objet décrit par texte ou clic, avec propagation masque.</div>
+        <div class="row"><span class="row-k">Vitesse</span><span class="row-v bad">~15–25 FPS (GPU)</span></div>
+        <div class="row"><span class="row-k">Robustesse occlusion</span><span class="row-v good">Très bonne</span></div>
+        <div class="row"><span class="row-k">Sortie</span><span class="row-v good">Masque + Bbox</span></div>
+        <div class="row"><span class="row-k">GPU requis</span><span class="row-v warn">Oui 12 GB+</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tableau synthétique -->
+  <p class="section-label">Comparaison synthétique - SOT</p>
+  <div class="bench-wrap" style="margin-bottom:36px">
+    <table>
+      <thead><tr><th>Tracker</th><th>Famille</th><th>Vitesse</th><th>Sortie</th><th>GPU</th><th>Occlusion</th><th>Init.</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="t-classic">MOSSE</td><td style="color:var(--muted);font-size:11px">Classique</td>
+          <td class="num t-classic t-best">700 FPS</td><td>Bbox</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Faible</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Bbox</td>
+        </tr>
+        <tr>
+          <td class="t-classic">KCF / CSRT</td><td style="color:var(--muted);font-size:11px">Classique</td>
+          <td class="num t-classic">60–200 FPS</td><td>Bbox</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Moyenne</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Bbox</td>
+        </tr>
+        <tr>
+          <td class="t-cnn">SiamRPN++</td><td style="color:var(--muted);font-size:11px">CNN</td>
+          <td class="num t-cnn">~35 FPS</td><td>Bbox</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Moyenne</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Bbox</td>
+        </tr>
+        <tr>
+          <td class="t-cnn">DiMP</td><td style="color:var(--muted);font-size:11px">CNN</td>
+          <td class="num t-cnn">~40 FPS</td><td>Bbox</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Bonne</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Bbox</td>
+        </tr>
+        <tr>
+          <td class="t-found">OSTrack</td><td style="color:var(--muted);font-size:11px">Transformer</td>
+          <td class="num t-found">~105 FPS</td><td>Bbox</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Bonne</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Bbox</td>
+        </tr>
+        <tr>
+          <td class="t-found t-best">SAM 2</td><td style="color:var(--muted);font-size:11px">Fondation</td>
+          <td class="num t-found">~35 FPS</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Masque+Bbox</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui 8 GB+</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Très bonne</td>
+          <td style="font-family:var(--mono);font-size:11px">Clic/Point</td>
+        </tr>
+        <tr>
+          <td class="t-found">Cutie</td><td style="color:var(--muted);font-size:11px">Fondation</td>
+          <td class="num t-found">~30 FPS</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Masque+Bbox</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Excellente</td>
+          <td style="font-family:var(--mono);font-size:11px">Masque init</td>
+        </tr>
+        <tr>
+          <td class="t-found">DEVA</td><td style="color:var(--muted);font-size:11px">SOT->MOT</td>
+          <td class="num t-found">~20 FPS</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Masque+Bbox</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Oui 12 GB+</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Très bonne</td>
+          <td style="font-family:var(--mono);font-size:11px">Texte/Clic</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Bridge SOT/MOT -->
+  <div class="bridge">
+    <div class="bridge-title">↔ Pont SOT / MOT - Pipeline hybride (P0 + multi-objets)</div>
+    <div class="bridge-grid">
+      <div class="bridge-col">
+        <div class="bridge-col-title">Mode pur SOT</div>
+        <div class="bridge-item">Clic sur P0 -> <b>tracker SOT</b> suit la cible unique</div>
+        <div class="bridge-item">Les autres objets <b>ignorés</b></div>
+        <div class="bridge-item">Idéal : CSRT (CPU) ou SAM 2 (GPU, masque)</div>
+        <div class="bridge-item">Pas de détecteur, init one-shot</div>
+      </div>
+      <div class="bridge-col">
+        <div class="bridge-col-title">Mode SOT + MOT hybride</div>
+        <div class="bridge-item">Clic -> <b>SOT initialise</b> l'ID de la cible prioritaire P0</div>
+        <div class="bridge-item">MOT tourne en parallèle pour les autres</div>
+        <div class="bridge-item">La cible est réidentifiée via ReID si perdue</div>
+        <div class="bridge-item">Ex : ByteTrack + SAM 2 pour P0</div>
+      </div>
+      <div class="bridge-col">
+        <div class="bridge-col-title">Mode fondation zéro-shot</div>
+        <div class="bridge-item">Clic ou <b>texte</b> -> Grounded-SAM 2 / DEVA</div>
+        <div class="bridge-item">Suit tous les objets de la classe décrite</div>
+        <div class="bridge-item">Pas de fine-tuning, pas de dataset custom</div>
+        <div class="bridge-item">Coût élevé : 12 GB GPU minimum</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- #### TAB PIPELINE #### -->
+<div id="tab-pipeline" class="tab-panel">
+
+  <div class="pipe-banner">
+    <div class="pipe-banner-icon">&#9651;</div>
+    <div>
+      <div class="pipe-banner-title">VisionNexus Pipeline &mdash; Architecture et flux</div>
+      <div class="pipe-banner-text">
+        Orchestration frame-par-frame : loader optional_format/PNG &rarr; detecteur YOLO &rarr; compensation ego-motion
+        &rarr; state machine MOT/SOT &rarr; visualiseur. Un fichier <b>cmd_send.txt</b> pilote les
+        transitions (mode <b>command</b>), ou la souris en mode <b>interactive</b>.
+        Le mode <b>headless</b> produit video et metriques sans interface.
+      </div>
+    </div>
+  </div>
+
+  <!-- Flux de donnees -->
+  <p class="section-label">Flux de donnees (boucle principale)</p>
+  <div class="flow-wrap">
+    <pre class="flow-pre"><span class="hl-text">SequenceLoader</span>         optional_format (MultiCsv) | ImageFolder (PNG/JPG)
+      |  frame brute (IR uint16 normalise en BGR uint8)
+      v
+<span class="hl-cyan">YOLODetector</span>           weights/last.pt  ->  raw_dets[]  [x1,y1,x2,y2,score]
+      |
+      |  <span class="hl-amber">EgoMotionCompensator</span>   H_ldv (LDV inertiels) | H_image (ORB/ECC fallback)
+      v
+comp_dets[]                     detections compensees ego-motion
+      |
+      +--- <span class="hl-text">CommandParser</span>     cmd_send.txt   (mode command)
+      |         |                   3 champs  ->  MotControlCommand  ->  set_mot_active()
+      |         |                   4 champs  ->  ClickCommand       ->  trigger_sot()
+      +--- <span class="hl-text">ClickHandler</span>      clic souris    (mode interactive)
+      |
+      v
+<span class="hl-green">TrackerStateMachine</span>
+  [STATE_MOT]  <span class="hl-cyan">mot_tracker.update</span>(frame, comp_dets)   ->  mot_tracks[]
+  [STATE_SOT]  <span class="hl-pink">active_sot.update</span>(frame, mot_tracks)   ->  sot_track (ID=0)
+      |
+      v
+<span class="hl-text">Visualizer.render</span>()    video MP4  |  frames PNG  |  display cv2</pre>
+  </div>
+
+  <!-- State Machine -->
+  <p class="section-label">State Machine MOT &harr; SOT</p>
+  <div class="sm-grid">
+    <div class="sm-state mot">
+      <div class="sm-label">// STATE_MOT (defaut)</div>
+      <div class="sm-item"><b>Sortie</b> : toutes les tracks MOT</div>
+      <div class="sm-item"><b>Detection</b> : YOLO + tracker MOT (ByteTrack / BoT-SORT / ...)</div>
+      <div class="sm-item"><b>Transition</b> : clic valide -> STATE_SOT</div>
+      <div class="sm-item"><b>Seuil clic</b> : <code>sot_click_max_dist_px</code> (px) entre clic et track la plus proche</div>
+      <div class="sm-item"><b>Clic rejete</b> si aucune track dans le rayon (log WARNING)</div>
+      <div class="sm-item"><b>MOT off</b> : commande <code>mot_state=0</code> vide les tracks, clic -> SOT Single</div>
+    </div>
+    <div class="sm-state sot">
+      <div class="sm-label">// STATE_SOT</div>
+      <div class="sm-item"><b>Sortie</b> : [sot_track ID=0] + mot_tracks si <code>mot_background=true</code></div>
+      <div class="sm-item"><b>DummySot</b> : force MOT en fond ET masque toutes les autres tracks</div>
+      <div class="sm-item"><b>Couleur SOT</b> : magenta <code>(255, 60, 220)</code> BGR</div>
+      <div class="sm-item"><b>Echec</b> : <code>sot_loss_threshold</code> frames consecutives -> STATE_MOT</div>
+      <div class="sm-item"><b>Derniere bbox</b> affichee pendant les frames de grace (miss)</div>
+      <div class="sm-item"><b>SOT Single</b> : <code>tracker_sot_single</code> si MOT desactive (ex. SAM2 point-only)</div>
+    </div>
+  </div>
+
+  <div class="sm-transition">
+    <div class="sm-transition-title">Transitions d&apos;etat</div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--byte)">STATE_MOT</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--sot-found)">STATE_SOT</div>
+      <div class="sm-trans-cond">Clic valide + track dans rayon <b>sot_click_max_dist_px</b> (ou MOT off).
+        <code>_activate_sot()</code> choisit <b>tracker_sot</b> (MOT actif) ou <b>tracker_sot_single</b> (MOT off).</div>
+    </div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--sot-found)">STATE_SOT</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--byte)">STATE_MOT</div>
+      <div class="sm-trans-cond"><b>sot_loss_threshold</b> frames d&apos;echec consecutifs (ok=False).
+        Le SOT est reinitialise (reset()), les tracks MOT reprennent.</div>
+    </div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--text)">any</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--byte)">STATE_MOT</div>
+      <div class="sm-trans-cond">Commande <b>mot_state=0</b> : annule le SOT en cours, vide les tracks MOT.
+        Commande <b>mot_state=1</b> : reactiver le MOT (tracks reprennent a la prochaine detection).</div>
+    </div>
+  </div>
+
+  <!-- Combinaisons MOT+SOT -->
+  <p class="section-label">Combinaisons MOT + SOT disponibles</p>
+  <div class="combo-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>MOT (tracker_mot)</th>
+          <th>SOT bbox (tracker_sot)</th>
+          <th>SOT single (tracker_sot_single)</th>
+          <th>GPU</th>
+          <th>Remarques</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="t-byte">bytetrack</td>
+          <td style="color:var(--sot-classic)">dummy</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--muted);font-size:11px">CPU seul. DummySot suit la track MOT la plus proche du clic.</td>
+        </tr>
+        <tr>
+          <td class="t-byte">bytetrack</td>
+          <td style="color:var(--sot-classic)">csrt</td>
+          <td style="color:var(--sot-classic)">csrt</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--muted);font-size:11px">Recommande debug. CSRT init par bbox MOT ou point (40px).</td>
+        </tr>
+        <tr>
+          <td class="t-byte">bytetrack</td>
+          <td style="color:var(--sot-cnn)">dimp</td>
+          <td style="color:var(--sot-classic)">csrt</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Oui ~2 GB</td>
+          <td style="color:var(--muted);font-size:11px">DiMP optimal si cible dans bbox MOT. Fallback CSRT si pas de bbox.</td>
+        </tr>
+        <tr>
+          <td class="t-byte">bytetrack</td>
+          <td style="color:var(--sot-found)">sam2</td>
+          <td style="color:var(--sot-found)">sam2</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Oui 6-8 GB</td>
+          <td style="color:var(--muted);font-size:11px">SAM2 masque pixel. Point-only natif (tracker_sot_single=sam2).</td>
+        </tr>
+        <tr>
+          <td class="t-bot">botsort</td>
+          <td style="color:var(--sot-cnn)">dimp</td>
+          <td style="color:var(--sot-found)">sam2</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Oui 4-8 GB</td>
+          <td style="color:var(--muted);font-size:11px">BoT-SORT + GMC. ReID optionnel (with_reid: true + fast_reid_weights).</td>
+        </tr>
+        <tr>
+          <td style="color:var(--boost)">boosttrack</td>
+          <td style="color:var(--sot-cnn)">ostrack</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Oui 5-8 GB</td>
+          <td style="color:var(--muted);font-size:11px">Combinaison haute precision. BoostTrack++ + OSTrack ViT.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- cmd_send format -->
+  <p class="section-label">Format cmd_send.txt (mode command)</p>
+  <div class="cmd-wrap">
+    <div class="cmd-title">Structure du fichier</div>
+    <div class="cmd-format"><span class="cmd-comment"># Les lignes commencent par # sont des commentaires (ignores)
+# Deux types de lignes actives :</span>
+
+<span class="cmd-comment"># --- Controle MOT (3 champs) ---</span>
+<span style="color:var(--pipe)">frame_emit</span>,<span style="color:var(--byte)">frame_real</span>,<span style="color:var(--warn)">mot_state</span>
+<span class="cmd-comment">#   mot_state 0 = desactiver MOT  |  mot_state 1 = reactiver MOT</span>
+0,0,0       <span class="cmd-comment"># exemple : desactiver le MOT des la frame 0</span>
+200,200,1   <span class="cmd-comment"># exemple : reactiver le MOT a la frame 200</span>
+
+<span class="cmd-comment"># --- Clic SOT (4 champs) ---</span>
+<span style="color:var(--pipe)">frame_emit</span>,<span style="color:var(--byte)">frame_click</span>,<span style="color:var(--text)">x</span>,<span style="color:var(--text)">y</span>
+<span class="cmd-comment">#   frame_emit  = frame courante ou la commande est emise
+#   frame_click = frame ou le clic a ete fait (peut etre anterieur -> reprojection)
+#   x, y        = coordonnees pixel du clic</span>
+265,263,646,193   <span class="cmd-comment"># clic emis frame 265, effectue frame 263, position (646,193)</span>
+358,356,664,193   <span class="cmd-comment"># second clic (retour SOT apres perte)</span></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--pipe);margin-bottom:8px;font-weight:600">Champs communs</div>
+        <div class="cmd-row"><span class="cmd-field">frame_emit</span><span class="cmd-desc">Frame courante (traitement). Commande active si frame_emit &lt;= frame_id &lt; frame_emit + command_delta.</span></div>
+        <div class="cmd-row"><span class="cmd-field">frame_real/click</span><span class="cmd-desc">Frame de reference du clic (peut etre anterieure). Si delta &gt; 0, reprojection LDV ou ORB appliquee.</span></div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--pipe);margin-bottom:8px;font-weight:600">Reprojection du clic</div>
+        <div class="cmd-row"><span class="cmd-field">Priorite 1</span><span class="cmd-desc">LDV disponible (azimut/elevation) -> homographie inertielle H = K*R*K^-1</span></div>
+        <div class="cmd-row"><span class="cmd-field">Priorite 2</span><span class="cmd-desc">frame_click = frame_id-1 + H_dets dispo -> perspectiveTransform()</span></div>
+        <div class="cmd-row"><span class="cmd-field">Priorite 3</span><span class="cmd-desc">homography_method_image = orb|ecc -> calcul ORB/ECC entre frame_ref et frame_cur</span></div>
+        <div class="cmd-row"><span class="cmd-field">Fallback</span><span class="cmd-desc">Coordonnees brutes (aucune reprojection)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ReID par tracker MOT -->
+  <p class="section-label">Support ReID par tracker MOT</p>
+  <div class="reid-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tracker MOT</th>
+          <th>ReID integre</th>
+          <th>Statut par defaut</th>
+          <th>Activation YAML</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--muted)">custom_kalman</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--muted);font-size:11px">IoU + distance Mahalanobis uniquement. Aucun embedding d&apos;apparence.</td>
+        </tr>
+        <tr>
+          <td class="t-byte">bytetrack</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">Non</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--muted);font-size:11px">-</td>
+          <td style="color:var(--muted);font-size:11px">Association 2 passes IoU seul. Pas de module d&apos;apparence dans BYTE.</td>
+        </tr>
+        <tr>
+          <td class="t-bot">botsort</td>
+          <td style="color:var(--good);font-family:var(--mono);font-size:11px">Oui (FastReID)</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">OFF</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text)"><code>with_reid: true</code><br><code>fast_reid_config: ...</code><br><code>fast_reid_weights: ...</code></td>
+          <td style="color:var(--muted);font-size:11px">FastReID (ResNet-50 ou OSNet). Necessite poids pre-entraines + ~1 GB VRAM supp. Fusion cosine+IoU.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--boost)">boosttrack</td>
+          <td style="color:var(--orange);font-family:var(--mono);font-size:11px">Partiel (desactive)</td>
+          <td style="color:var(--warn);font-family:var(--mono);font-size:11px">OFF</td>
+          <td style="color:var(--muted);font-size:11px">Non expose dans YAML</td>
+          <td style="color:var(--muted);font-size:11px"><code>use_embedding</code> dans GeneralSettings mais non passe au wrapper de tracking. Activation manuelle dans boosttrack/tracker.py si necessaire.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CMC politique -->
+  <p class="section-label">Politique CMC (camera motion compensation)</p>
+  <div class="sm-transition">
+    <div class="sm-transition-title">Regles de compensation ego-motion</div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--byte)">bytetrack</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--muted)">ext. CMC</div>
+      <div class="sm-trans-cond"><code>has_internal_cmc = False</code>. Le pipeline applique <b>compensate_detections()</b> sur les raw_dets avant passage au tracker.</div>
+    </div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--bot)">botsort</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--good)">interne</div>
+      <div class="sm-trans-cond"><code>has_internal_cmc = True</code>. BoT-SORT integre son propre GMC (sparseOptFlow). Le pipeline passe les raw_dets non-compenses.</div>
+    </div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--boost)">boosttrack</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--good)">interne</div>
+      <div class="sm-trans-cond"><code>has_internal_cmc = True</code>. BoostTrack integre ECC optionnel (<code>use_ecc: true</code>). Meme politique que BoT-SORT.</div>
+    </div>
+    <div class="sm-trans-row">
+      <div class="sm-trans-from" style="color:var(--muted)">custom_kalman</div>
+      <div class="sm-trans-arrow">-></div>
+      <div class="sm-trans-to" style="color:var(--muted)">ext. CMC</div>
+      <div class="sm-trans-cond"><code>has_internal_cmc = False</code>. Compensation externe appliquee. Homographie depuis LDV ou ORB/ECC image.</div>
+    </div>
+  </div>
+
+  <!-- Configs de debug -->
+  <p class="section-label">Configs de debug (debug_run/)</p>
+  <div class="combo-wrap">
+    <table>
+      <thead>
+        <tr><th>Fichier YAML</th><th>Scenario</th><th>cmd_send</th><th>SOT</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text)">debug_bytetrack_csrt.yaml</td>
+          <td style="color:var(--muted);font-size:11px">ByteTrack actif + CSRT depuis bbox MOT. 2 clics successifs.</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--byte)">cmd_send_mot_sot.txt</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--sot-classic)">csrt</td>
+        </tr>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text)">debug_bytetrack_dimp.yaml</td>
+          <td style="color:var(--muted);font-size:11px">ByteTrack actif + DiMP depuis bbox MOT. Meme clics que CSRT.</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--byte)">cmd_send_mot_sot.txt</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--sot-cnn)">dimp</td>
+        </tr>
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text)">debug_bytetrack_sot_single.yaml</td>
+          <td style="color:var(--muted);font-size:11px">MOT desactive frame 0 via mot_state=0. Clic -> CSRT Single (point 40x40).</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--byte)">cmd_send_sot_single.txt</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--sot-classic)">csrt (single)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+<!-- #### END TAB PIPELINE #### -->
+
+<footer>
+  <div>Sources</div>
+  <div class="footer-sources">
+    <span class="footer-src">ByteTrack - <a href="https://github.com/ifzhang/ByteTrack" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2110.06864" target="_blank">arXiv:2110.06864</a></span>
+    <span class="footer-src">BOT-SORT - <a href="https://github.com/NirAharon/BoT-SORT" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2206.14651" target="_blank">arXiv:2206.14651</a></span>
+    <span class="footer-src">BoostTrack++ - <a href="https://github.com/vukasin-stanojevic/BoostTrack" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2408.13003" target="_blank">arXiv:2408.13003</a></span>
+    <span class="footer-src">SAM 2 - <a href="https://github.com/facebookresearch/sam2" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2408.00714" target="_blank">arXiv:2408.00714</a></span>
+    <span class="footer-src">Cutie - <a href="https://github.com/hkchengrex/Cutie" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2310.05705" target="_blank">arXiv</a></span>
+    <span class="footer-src">DEVA - <a href="https://github.com/hkchengrex/DEVA" target="_blank">GitHub</a> · <a href="https://arxiv.org/abs/2309.03903" target="_blank">arXiv</a></span>
+    <span class="footer-src">Benchmarks - <a href="https://motchallenge.net/" target="_blank">MOT Challenge</a></span>
+  </div>
+</footer>
+
+<script>
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Depuis le dossier Computer_Vision_App\desktop
+
+# Installation reproductible des dependances depuis package-lock.json
+npm ci
+
+# Construction de VisionNexusElectron.exe pour Windows x64
+npm run dist:win
+
+# Resultat : desktop\release\VisionNexusElectron.exe
+
+
+# Variante Linux AppImage
+# npm run dist:linux

@@ -1,0 +1,1101 @@
+#################################
+# config.yaml - Configuration unique du pipeline VisionNexus
+#
+# Source de vérité pour TOUS les paramètres.
+# Une copie est automatiquement enregistrée dans chaque run
+# pour garantir la traçabilité.
+#
+# Seul argument CLI : --config <fichier.yaml>
+# Défaut            : config/config.yaml
+#################################
+
+
+#################################
+# IDENTIFICATION DU RUN
+#################################
+
+# Nom libre intégré dans le nom du dossier de sortie.
+# Format final : outputs/run_{date}_{run_name}_{mot}_{sot}/
+# Exemples : "baseline", "test_csrt", "prod_v2"
+run_name: "baseline"
+
+# Niveau de log affiché sur la console.
+# Options : DEBUG | INFO | WARNING | ERROR
+#   DEBUG   : affiche tout, y compris log.debug() (seuillage TopHat, PSR CSRT...).
+#   INFO    : comportement standard.
+#   WARNING : sortie console minimale (silencieux sauf problèmes).
+log_level: "INFO"
+
+
+#################################
+# CHEMINS (relatifs à la racine du projet)
+#################################
+
+# Répertoire de la séquence à traiter.
+# - Dossier .mp4 (MultiCsvCamera IR)  -> loader MultiCsv
+# - Dossier d'images PNG/JPG         -> loader ImageFolder
+# - Synthétique                      -> "data/sequences/synthetic"
+sequence_dir: "data/sequences/sample_sequence"
+
+# Fichier de vérité terrain (.ver ou YOLO .txt).
+# Laisser vide ("") pour désactiver le calcul MOTA/IDF1.
+# Nouveau: annotation_file supporte .ver ET YOLO .txt
+annotation_file: "data/sequences/sample_sequence.ver"
+compute_metrics: true   # accumule pred_per_frame/sot_active_per_frame et calcule les metriques
+                        # n'a d'effet que si annotation_file est renseigne (double condition)
+
+# Seuil IoU pour l'association prediction<->GT dans le calcul des metriques MOT.
+# Valeur standard : 0.5 (COCO). Pour cibles IR minuscules (5x2 px) : 0.1 ou 0.2.
+# Trop eleve -> "detection manquee" sur des tracks visuellement correctes.
+metrics_iou_threshold: 0.1
+
+# Nom du capteur camera (utilisé pour charger le bon reader de métadonnées CSV).
+# Options : multi_csv | single_csv | "" (pas de métadonnées CSV)
+#
+#   multi_csv    : 3 CSV (BlockID_NumIm + INFO_VID_IR + POINTAGECAM_IR), az/el en degrés
+#   single_csv : 1 CSV (delta_ms, ts, az, el, fov_deg_0, fov_deg_1, …), az/el en RADIANS
+#                FOV sélectionné selon le nom du fichier : "TV"->fov_deg_1, "IR"->fov_deg_0
+#                width/height non présents dans le CSV -> pipeline déduit de la 1ère frame
+#                chv_deg non disponible -> 0.0 (non utilisé par le pipeline)
+#   ""         : aucun reader de métadonnées (LDV absent, CMC image seule ou désactivée)
+camera_name: "multi_csv"
+
+# Liste des fichiers CSV requis (MultiCsv: 3 fichiers auto-découverts par suffixe).
+# Laisser vide [] pour auto-découverte.
+metadata_csv: []
+
+# Répertoire racine des sorties (créé si absent).
+# Chaque run y crée son propre sous-dossier horodaté.
+output_dir: "outputs"
+
+# Poids YOLO (.pt) pour le détecteur.
+# Laisser vide ("") pour utiliser DummyDetector (aucune détection).
+weights_yolo: "weights/last.pt"
+
+
+#################################
+# PIPELINE
+#################################
+
+# Tracker multi-objets (MOT).
+# Options : custom_kalman | bytetrack | botsort | boosttrack | none
+#   custom_kalman : Kalman + Hongrois, léger, CPU, aucune dépendance
+#   bytetrack     : BYTE association deux passes, robuste aux faibles scores
+#   botsort       : ByteTrack + GMC (optique sparseOptFlow) + ReID optionnel
+#   boosttrack    : ByteTrack + ECC + distance Mahalanobis
+#   none          : MODE SOT-ONLY. Pas de tracker MOT, pas de detector_mot.
+#                   detector_roi OBLIGATOIRE. mot_background IGNORE.
+#                   Etats machine : IDLE <-> SOT (jamais MOT).
+tracker_mot: "custom_kalman"
+
+# Tracker mono-objet (SOT) bbox - déclenché par clic quand MOT est actif.
+# Reçoit la liste des tracks MOT pour trouver la bbox de la cible la plus proche du clic.
+# Options : dummy | csrt | tracking_tophat | dimp | ostrack | sam2
+#   dummy   : suit la track MOT la plus proche du clic (pas de modèle d'apparence)
+#   csrt    : DCF classique, CPU uniquement, 0 VRAM
+#   tracking_tophat     : Top-Hat + NCC/ResNet dans zone de recherche, CPU (tophat) ou GPU (resnet)
+#   dimp    : filtre discriminant en ligne, GPU ~2 GB
+#   ostrack : ViT one-stream, GPU ~3 GB, SOTA SOT
+#   sam2    : mémoire temporelle + masque pixel-level, GPU 6-8 GB
+tracker_sot: "dummy"
+
+# Nombre de cibles SOT à suivre simultanément.
+# 1 (défaut) : comportement actuel - clic gauche = SOT cible 1 seulement.
+# 2          : dual tracking - clic gauche = SOT cible 1 (magenta),
+#                               clic droit  = SOT cible 2 (orange).
+#              Les deux trackers utilisent le même type (tracker_sot:).
+#              Chaque tracker est une instance indépendante avec son propre état.
+#              Le SOT2 (clic droit) est parallèle et n'affecte pas l'état MOT/SOT1.
+#              DummySot avec n_targets:2 nécessite mot_background:true pour les deux.
+n_targets: 1
+
+# Si true  (Cas 2) : le MOT tourne en FOND pendant le SOT.
+#   -> Les tracks MOT restent visibles. Nouveau clic en SOT = switch vers la track la plus proche.
+#   -> WARNING si aucune track MOT dans le rayon sot_click_max_dist_px.
+#   -> DummySot requiert mot_background=true (il suit une track MOT existante).
+# Si false (Cas 3) : le MOT est mis en VEILLE pendant le SOT.
+#   -> Nouveau clic en SOT = abandonner SOT -> detector_roi -> nouveau SOT.
+#   -> WARNING "Impossible d'accrocher" si detector_roi ne trouve aucun blob.
+mot_background: false
+
+# Mode d'opération.
+# Options : headless | command | interactive
+#   headless    : traitement pur sans affichage (benchmark, batch)
+#   command     : clics lus depuis un fichier texte (rejouer une session)
+#   interactive : fenêtre cv2, clic souris déclenche le SOT en direct, ou MJPEG
+mode: "headless"
+
+# Fréquence cible en Hz (détermine le temps d'attente du loader).
+fps: 10.0
+
+# Nombre de frames agrégées par bloc dans MultiCsvCamera.
+# Ignoré pour ImageFolderLoader. Typiquement 5.
+slice_size: 5
+
+# Index de la première frame à traiter (0 = début de séquence).
+start_frame_idx: 0
+
+# Index de la dernière frame à traiter (-1 = toutes les frames).
+stop_frame_idx: -1
+
+# Device PyTorch pour les trackers GPU (YOLO, DiMP, OSTrack, SAM2).
+# Options : cuda | cpu
+# Sur Jetson Orin : cuda (GPU intégré)
+device: "cuda"
+
+
+#################################
+# RENDU
+#################################
+
+# Sauvegarder chaque frame annotée en PNG/JPG dans output_dir/frames/.
+# Impact : écriture disque importante (~500 Ko/frame PNG IR 640x512).
+save_frames: false
+
+# Encoder un MP4 (ou AVI en fallback) dans output_dir/.
+# Codec mp4v -> .mp4  |  XVID -> .avi
+save_video: true
+
+# Afficher une fenêtre cv2 en temps réel sur l'écran LOCAL (HDMI).
+# Requiert un affichage (pas de serveur headless sans X11).
+# Sur Jetson sans écran branché : mettre false et utiliser stream_mode: mjpeg.
+# En mode interactive avec écran : mettre true.
+local_display: false
+
+# Extension des frames sauvegardées. Options : png | jpg
+frame_ext: "png"
+
+# Codec vidéo. Options : mp4v (->.mp4) | XVID (->.avi) | avc1 (H.264 si dispo)
+codec: "mp4v"
+
+# Longueur de la trace de trajectoire (en frames). 0 = désactivé.
+trail: 20
+
+# Afficher un texte de statut du pipeline (mode MOT/SOT, événements comme
+# "SOT déclenché", "← Retour MOT") sur chaque frame.
+# true  -> texte rendu dans le canvas AVANT sauvegarde -> présent dans PNG et vidéo
+# false -> texte affiché uniquement sur le display live, absent des fichiers
+debug_dialog_on_frames: false
+
+# Mode de rendu du canvas.
+#
+#   light_render: true  - ultrarapide (Jetson / bench / stream réseau)
+#     · bboxes colorées uniquement - ZÉRO texte, traîne, légende, bande debug
+#     · BYPASS tous les flags ci-dessous (show_legend, debug_overlay, trail…)
+#     · économise ~3-5 ms/frame (~30-50 % du budget render)
+#     · idéal pour : Jetson stream, save_video, save_frames production
+#
+#   light_render: false - mode complet (développement / analyse visuelle)
+#     · applique TOUS les flags : show_legend, debug_overlay, trail, show_gt…
+#     · ID de track, labels GT, légende, traîne progressive
+#     · bande d'état en bas si debug_dialog_on_frames: true
+#     · panneau log à droite de la fenêtre, indicateur REC, coordonnées curseur
+light_render: false
+
+#####Flux ZMQ entrant (capteur C++ generique -> pipeline) ##########
+#
+# Protocole JSON+JPEG generique, voir tools/zmq_cpp/ (main.cpp, sender.hpp,
+# json_utils.hpp). Ports fixes des deux cotes : aucune decouverte dynamique,
+# zmq_port/zmq_anno_port/zmq_click_port doivent correspondre aux options
+# --port/--anno-port/--click-port lancees cote C++.
+#
+# Activer avec sequence_dir = "tcp" (local) ou "tcp://host" (distant) :
+#   sequence_dir: "tcp"               # C++ sur la meme machine
+#   sequence_dir: "tcp://192.168.1.10"  # C++ sur machine distante
+#
+# Canaux (voir tools/zmq_cpp) :
+#   zmq_port       : C++ PUSH -> Python PULL, multipart [meta JSON, JPEG]
+#                    meta JSON = {"az":rad,"el":rad,"chh":deg,"frame_id":int}
+#                    (chh = FOV horizontal en degres ; pas de roulis ni de FOV
+#                    vertical distinct dans ce protocole generique)
+#   zmq_anno_port  : Python PUSH -> C++ PULL, JSON {"frame_id":int,"boxes":[...]}
+#   zmq_click_port : C++ PUSH -> Python PULL, JSON {"frame_id","type","x","y"}
+#
+# Port des frames (doit correspondre a --port cote C++, defaut 5555).
+zmq_port: 5555
+
+# Timeout (ms) avant avertissement si aucun message recu.
+zmq_recv_timeout_ms: 5000
+
+# Taille du ring buffer Python (nombre de frames gardees cote Python).
+# Le ring buffer retient les N dernieres frames. Si Python est lent, les plus
+# anciennes sont silencieusement ecrasees (drop oldest, keep newest).
+# Le socket ZMQ image Python recoit hwm = zmq_ring_size * 2.
+# Recommande : 10 frames (~1s a 10fps).
+zmq_ring_size: 10
+
+# Seuil d'ecart inter-frame_id moyen (fenetre 5 frames) declenchant le recalage.
+# Si l'ecart moyen entre frame_ids consecutifs depasse cette valeur, Python saute
+# des frames (drain du ring buffer) pour rattraper le flux temps reel.
+zmq_catchup_threshold: 2.0
+
+#####ZMQ display bidirectionnel (mode headless + tcp) #########
+#
+# Active automatiquement quand sequence_dir="tcp" (ou "tcp://host") ET mode=headless.
+#
+# Ports annotation/clic (doivent correspondre a --anno-port/--click-port cote C++).
+zmq_anno_port:  5556
+zmq_click_port: 5557
+#
+# Nombre max de boxes envoyees par frame au viewer C++ (pas de limite protocole,
+# le JSON accepte une liste de taille variable - contrairement a l'ancien struct
+# binaire de taille fixe). null = defaut (5).
+zmq_anno_n_boxes: 5
+#
+# Lancer le C++ avec display et pipeline headless :
+#   python main.py --config config_examples/F2_zmq_single_csv_headless.yaml
+
+
+#####Streaming réseau (Jetson -> PC via Ethernet) ##########
+# stream_mode: "none"   -> pas de stream, comportement par défaut
+# stream_mode: "mjpeg"  -> serveur HTTP MJPEG sur stream_port
+#                          Côté PC : navigateur  http://<ip>:<port>/
+#                                    VLC         http://<ip>:<port>/stream
+#                                    Python       tools/mjpeg_receiver.py
+stream_mode:    "none"
+stream_host:    "0.0.0.0"    # interface Jetson (0.0.0.0 = toutes les interfaces)
+stream_port:    8080
+stream_quality: 70            # qualité JPEG (0-100). 70 = bon compromis taille/qualité
+stream_every:   1             # envoyer 1 frame sur N au stream (2 = moitié des frames)
+
+# Afficher les détections brutes (avant ego-motion). Couleur rouge.
+show_raw_det: true
+
+# Afficher les détections compensées (entrées tracker). Couleur jaune.
+show_comp_det: true
+
+# Afficher les annotations GT (vérité terrain). Couleur cyan.
+show_gt: true
+show_tracks:   true
+
+# Afficher le HUD (Frame, Tracks, FPS, EGO). Coin haut-gauche.
+show_hud: true
+
+# Afficher la légende des couleurs. Coin bas-gauche.
+show_legend: true
+
+# Afficher les détections raw/comp pendant le SOT.
+# false (défaut) : masquer les détections quand SOT actif -> seule la track magenta visible.
+# true           : toujours afficher les détections (utile pour debug).
+show_dets_in_sot: false
+
+render:
+  # Rayon (px) du cercle marquant la position du clic operateur.
+  click_radius:    3
+  # Epaisseur (px) de la croix et du cercle du clic.
+  click_thickness: 1
+  # Epaisseur (px) des rectangles : detections brutes / compensees / GT.
+  bbox_thickness:  1
+  # Epaisseur (px) des bboxes de tracks MOT (vert) quand l'etat est MOT pur.
+  mot_bbox_thickness: 2
+  # Epaisseur (px) des bboxes MOT quand le SOT est actif en fond (mot_background=true).
+  # Plus fin que mot_bbox_thickness pour mettre visuellement en valeur la track SOT.
+  mot_bg_bbox_thickness: 1
+  # Epaisseur (px) de la bbox de la track SOT (magenta).
+  # Plus epais que MOT pour une meilleure visibilite de la cible selectionnee.
+  sot_bbox_thickness:  3   # track SOT cible 1 (magenta, clic gauche)
+  sot2_bbox_thickness: 3   # track SOT cible 2 (orange, clic droit) - actif si n_targets: 2
+
+  # Couleurs BGR [B, G, R] -- format liste YAML converti en tuple Python
+  # (ordre OpenCV : Blue, Green, Red)
+  color_raw_det:     [50,  50,  220]   # rouge        - detections brutes (avant compensation)
+  color_comp_det:    [30,  220, 220]   # jaune        - detections compensees (entrees tracker)
+  color_mot_active:  [50,  210,  50]   # vert vif     - tracks MOT actives (mise a jour ce frame)
+  color_mot_predict: [50,  130,  50]   # vert sombre  - predictions Kalman (pas de detection)
+  color_sot_lock:    [255,  60,  220]  # magenta      - SOT1 (clic gauche) : cible 1 verrouilee
+  color_sot_miss:    [160,  30,  130]  # magenta sombre - SOT1 perd temporairement la cible 1
+  color_sot2_lock:   [0,   165,  255]  # orange       - SOT2 (clic droit) : cible 2 verrouilee
+  color_sot2_miss:   [0,   100,  180]  # orange sombre - SOT2 perd temporairement la cible 2
+  color_gt:          [220, 200,   30]  # cyan         - ground truth (verite terrain)
+
+
+#################################
+# SOT (Single Object Tracker)
+#################################
+
+# Nombre de frames consécutives d'échec SOT avant retour en mode MOT.
+# Plus la valeur est haute, plus on tolère les occultations avant abandon.
+sot_loss_threshold: 10
+
+# Distance max (pixels) entre le clic et la track MOT la plus proche.
+# PARAMETRE UNIFIE -- meme valeur utilisee par :
+#   state_machine : si track dans le rayon -> SOT.init(track.bbox)
+#                   si trop loin / 0 tracks -> fallback detector_roi
+#                   si detector_roi vide -> [KO] Warning, clic ignore
+#   CsrtSot       : _near_thresh_px (selectionne la track d init CSRT)
+#   DummySot      : _max_match_dist (trouve la track MOT a chaque frame)
+# 0 = pas de filtre (tout clic declenche le SOT, toutes tracks acceptees).
+# Recommande avec MOT actif : 200 px (rejette les clics dans le vide).
+# Ignoré si tracker_mot=none (pas de tracks MOT persistantes - seuil sans effet sur _DetTrack éphémères).
+sot_click_max_dist_px: 200
+
+
+#################################
+# REPROJECTION DU CLIC (gestion du délai frame_click -> frame_emit)
+#################################
+
+# Taille du buffer circulaire (frames) pour la reprojection.
+# Doit être >= délai max entre émission du clic et réception (en frames).
+max_delay_frames: 30
+
+# Seuil d'inliers RANSAC pour valider une homographie ORB.
+# En dessous de ce seuil, on retourne les coordonnées brutes.
+min_inliers: 10
+
+# Methode H image externe - niveau 3 de la chaine CMC (voir use_ldv_cmc ci-dessous).
+# Options : orb | ecc | "" (vide = desactive le niveau 3)
+#   orb : keypoints ORB + RANSAC, robuste aux grandes translations,   ~5 ms/frame
+#   ecc : Enhanced Correlation Coefficient, precis petits mouvements, ~30 ms/frame
+#   ""  : niveau 3 desactive -> le tracker recoit H=None si niveaux 1 et 2 inactifs
+#
+# Utilise aussi pour la reprojection des clics (fallback si LDV absent).
+homography_method_image: "orb"
+
+# Chaine de fallback CMC - 4 niveaux de priorite (log [CMC] au demarrage) :
+#
+#   Niv.1  LDV inertiel    : use_ldv_cmc=true ET LDV disponible
+#                            -> H_ldv = K·R·K^-1 transmis au tracker (bypass image)
+#                            -> Gain : sparseOptFlow/ECC/ORB entierement skippee
+#
+#   Niv.2  CMC interne     : tracker.has_own_image_cmc=True
+#                            (botsort si cmc_method != 'none')
+#                            (boosttrack si use_ecc=true)
+#                            -> H=None transmis : tracker calcule son propre H image
+#                            -> H_image externe NON calcule (evite le double calcul)
+#
+#   Niv.3  H image externe : homography_method_image configure (orb | ecc)
+#                            -> H calcule par session.py (ORB/ECC) et transmis au tracker
+#                            -> Actif seulement si niveaux 1 et 2 inactifs
+#
+#   Niv.4  Aucune CMC      : H=None transmis (camera fixe, 1ere frame, pas de methode)
+#
+# use_ldv_cmc active/desactive uniquement le niveau 1 (LDV).
+# Pour desactiver le niveau 2, mettre cmc_method: "none" dans botsort ou use_ecc: false.
+# Pour desactiver le niveau 3, mettre homography_method_image: "".
+use_ldv_cmc: true
+
+# Chemin vers le fichier de commandes (.txt).
+# Format : deux types de lignes (séparateur : virgule, TAB ou espaces)
+#
+#   Clic SOT (4 champs)      : frame_emit,frame_click,x,y
+#   Contrôle MOT (3 champs)  : frame_emit,frame_real,mot_state
+#     mot_state 0 = désactiver le MOT (mode SOT Single)
+#     mot_state 1 = réactiver le MOT
+#
+# Laisser vide si mode != command.
+clicks: ""
+
+# Tolérance de timing : une commande est active si
+# frame_emit <= frame_id < frame_emit + command_delta.
+command_delta: 1
+
+# Seuil VRAM (GB) en dessous duquel on refuse de charger SAM2 large.
+# Ajuster selon la carte GPU disponible.
+vram_threshold_gb: 6.0
+
+
+#################################
+# DÉPÔTS TRACKERS TIERS (relatifs à la racine du projet)
+#################################
+
+# Ces chemins doivent pointer vers les dossiers clonés depuis GitHub.
+# Laisser les valeurs par défaut si vous avez suivi le README.
+bytetrack_root:  "trackers/mot/bytetrack/ByteTrack"
+botsort_root:    "trackers/mot/botsort/BoT-SORT"
+boosttrack_root: "trackers/mot/boosttrack/BoostTrack"
+pytracking_root: "trackers/sot/dimp/pytracking"
+ostrack_root:    "trackers/sot/ostrack/OSTrack"
+sam2_root:       "trackers/sot/sam2/sam2"
+
+
+#################################
+# HYPERPARAMÈTRES
+#################################
+
+### MOT trackers
+
+#####custom_kalman #####################
+#
+# Tracker Kalman + algorithme Hongrois (LAP) - CPU uniquement.
+# Léger, sans dépendance externe, idéal Jetson ou sans GPU.
+#
+# CMC interne (Methode B) :
+#   camera_update(H) AVANT predict() dans chaque KalmanFilter2D.
+#   LDV dispo    -> H_ldv transmis, aucun ORB/ECC calcule.
+#   LDV absent   -> H_image (ORB/ECC) selon homography_method_image.
+#   H=None       -> pas de compensation (premiere frame ou camera fixe).
+
+kalman_mot_custom:
+  # Durée de vie maximale (frames) d'une piste sans détection associée.
+  # Augmenter si objets fréquemment occultés. Ex : 10-30 pour occultations longues.
+  max_age: 5
+
+  # Nombre minimal de détections associées avant qu'une piste soit "confirmée".
+  # Évite les faux positifs sur 1-2 frames. Typiquement 2-3.
+  min_hits: 2
+
+  # Seuil IoU pour l'association Hongrois (entre prédiction et détection).
+  # 0 = toute association acceptée, 1 = superposition parfaite requise.
+  # Réduire si objets proches et IoU naturellement faible.
+  iou_threshold: 0.3
+
+  # Distance max (pixels) entre le centre prédit et la détection pour association.
+  # Alternative à l'IoU quand les boîtes ne se chevauchent pas.
+  # 100 px convient pour des objets de taille moyenne.
+  dist_threshold: 100
+
+  # Bruit de processus (Q) du filtre de Kalman.
+  # Contrôle la confiance accordée au modèle de mouvement vs les mesures.
+  # Élever si les objets ont des trajectoires erratiques.
+  process_noise: 100
+
+  # Bruit de mesure (R) du filtre de Kalman.
+  # Contrôle la confiance accordée aux détections YOLO.
+  # Réduire si les détections sont très précises.
+  measure_noise: 0.001
+
+  # Utiliser la distance de Mahalanobis à la place de la distance euclidienne.
+  # Plus robuste si les objets ont des vitesses très différentes.
+  use_mahalanobis: false
+
+
+#####bytetrack #####################
+#
+# ByteTrack (Zhang et al., 2022) - association deux passes BYTE.
+# Récupère les détections à bas score dans une 2e passe d'association.
+#
+# CMC interne (Methode B) :
+#   _apply_camera_update(H) patche STrack.mean (cx,cy,vx,vy) AVANT tracker.update().
+#   LDV dispo  -> H_ldv transmis, ORB/ECC skippees.
+#   LDV absent -> H_image (ORB/ECC) selon homography_method_image.
+#   Repo ByteTrack intact (patch externe sur instances STrack uniquement).
+
+bytetrack:
+  # Score de confiance YOLO au-dessus duquel une détection est "haute qualité"
+  # (1ère passe d'association). Typiquement 0.4-0.6.
+  # Avec detector_mot=tophat (blobs IR 0.04-0.15) : mettre < 0.05 (ex: 0.04).
+  # Avec detector_mot=yolo (scores 0.3-0.99) : valeur recommandée 0.5.
+  track_thresh: 0.5
+
+  # Durée de vie max (frames) d'une piste perdue avant suppression.
+  # Équivalent à max_age. Augmenter pour les longues occultations.
+  # Plage utile : 10-60. 30 frames à 10 Hz = 3 secondes d'occultation max.
+  track_buffer: 30
+
+  # Seuil de similarité (IoU) pour l'association Hongrois.
+  # 0.8 est recommandé par les auteurs pour la plupart des séquences.
+  # Réduire (0.6-0.7) si les objets se déplacent vite entre deux frames.
+  match_thresh: 0.8
+
+  # Mode MOT20 : optimisations spécifiques aux scènes très denses.
+  # Mettre true uniquement pour des séquences avec >100 objets simultanés.
+  mot20: false
+
+  # Surface minimale d'une boîte (px²) pour être trackée.
+  # Filtre les micro-détections bruitées. Cibles IR drone 5x2px -> mettre 8-10.
+  # Plage utile : 8-100.
+  min_box_area: 10
+
+  # Bruit du filtre de Kalman - modèle 8D : [cx, cy, a, h, vx, vy, va, vh].
+  # Les matrices R et Q sont construites proportionnellement à h (hauteur bbox) :
+  #   σ_mesure  = 2 × kalman_std_position × h   -> R = diag(σ_mesure²)
+  #   σ_vitesse = 10 × kalman_std_velocity  × h  -> parties vitesse de Q = diag(σ_vitesse²)
+  #
+  # À h=7px (drone IR) avec les valeurs par défaut :
+  #   σ_mesure = 2 × 0.05 × 7 = 0.7px  -> Kalman tolère ±0.7px de bruit de détection
+  #   σ_vit    = 10 × 0.006 × 7 = 0.4px/frame -> accélération max suivie ±0.4px/frame²
+  #
+  # kalman_std_position  Plage : 0.01–0.5   Défaut : 0.05 (1/20)
+  #   Confiance dans la mesure : petit = "je fais confiance au détecteur" (suivi réactif)
+  #                              grand = "le détecteur est bruité" (suivi plus lissé)
+  #   Augmenter (0.1–0.3) si les blobs TopHat sont instables (bruit thermique IR).
+  #   Réduire (0.01–0.03) si le détecteur YOLO est très précis.
+  #
+  # kalman_std_velocity  Plage : 0.001–0.1  Défaut : 0.00625 (1/160)
+  #   Bruit de processus vitesse : petit = trajectoire régulière attendue
+  #                                grand = cible peut accélérer brusquement
+  #   Augmenter (0.02–0.05) pour des cibles manœuvrantes (virages serrés).
+  #
+  # Lien custom_kalman : process_noise ↔ (σ_vitesse)²  (absolute vs proportionnel à h)
+  #                      measure_noise ↔ (σ_mesure)²    (idem)
+  kalman_std_position: 0.05
+  kalman_std_velocity: 0.00625
+  show_kalman_predict: false   # true = affiche tracks perdues (prediction Kalman, vert sombre)
+
+
+#####botsort ######################
+#
+# BoT-SORT (Aharon et al., 2022) - ByteTrack + GMC + ReID optionnel.
+# GMC (Global Motion Compensation) via flux optique sparse (sparseOptFlow).
+#
+# CMC interne :
+#   GMC interne sparseOptFlow OU bypass LDV via monkey-patch gmc.apply.
+#   use_ldv_cmc=True + LDV dispo -> H_ldv injecte, sparseOptFlow skippe.
+#   use_ldv_cmc=False ou LDV absent -> sparseOptFlow calcule depuis image.
+#   get_last_homography() expose le H utilise (reprojection clic k=1).
+
+botsort:
+  # Seuil score haute qualité (1ère passe) : bucket HIGH = seules ces détections
+  # peuvent CREER de nouvelles tracks (via new_track_thresh).
+  # detector_mot=tophat : intensite blobs IR 0.05-0.15 -> mettre < 0.05 (ex: 0.04).
+  # detector_mot=yolo   : confiance YOLO 0.3-0.99      -> remettre a 0.5.
+  track_high_thresh: 0.04
+
+  # Seuil score basse qualité (2ème passe BYTE).
+  # Détections entre track_low_thresh et track_high_thresh : peuvent UNIQUEMENT
+  # matcher des tracks existantes, jamais en creer.
+  track_low_thresh: 0.01
+
+  # Score minimum pour créer une nouvelle piste depuis une détection HIGH non matchée.
+  # Doit etre <= track_high_thresh (sinon aucune track n'est jamais creee).
+  new_track_thresh: 0.04
+
+  # Durée de vie max des pistes perdues (frames).
+  track_buffer: 30
+
+  # Seuil IoU pour l'association (après GMC).
+  match_thresh: 0.8
+
+  # Seuil de proximité spatiale pour filtrer des candidates d'association.
+  proximity_thresh: 0.5
+
+  # Seuil de similarité ReID (cosine) pour l'association de ré-identification.
+  # Ignoré si with_reid: false.
+  appearance_thresh: 0.25
+
+  # Activer le module ReID (fast-reid). Nécessite fast_reid_config et _weights.
+  with_reid: false
+
+  # Chemin vers la config fast-reid (vide si with_reid: false).
+  fast_reid_config: ""
+
+  # Chemin vers les poids fast-reid (vide si with_reid: false).
+  fast_reid_weights: ""
+
+  # Utiliser la précision mixte FP16 pour ReID (accélère sur GPU compatible).
+  fp16: false
+
+  # Fusionner score détection et score IoU pour l'association.
+  fuse_score: false
+
+  # Mode MOT20 (scènes très denses).
+  mot20: false
+
+  # Méthode de compensation globale du mouvement caméra.
+  # Options : sparseOptFlow | orb | ecc | sof | file
+  # sparseOptFlow : Shi-Tomasi + Lucas-Kanade, rapide et robuste
+  cmc_method: "sparseOptFlow"
+
+  # Bruit du filtre de Kalman - même modèle 8D que ByteTrack, même interface.
+  # Voir section bytetrack: ci-dessus pour le détail des équations et plages.
+  kalman_std_position: 0.05
+  kalman_std_velocity: 0.00625
+  show_kalman_predict: false   # true = affiche tracks perdues (prediction Kalman, vert sombre)
+
+
+#####boosttrack #######################
+#
+# BoostTrack (Stanojevic et al., 2023) - ByteTrack amélioré.
+# Ajoute ECC pour la stabilisation et distance Mahalanobis.
+#
+# CMC interne (depend de use_ecc) :
+#   use_ecc=True  : ECC interne calcule H depuis l'image.
+#     use_ldv_cmc=True + LDV dispo -> H_ldv injecte dans ecc._transforms ;
+#                                     ECC skippee ; get_last_homography()=H_ldv.
+#     use_ldv_cmc=False ou LDV absent -> ECC calcule normalement.
+#   use_ecc=False : pas d'ECC. Methode B comme ByteTrack.
+#     H fourni -> _apply_camera_update(H) sur STrack.mean avant tracker.update().
+#     H=None   -> aucune compensation.
+
+boosttrack:
+  # Activer ECC (Enhanced Correlation Coefficient) pour CMC image interne.
+  # true  : ECC calcule H depuis l'image (ou bypass via H_ldv si use_ldv_cmc).
+  # false : pas d'ECC ; CMC via KalmanBoxTracker.camera_update(H).
+  # Cout ECC : ~+5-15 ms/frame selon resolution.
+  use_ecc: false
+
+  # det_thresh = track_thresh -> seuil de confiance pour creer/matcher des pistes.
+  # Avec tophat (blobs IR 0.04-0.15) : mettre < 0.05. Avec YOLO : 0.5.
+  # -> GeneralSettings["det_thresh"]
+  track_thresh: 0.5
+
+  # Seuil d'association : iou_threshold dans GeneralSettings.
+  # Plage utile : 0.2-0.5 (cout combine IoU+Mahalanobis+Shape).
+  # -> GeneralSettings["iou_threshold"]
+  match_thresh: 0.3
+
+  # Frames max sans detection avant suppression d'une piste.
+  # Analogue a track_buffer de ByteTrack mais en frames directes (pas de FPS scaling).
+  # -> self._tracker.max_age (override post-init)
+  max_age: 30
+
+  # Observations consecutives pour confirmer une piste (hit_streak >= min_hits).
+  # Default BoostTrack = 3 (plus strict que ByteTrack qui est 2).
+  # -> GeneralSettings["min_hits"]
+  min_hits: 3
+
+  # Aire minimale (px2) pour qu'une piste soit retournee.
+  # -> GeneralSettings["min_box_area"]
+  min_box_area: 10
+
+  # Poids du cout combine lors de l'association Hongrois.
+  # lambda_iou + lambda_mhd + lambda_shape = 1.0 (normalises en interne).
+  # Mahalanobis (mhd) : tient compte de l'incertitude Kalman -> meilleur sur petites cibles.
+  # Shape : similarite de forme w/h.
+  lambda_iou:   0.5    # poids IoU geometrique
+  lambda_mhd:   0.25   # poids distance de Mahalanobis
+  lambda_shape: 0.25   # poids similarite de forme (rapport d'aspect)
+
+  # Boosts adaptatifs de confiance (DLO/DUO) -> ameliorent les associations difficiles.
+  # Desactiver si instabilite ou faux positifs supplementaires.
+  use_dlo_boost: true   # boost adaptatif selon confiance detection
+  use_duo_boost: true   # boost via distance de Mahalanobis
+
+  # Re-ID / Embedding (FastReID via torchreid)
+  # Necessite les poids pre-entraine dans boosttrack_root/external/weights/
+  # Poids MOT17 : mot17_sbs_S50.pth  MOT20 : mot20_sbs_S50.pth
+  # Pour cibles IR : peu utile (feature person-tracking), desactivez sauf test
+  use_embedding:          false    # true -> active l'embedding d'apparence (GPU requis)
+  embedding_dataset:      "mot17"  # "mot17" | "mot20" | "dance" -> selectionne les poids
+  embedding_test_dataset: false    # true -> poids test dataset (vs ablation)
+
+  # Bruit du filtre de Kalman BoostTrack - politique ConstantNoise (valeurs ABSOLUES).
+  # Contrairement à ByteTrack, les variances ne sont PAS proportionnelles à h.
+  # État 8D : [cx, cy, h, r, vcx, vcy, vh, vr]  où r = w/h (rapport d'aspect).
+  #
+  # Matrice de mesure R (confiance dans les détections) :
+  #   R = diag([R_pos, R_pos, R_h, R_a])
+  #   kalman_R_pos  Plage : 0.1–50   Défaut : 1.0
+  #     Variance position (cx, cy) en px². Grand = Kalman moins réactif aux détections.
+  #     Augmenter (5–20) si les blobs IR sont très bruités ou instables.
+  #   kalman_R_h    Plage : 1.0–100  Défaut : 10.0
+  #     Variance hauteur h. Par défaut élevé car la hauteur d'un blob IR est très bruitée.
+  #   kalman_R_a    Plage : 0.001–1  Défaut : 0.01
+  #     Variance ratio a=w/h. Faible car un drone garde une forme stable.
+  #
+  # Matrice de processus Q (bruit de modèle - incertitude sur la dynamique) :
+  #   Q = I × Q_scale  (parties vitesse × Q_vel)
+  #   kalman_Q_scale  Plage : 0.1–100  Défaut : 1.0
+  #     Amplitude globale. Augmenter si la cible manœuvre agressivement.
+  #   kalman_Q_vel    Plage : 0.001–1  Défaut : 0.01
+  #     Facteur multiplicatif pour les états vitesse dans Q.
+  #     Faible = vitesse change lentement (trajectoire régulière).
+  #
+  # Lien custom_kalman :
+  #   kalman_R_pos   ↔  measure_noise  (même concept, valeurs absolues en px²)
+  #   kalman_Q_scale ↔  process_noise  (idem)
+  #   BoostTrack ConstantNoise est le modèle le plus proche de custom_kalman
+  #   car les deux utilisent des matrices Q/R absolues (non proportionnelles à h).
+  kalman_R_pos:   1.0
+  kalman_R_h:    10.0
+  kalman_R_a:     0.01
+  kalman_Q_scale: 1.0
+  kalman_Q_vel:   0.01
+  show_kalman_predict: false   # true = affiche tracks perdues (prediction Kalman, vert sombre)
+
+
+### SOT trackers
+# Parametres du filtre de Kalman 2D integre dans les trackers SOT (CSRT, Tracking_TOPHAT).
+# Utilise pour la cinematique de la cible et comme future bbox de secours.
+# Actif quelle que soit la config pipeline (MOT+SOT, SOT-only...).
+# Mettre l'un ou l'autre a null pour DESACTIVER completement le Kalman
+# (aucun overhead a l'execution). Override possible dans csrt: ou tracking_tophat:.
+sot_kalman:
+  kf_process_noise: 10.0   # Bruit de processus Q (elever si cible erratique)
+  kf_measure_noise:  5.0   # Bruit de mesure R (elever si tracker bruite)
+
+
+#####csrt ########################
+#
+# CSRT (Lukezic et al., 2017) - DCF avec fiabilite canal/spatiale.
+# CPU uniquement, integre OpenCV. Aucun GPU requis.
+#
+# Parametres Kalman (kf_process_noise, kf_measure_noise) :
+#   Source principale : sot_kalman: ci-dessus (partage avec Tracking_TOPHAT).
+#   Override possible directement dans csrt: si CSRT doit differer de Tracking_TOPHAT.
+#   Mettre null -> Kalman desactive pour CSRT uniquement.
+
+csrt:
+  ######################################
+  # Filtres de qualite (post-tracking, appliques par notre code)
+  ######################################
+
+  # Seuil PSR (Peak-to-Sidelobe Ratio) : score de confiance interne CSRT.
+  # getScore() retourne ce ratio. En dessous -> [KO] cible perdue.
+  # Valeurs typiques : 5-8. Reduire si trop de pertes ; augmenter si
+  # faux positifs (CSRT suit le mauvais objet).
+  # NOTE : getScore() indisponible dans certains builds OpenCV pip -> PSR=N/A,
+  # le seuil est alors inactif.
+  psr_threshold: 6.0
+
+  # Taille minimale acceptee pour la bbox CSRT (pixels).
+  # Si w < min_width_px OU h < min_height_px -> [KO] echec SOT.
+  # Evite les micro-localisations parasites (ex : 5x3 px sur artefact IR).
+  min_width_px:  10
+  min_height_px: 10
+
+  ######################################
+  # Compensation mouvement camera (CMC par warp de frame)
+  ######################################
+
+  # Override Kalman SOT (optionnel - si absent, herite de sot_kalman:)
+  # Decommenter pour regler CSRT independamment de Tracking_TOPHAT.
+  # Mettre null pour desactiver completement le Kalman sur CSRT :
+  # kf_process_noise: 10.0   # null = desactive Kalman CSRT
+  # kf_measure_noise:  5.0   # null = desactive Kalman CSRT
+
+  ######################################
+  # Initialisation du tracker
+  ######################################
+
+  # Cote (px) du carre de fallback pour init CSRT quand aucune track
+  # MOT n'est disponible dans le rayon sot_click_max_dist_px.
+  # Centre sur le clic operateur, clippe aux bords image.
+  # Augmenter si la cible est grande ; reduire pour moins de fond inclus.
+  fallback_bbox_size_px: 40
+
+  ######################################
+  # Parametres internes OpenCV (TrackerCSRT_Params)
+  # Ces valeurs sont transmises a cv2.TrackerCSRT_create() a chaque init.
+  ######################################
+
+  # Facteur multiplicatif de la zone de recherche DCF autour de la cible.
+  # Ex : padding=3 -> zone_recherche = 3 x taille_cible.
+  # Augmenter pour cibles rapides ou grands mouvements camera.
+  # Reduire pour gagner du CPU (mais risque de perdre la cible).
+  padding: 3.0
+
+  # Taux d'apprentissage du filtre DCF (0-1).
+  # Faible : modele stable, adaptation lente (ok cibles IR peu changeantes).
+  # Eleve  : adaptation rapide, derive possible (mauvais fond inclus).
+  # Recommande 0.01-0.05 pour drones IR (apparence stable).
+  filter_lr: 0.02
+
+  # Iterations d'optimisation ADMM pour le filtre de reponse.
+  # Plus = solution plus precise, plus lent. Plage utile : 2-6.
+  admm_iterations: 4
+
+  # Nombre de niveaux d'echelle dans le filtre DSST multi-scale.
+  # 0 ou 1 = pas de multi-scale (rapide, moins robuste au changement de taille).
+  # Augmenter si la cible s'approche / s'eloigne significativement.
+  number_of_scales: 33
+
+  # Rapport entre deux echelles consecutives (facteur > 1).
+  # 1.05 = chaque niveau est 5% plus grand que le precedent.
+  scale_step: 1.05
+
+  # Cote (px) du patch normalise avant extraction des features DCF.
+  # Plus grand = plus de details, plus lent. Plage utile : 100-300.
+  template_size: 200
+
+  # Ponderation adaptative des canaux de features (signature de CSRT).
+  # true  = CSRT complet : chaque canal HOG/RGB/Color-Names pondere separement.
+  # false = poids egaux (DCF standard, plus rapide).
+  use_channel_weights: true
+
+  # Segmentation fond/cible par histogramme pour la regularisation spatiale.
+  # true  = masque fond genere, plus precis sur cibles nettes.
+  # false = pas de segmentation (defaut, robuste en IR pointiforme).
+  # Cout : +5-15 ms/frame.
+  use_segmentation: false
+
+
+#####dummy_sot #####################
+
+dummy_sot:
+  # max_match_dist_px supprime : utilise sot_click_max_dist_px (top-level, param unifie)
+
+
+#####dimp ########################
+#
+# DiMP (Bhat et al., ICCV 2019) - filtre discriminant optimisé en ligne.
+# Nécessite GPU (~2 GB VRAM pour dimp50).
+
+dimp:
+  # Chemin vers le fichier de poids (.pth) DiMP.
+  # Télécharger depuis le dépôt pytracking officiel.
+  # Laisser vide pour déclencher une erreur explicite.
+  weights: ""
+
+  # Variante du modèle DiMP.
+  # Options : dimp18 (ResNet-18, rapide) | dimp50 (ResNet-50, précis)
+  net_type: "dimp50"
+
+
+#####ostrack ######################
+#
+# OSTrack (Ye et al., ECCV 2022) - ViT one-stream, SOTA sur LaSOT/GOT-10k.
+# Nécessite GPU (~3 GB VRAM).
+
+ostrack:
+  # Chemin vers les poids OSTrack (.pth).
+  # Télécharger depuis le dépôt OSTrack officiel.
+  weights: ""
+
+
+#####sam2 ########################
+#
+# SAM 2 (Ravi et al., Meta 2024) - segmentation vidéo avec mémoire temporelle.
+# Suit un masque pixel-level. Nécessite GPU 6-8 GB VRAM.
+
+sam2:
+  # Chemin vers les poids SAM2 (.pt).
+  # Télécharger depuis Meta AI (sam2_hiera_large.pt, sam2_hiera_tiny.pt…).
+  weights: ""
+
+  # Fichier de config de l'architecture SAM2.
+  # Options disponibles (dans sam2/configs/) :
+  #   sam2_hiera_tiny.yaml   -> 38M params, ~3 GB VRAM, ~25 FPS
+  #   sam2_hiera_small.yaml  -> 46M params, ~4 GB VRAM, ~20 FPS
+  #   sam2_hiera_base_plus.yaml -> 80M params, ~5 GB VRAM, ~15 FPS
+  #   sam2_hiera_large.yaml  -> 224M params, ~8 GB VRAM, ~10 FPS
+  model_cfg: "sam2_hiera_large.yaml"
+
+
+#####tracking_tophat #########################
+#
+# Tracking_TOPHAT (Poursuite par Composantes Connexes).
+# Top-Hat dans une zone de recherche + matching template/features.
+# Les parametres Kalman (kf_process_noise, kf_measure_noise) viennent de
+# sot_kalman: ci-dessus et peuvent etre surcharges ici si besoin.
+#
+# Mode "tophat" (recommande, CPU uniquement) :
+#   NCC (Normalized Cross-Correlation) sur patchs uint8.
+#   Rapide, sans dependance, efficace sur cibles IR pointues.
+#
+# Mode "resnet" (optionnel, GPU recommande) :
+#   Similarite cosinus sur features ResNet18 pretraine.
+#   Plus robuste aux changements d'apparence et d'echelle.
+
+tracking_tophat:
+  #################################
+  # PARAMETRES PRINCIPAUX (a regler en premier - pilotent tout le reste)
+  #################################
+  # false (defaut) : apparence NCC sur patchs, CPU, zero dependance GPU.
+  # true  : apparence cosinus ResNet18 (GPU optionnel). Necessite PyTorch.
+  # La DETECTION est toujours multi-kernel Top-Hat quelle que soit la valeur.
+  # N'a d'effet que si w_appearance > 0.
+  use_resnet:              false  # false = NCC CPU | true = ResNet18 cosinus GPU
+
+  # white_tophat_kernels : noyaux white tophat (cible CHAUDE = plus lumineuse
+  # que le fond). Petites cibles IR : [3, 5, 7] | grosses : [7, 11, 15, 21].
+  white_tophat_kernels: [3, 5, 7]
+
+  # black_tophat_kernels : noyaux black tophat (cible FROIDE = plus sombre que
+  # le fond). Vide [] = desactive. Ex: [5, 7] pour cibles froides + transition.
+  black_tophat_kernels: []
+
+  # LISTE UNIQUE de seuils adaptatifs (median + k_sigma * MAD). 1 niveau suffit
+  # en general ; plusieurs niveaux = robustesse au contraste mais cout x N.
+  # (remplace l'ancien k_sigma scalaire.) Nb total de passes = kernels x seuils.
+  k_sigma_levels: [2.5]
+
+  # true : la ROI de recherche ET la bbox de sortie suivent la taille de la
+  # cible (EMA). C'est le coeur de l'adaptativite (la bbox retrecit ET grandit).
+  adaptive_size: true
+
+  # Score global minimum (0-1) pour accepter un blob comme la cible. Plus haut
+  # = plus strict (moins de faux positifs, plus de risque de perte).
+  feature_match_threshold: 0.45
+
+  # Gate dur : distance max (px) entre un blob et le centre predit Kalman.
+  # Au-dela, le blob est rejete (coherence spatiale). Augmenter si cible rapide.
+  max_dist_px: 40
+
+  #################################
+  # DETECTION / ROI
+  #################################
+  search_radius_px:     40     # demi-taille MIN de la ROI (plancher, px)
+  max_search_radius_px: 200    # demi-taille MAX de la ROI (borne temps reel, px)
+  threshold_rel:        0.3    # seuil fixe (si use_adaptive_thresh: false)
+  use_adaptive_thresh:  true   # seuillage adaptatif (recommande, robuste IR)
+  min_thresh_abs:       5      # seuil absolu minimum 0-255 (adaptatif)
+  min_area_px2:         8      # aire min d'un blob (px²) ; IR pointiforme -> 4-8
+  max_area_px2:         5000   # aire max d'un blob (px²) ; filtre nuages/reflets
+
+  #################################
+  # FUSION DES BLOBS CANDIDATS (suppression des doublons)
+  #################################
+  dedup_iou_thresh:     0.3    # IoU au-dessus duquel 2 blobs sont fusionnes
+  dedup_dist_px:        5      # distance centre<->centre de fusion (px)
+  max_candidates:       30     # nb max de blobs scores par frame (borne perf)
+
+  #################################
+  # POIDS DES FEATURES (score global, normalise en interne)
+  #################################
+  w_geometry:           0.20   # diametre + ratio w/h (tolerant a l'echelle)
+  w_intensity:          0.20   # intensite moyenne du blob
+  w_background:         0.15   # contraste / SNR vs le fond local
+  w_motion:             0.30   # coherence avec le centre predit Kalman
+  w_appearance:         0.15   # poids NCC/cosinus template (0 = OFF, plus rapide sur Jetson)
+  feature_ema_alpha:    0.3    # lissage EMA du profil de features cible
+  bg_ring_margin_px:    6      # epaisseur de l'anneau de fond autour du blob (px)
+
+  #################################
+  # TAILLE ADAPTATIVE (EMA)
+  #################################
+  size_ema_alpha:       0.2    # lissage EMA des tailles (bbox + diametre blob)
+  roi_size_factor:      2.0    # rayon ROI ~ roi_size_factor x diametre EMA
+  vel_radius_factor:    2.0    # marge ROI = vel_radius_factor x vitesse Kalman
+
+  #################################
+  # APPARENCE (template) - utilise seulement si w_appearance > 0
+  #################################
+  template_patch_size:  48     # taille du patch d'apparence (carre, px)
+  template_history:     5      # nb de templates gardes (anti-derive)
+  template_update_thresh: 0.50 # score d'apparence min pour maj le template
+  template_update_interval: 3  # maj template toutes les N frames acceptees
+  # Cote (px) du carre de fallback pour init Tracking_TOPHAT quand aucune track MOT ni
+  # memoire Tracking_TOPHAT precedente n'est disponible.
+  fallback_bbox_size_px: 40
+  # mode=resnet : resnet_device herite de device: (top-level) si absent.
+  # Options layer : layer1..layer4 (layer3 recommande).
+  resnet_layer: "layer3"
+
+
+#################################
+# DETECTION
+#################################
+
+# Detecteur MOT (plein cadre, retourne plusieurs bboxes).
+# Options : yolo | tophat | none | dummy
+#   yolo    : YOLO ultralytics (defaut si weights_yolo set)
+#   tophat  : top-hat morphologique IR (non-IA, aucun GPU)
+#   none    : aucune detection (SOT pur, attend clic)
+#   dummy   : fausses detections aleatoires (test/bench)
+detector_mot:  "yolo"
+
+# Detecteur ROI (autour du clic operateur, retourne UNE bbox pour init SOT).
+# Utilise quand aucune track MOT n'est disponible au clic.
+# Options : tophat | none
+#   tophat : top-hat + seuil dans ROI autour du clic -> blob le plus proche
+#   none   : pas de detection ROI (SOT demarre depuis clic pur)
+detector_roi:  "tophat"
+
+# Parametres YOLO (ultralytics) - actifs quand detector_mot: "yolo"
+yolo:
+  # Seuil de confiance minimum (post-NMS). Les detections sous ce seuil sont ignorees.
+  conf_thresh: 0.3
+  # Seuil IoU pour la suppression non-maximale (NMS). Reduire pour moins de doublons.
+  iou_thresh:  0.45
+  # Taille d'entree du reseau (pixels, carre). 640 = standard YOLOv8.
+  img_size:    640
+
+# Parametres du detecteur top-hat MOT (plein cadre)
+tophat_mot:
+  # LISTE de noyaux elliptiques top-hat (pixels). Un seul element = comportement
+  # legacy mono-pass. Plusieurs elements = multi-echelle (1 passe par noyau).
+  # Ex : [7] (rapide plein cadre) | [5, 7, 11] (multi-echelle).
+  tophat_kernels: [7]
+  # Seuil relatif : threshold = threshold_rel * max_val dans l'image.
+  # Ignore si use_adaptive_thresh: true.
+  threshold_rel:  0.4
+  # Aire minimale d'un blob (pixels^2). Filtre les pixels isoles.
+  min_area_px2:   16
+  # Aire maximale d'un blob (pixels^2). Filtre les grandes taches (nuages, reflexions).
+  max_area_px2:   5000
+  # Score minimum : intensite moyenne du blob / 255 (apres top-hat).
+  # 0 = aucun filtre (tracker decide).
+  min_score:      0.0
+  # Seuillage adaptatif : thresh = max(min_thresh_abs, median + k_sigma * MAD * 1.4826)
+  # Plus robuste que le seuil fixe en presence de variations de fond IR.
+  use_adaptive_thresh: false
+  # LISTE de seuils sigma adaptatifs (median + k_sigma * MAD). 1 element suffit
+  # en general. Plusieurs = robustesse accrue au contraste (cout x N).
+  k_sigma_levels: [2.0]
+  min_thresh_abs: 5     # Seuil absolu minimum (0-255).
+  # Nombre max de blobs retournes apres deduplication (borne perf dedup O(n^2)).
+  # 0 = pas de cap. Recommande : 50 (plein cadre).
+  max_candidates: 50
+
+# Parametres du detecteur top-hat ROI (autour du clic operateur)
+tophat_roi:
+  # Demi-taille de la ROI autour du clic (pixels).
+  # La ROI fait (2*roi_size_px) x (2*roi_size_px), clippee aux bords.
+  roi_size_px:    120
+  # LISTE de noyaux top-hat dans la ROI. Plus petits que tophat_mot
+  # car la cible occupe une plus grande fraction de la ROI.
+  white_kernels: [5]
+  black_kernels: []        # noyaux black tophat (cible froide). [] = off
+  # Seuil relatif dans la ROI (plus bas pour detecter cibles faibles au clic).
+  # Ignore si use_adaptive_thresh: true.
+  threshold_rel:  0.3
+  # Aire minimale d'un blob dans la ROI.
+  min_area_px2:   4
+  # Aire maximale d'un blob dans la ROI (limite la taille de la cible).
+  max_area_px2:   2000
+  # Seuillage adaptatif (meme principe que tophat_mot).
+  use_adaptive_thresh: false
+  k_sigma_levels: [2.0]
+  min_thresh_abs: 5
+  # Nombre max de blobs evalues dans la ROI (borne perf scoring O(n)).
+  # 0 = pas de cap. Recommande : 20 (ROI petite, 1 seul blob retenu au final).
+  max_candidates: 20
+
+
+#################################
+# DEBUG TRACKING (visualisation et logs de debug)
+#################################
+#
+# Activer ces options pour analyser le comportement du pipeline en detail.
+# Toutes les sauvegardes PNG/MP4 sont dans <output_dir>/run_xxx/debug_tracking/.
+# N'a aucun impact sur les performances si toutes les options sont false.
+
+debug_tracking:
+  # NOTE : save_dir est IGNORE au runtime.
+  # Le chemin effectif est toujours <output_dir>/run_xxx/debug_tracking/
+  # (injecte automatiquement par session.py via cfg["_debug_dir"]).
+  save_dir: "outputs/debug_tracking"   # heritage, non utilise
+  debug_video_fps: 25.0
+
+  # Activer les logs DEBUG detailles du tracker MOT (etat interne track par track).
+  # Affiche : total/confirme/tentative + bbox, hits, time_since_update, vitesse.
+  # N'a d'effet que si log_level: "DEBUG" est aussi active.
+  verbose_mot_tracker: true
+
+  ## TopHat ROI
+  # Sauvegarder la ROI top-hat + blobs a chaque clic operateur.
+  # Vue gauche : image binaire seuilee (blanc sur noir).
+  # Vue droite : image grise + blobs en couleur + stats + params algo.
+  # Utile pour regler roi_size_px, threshold_rel, k_sigma.
+  tophat_roi_save: false
+  tophat_patch_margin: 30   # Marge (px) autour de la ROI analysee dans le patch debug.
+  tophat_color_roi:      [60,  60, 200]   # Rouge clair : cadre ROI
+  tophat_color_blobs:    [200, 80,   0]   # Bleu : tous les blobs
+  tophat_color_selected: [0,  200,   0]   # Vert : blob selectionne
+  tophat_color_click:    [0,    0, 200]   # Rouge vif : marqueur clic
+
+  ## CSRT
+  # Sauvegarder le patch CSRT suivi toutes les N frames (PNG).
+  # Contenu : patch IR normalise + bbox verte.
+  # Utile pour verifier que CSRT suit bien la bonne zone.
+  csrt_patch_save: false
+  csrt_patch_interval: 10   # Intervalle de frames entre sauvegardes (0 = desactive)
+  # Logger le PSR (Peak-to-Sidelobe Ratio) reel a chaque frame.
+  # Le PSR est le score de confiance interne de CSRT.
+  # Visible dans les logs DEBUG. Utile pour calibrer psr_threshold.
+  csrt_log_psr: true
+  # Video debug CSRT : bbox CSRT (vert) + indicateur WARP + cam_shift + PSR.
+  # Permet de visualiser l'efficacite de la CMC par warp de frame et les pertes.
+  # Ecrite dans <output_dir>/run_xxx/debug_tracking/csrt_kalman_debug.mp4
+  csrt_kalman_box_visu: false
+  csrt_kalman_video_name: "csrt_kalman_debug.mp4"
+
+  ## TopHat MOT
+  # Video MP4 debug pour tophat_mot : image binaire seuilee frame par frame.
+  # Ecrite dans <output_dir>/run_xxx/debug_tracking/tophat_mot_binary.mp4.
+  # Utile pour visualiser le seuillage TopHat en mouvement.
+  tophat_mot_save_binary_video: false
+  binary_video_name: "tophat_mot_binary.mp4"
+
+  ## Tracking_TOPHAT
+  # Video annotee Tracking_TOPHAT SOT : zone de recherche (bleu), blob selectionne (vert),
+  # centre predit (croix jaune), score NCC et statut en bas de frame.
+  tracking_tophat_sot_save_video: false
+  tracking_tophat_video_name: "tracking_tophat_sot_debug.mp4"
+  # Video binaire Tracking_TOPHAT SOT : image seuilee Top-Hat dans la zone de recherche.
+  # Le reste du cadre est noir. Analogue a tophat_mot_binary.mp4 pour le SOT.
+  tracking_tophat_binary_save_video: false
+  tracking_tophat_blob_save_video:    false   # carte des N candidats + blob retenu (rouge + score)
+  tracking_tophat_blob_video_name: "tracking_tophat_blobs_sot_debug.mp4"
+  tracking_tophat_binary_video_name: "tracking_tophat_seuillage_sot_debug.mp4"

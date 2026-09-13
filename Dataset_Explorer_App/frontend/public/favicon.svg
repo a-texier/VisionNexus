@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background arrondi — même style qu'AnnotationApp -->
+  <rect width="32" height="32" rx="7" fill="#0f172a"/>
+
+  <!-- Axes de repère (subtils) -->
+  <line x1="5.5" y1="26.5" x2="27" y2="26.5" stroke="#1e293b" stroke-width="1.2"/>
+  <line x1="5.5" y1="5"    x2="5.5" y2="26.5" stroke="#1e293b" stroke-width="1.2"/>
+
+  <!-- Cluster 1 — indigo (bas-gauche) -->
+  <circle cx="10.5" cy="21.5" r="2.8" fill="#4f46e5"/>
+  <circle cx="13.5" cy="19.5" r="2"   fill="#6366f1" opacity="0.85"/>
+  <circle cx="9"    cy="18.5" r="1.6" fill="#818cf8" opacity="0.7"/>
+
+  <!-- Cluster 2 — violet (haut-centre) -->
+  <circle cx="17.5" cy="10"   r="2.8" fill="#7c3aed"/>
+  <circle cx="20.5" cy="12.5" r="2"   fill="#8b5cf6" opacity="0.85"/>
+  <circle cx="15"   cy="13"   r="1.6" fill="#a78bfa" opacity="0.7"/>
+
+  <!-- Cluster 3 — teal (droite) -->
+  <circle cx="23.5" cy="20"   r="2.8" fill="#0d9488"/>
+  <circle cx="22"   cy="16.5" r="2"   fill="#14b8a6" opacity="0.85"/>
+  <circle cx="25.5" cy="17"   r="1.6" fill="#2dd4bf" opacity="0.7"/>
+
+  <!-- Outliers (gris, ton neutre) -->
+  <circle cx="15"   cy="22.5" r="1.1" fill="#475569" opacity="0.55"/>
+  <circle cx="19.5" cy="21"   r="1"   fill="#475569" opacity="0.45"/>
+  <circle cx="11"   cy="15"   r="0.9" fill="#334155" opacity="0.5"/>
+</svg>

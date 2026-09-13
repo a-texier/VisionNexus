@@ -1,0 +1,60 @@
+#################################
+# SOT solo via fichier de commandes (MOT desactive)
+#################################
+#
+# Comportement (Cas 3 : mot_background=false) :
+#   - MOT COMPLETEMENT ARRETE pendant le SOT (detector_mot=none).
+#   - Clic SOT -> detector_roi (top-hat ROI) cherche un blob au clic.
+#     Si blob trouve -> init CSRT sur cette bbox.
+#     Si aucun blob  -> WARNING "Impossible d accrocher" (pas de fallback 40x40).
+#   - Nouveau clic en mode SOT -> abandonner l ancien SOT, relancer detector_roi.
+#   - Aucune track MOT affichee (fond vide).
+#
+# Format du fichier de commandes :
+#   Clic SOT          : frame_emit,frame_click,x,y
+#   Controle MOT      : frame_emit,frame_real,mot_state  (0=OFF, 1=ON)
+#
+# Usage :
+#   python main.py --config config_examples/sot_solo_command.yaml
+#################################
+
+run_name: "sot_solo_command"
+
+#####Sequence #####################
+sequence_dir: "data/sequences/sample_sequence/sample_sequence.mp4"
+weights_yolo: ""  # Pas de YOLO (detector_mot=none)
+
+#####Pipeline #####################
+tracker_sot: "csrt"   # SOT : init depuis bbox detector_roi (top-hat ROI au clic)
+
+mode: "command"
+
+#####Rendu #######################
+light_render: true   # bboxes seules, BYPASS tout le reste (rapide)
+show_raw_det:  false   # Pas de detections MOT (detector_mot=none)
+show_comp_det: false
+
+#####SOT ########################
+sot_loss_threshold: 20   # Tolerant : cible peut etre occultee brievement
+
+#####Commandes #######################
+clicks: "cmd_send/clics.txt"  # Format : commande MOT off PUIS clic SOT
+command_delta: 2
+
+#####Reprojection du clic ###################
+homography_method_image: ""    # desactive (LDV seule)
+
+csrt:
+  padding: 6.0
+
+tracking_tophat:
+  max_dist_px: 150
+  search_radius_px: 80
+  use_adaptive_thresh: false
+
+detector_mot: "none"
+
+tophat_roi:
+  roi_size_px:   150   # ROI plus large (cible peut etre loin du clic scripte)
+  threshold_rel: 0.25  # Seuil plus bas : tolere des cibles plus faibles
+  max_area_px2:  3000

@@ -1,0 +1,102 @@
+#################################
+# Scenario B : MOT continu + SOT declenche par fichier de commandes
+#################################
+#
+# Comportement :
+#   - MOT tourne en continu (BoT-SORT + YOLO + LDV CMC).
+#   - Les clics SOT sont lus depuis un fichier texte (mode=command).
+#   - Pas d'affichage interactif (display=false) -> traitement batch reproductible.
+#   - Pendant le SOT le MOT CONTINUE EN FOND (mot_background=true, Cas 2).
+#   - Nouveau clic en mode SOT -> switch vers la track MOT la plus proche du clic.
+#
+# Format du fichier de commandes (clicks: "cmd_send/clics.txt") :
+#   Clic SOT  : frame_emit,frame_click,x,y
+#   Controle  : frame_emit,frame_real,mot_state  (0=OFF, 1=ON)
+#
+# Usage :
+#   python main.py --config config_examples/B_mot_sot_command.yaml
+#
+# Cas d'usage :
+#   Rejouer une session enregistree pour calcul MOTA/IDF1, ou
+#   scripter les clics SOT pour une evaluation automatique.
+#################################
+
+run_name: scenB_command
+sequence_dir: data/sequences/sample_sequence/sample_sequence.mp4
+metadata_csv:
+- data/sequences/sample_sequence/sample_sequence_BlockID_NumIm.csv
+- data/sequences/sample_sequence/sample_sequence_data_INFO_VID_IR.csv
+- data/sequences/sample_sequence/sample_sequence_data_POINTAGECAM_IR.csv
+tracker_mot: boosttrack
+tracker_sot: tracking_tophat
+mode: command
+start_frame_idx: 500
+light_render: true
+save_video: false
+show_raw_det: false
+show_comp_det: false
+show_gt: false
+sot_loss_threshold: 20
+mot_keepalive_after_sot_s: 2.0
+sot_click_max_dist_px: 0
+clicks: cmd_send/cmd_send_sample_sequence.mp4.txt
+command_delta: 2
+max_delay_frames: 50
+homography_method_image: ''
+boosttrack:
+  use_ecc: true
+  track_thresh: 0
+  match_thresh: 1.0e-05
+  max_age: 10
+  min_hits: 0
+  lambda_iou: 0.1
+  lambda_mhd: 0.75
+  use_dlo_boost: false
+  use_duo_boost: false
+  kalman_R_pos: 0.1
+  kalman_R_h: 0.1
+  kalman_R_a: 0.1
+  kalman_Q_scale: 10
+  kalman_Q_vel: 10
+sot_kalman:
+  kf_process_noise: 2
+  kf_measure_noise: 1
+csrt:
+  padding: 6.0
+tracking_tophat:
+  white_tophat_kernels:
+  - 5
+  - 10
+  search_radius_px: 80
+  max_search_radius_px: 160
+  min_thresh_abs: 10
+  w_appearance: 0
+tophat_mot:
+  tophat_kernels:
+  - 5
+  - 20
+  threshold_rel: 0.3
+  min_area_px2: 5
+  max_area_px2: 1000
+  use_adaptive_thresh: true
+  k_sigma_levels:
+  - 2.5
+  max_candidates: 20
+tophat_roi:
+  roi_size_px: 200
+  white_kernels:
+  - 8
+  - 13
+  black_kernels:
+  - 8
+  - 13
+  max_area_px2: 5000
+  use_adaptive_thresh: true
+  k_sigma_levels:
+  - 2.5
+debug_tracking:
+  tophat_roi_save: true
+  csrt_kalman_box_visu: true
+  tophat_mot_save_binary_video: true
+  tracking_tophat_sot_save_video: true
+  tracking_tophat_binary_save_video: true

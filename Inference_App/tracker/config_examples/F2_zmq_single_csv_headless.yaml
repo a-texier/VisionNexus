@@ -1,0 +1,89 @@
+#################################
+# Scenario F2 : Flux ZMQ generique + MOT + SOT - Headless
+#               Affichage deporte dans le viewer C++
+#################################
+#
+# Difference avec F_zmq_single_csv_interactive.yaml :
+#   mode: "headless"  Python ne fait AUCUN rendu.
+#   Le viewer C++ (tools/zmq_cpp --display) recoit les bboxes de tracking
+#   depuis Python, les dessine sur les frames en buffer, et affiche le
+#   resultat avec imshow. Les clics de l'operateur dans la fenetre C++ sont
+#   renvoyes a Python.
+#
+# Protocole ZMQ generique (voir tools/zmq_cpp et data/zmq/protocol.py) :
+#   Canal 1 - Frames C++ vers Python : C++ PUSH bind(:zmq_port) -> Python PULL
+#     Payload multipart : [meta JSON {"az","el","chh","frame_id"}, JPEG]
+#
+#   Canal 2 - Annotations Python vers C++ : Python PUSH -> C++ PULL bind(:zmq_anno_port)
+#     Payload JSON : {"frame_id": int, "boxes": [{"x1","y1","x2","y2","b","g","r","label"}, ...]}
+#     Couleurs : vert=MOT actif | magenta=SOT1 | orange=SOT2
+#
+#   Canal 3 - Clics C++ vers Python : C++ PUSH bind(:zmq_click_port) -> Python PULL
+#     Payload JSON : {"frame_id": int, "type": "left"|"right"|"scroll", "x": int, "y": int}
+#
+#   Aucune decouverte dynamique : host/ports doivent correspondre des deux
+#   cotes (zmq_port/zmq_anno_port/zmq_click_port <-> --port/--anno-port/--click-port).
+#
+# Demarrage :
+#   # 1. Lancer le sender C++ avec --display (terminal 1)
+#   ./tools/zmq_cpp/sender --video <video.mp4> --csv <meta.csv> --display
+#
+#   # 2. Lancer le pipeline Python headless (terminal 2)
+#   python main.py --config config_examples/F2_zmq_single_csv_headless.yaml
+#
+# Notes :
+#   - sequence_dir: "tcp" = protocole local (127.0.0.1).
+#     Pour un hote distant : sequence_dir: "tcp://192.168.1.10"
+#   - Les clics gauche/droit dans la fenetre C++ declenchent SOT1/SOT2.
+#   - La molette (clic milieu) relache toutes les cibles SOT.
+#
+#################################
+
+run_name: "scenF2_zmq_headless"
+
+#####Source ZMQ generique #####################
+sequence_dir: "tcp"
+
+# Pas de CSV cote pipeline : les metadonnees arrivent dans le meta JSON.
+camera_name:  ""
+metadata_csv: []
+
+# Timeout (ms) sans message ZMQ avant avertissement. Plus long qu'en interactif
+# car le sender C++ peut demarrer apres Python sans que ce soit une erreur.
+zmq_recv_timeout_ms: 40000
+
+#####Annotations / metriques ######################
+annotation_file: ""
+compute_metrics: false
+
+#####Pipeline ######################
+tracker_mot:    "botsort"
+tracker_sot:    "csrt"
+n_targets:      2
+
+# headless : Python ne fait aucun rendu ni affichage.
+# Le viewer C++ (--display) gere l'affichage et les clics.
+mode: "headless"
+
+#####Rendu ########################
+# En mode headless, ignorees par l'affichage Python (il n'y en a pas).
+# Les couleurs de render: sont utilisees pour les annotations envoyees au
+# viewer C++ (ZmqDisplayBridge._track_color).
+show_hud:    false
+show_legend: false
+
+render:
+  sot_bbox_thickness: 4
+
+#####SOT #########################
+sot_loss_threshold: 15
+
+#####CMC #########################
+use_ldv_cmc:             true
+homography_method_image: ""
+# max_delay_frames : taille du buffer LDV (reprojection des clics ZMQ).
+# Doit couvrir le retard max entre le clic C++ et la frame courante Python.
+max_delay_frames: 50
+
+csrt:
+  padding: 6.0

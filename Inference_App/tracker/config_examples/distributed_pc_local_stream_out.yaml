@@ -1,0 +1,52 @@
+#################################
+# PC local : donnees locales -> pipeline -> stream annote -> PC operateur (affichage)
+#################################
+#
+# Architecture :
+#
+#   Ce PC                                   PC hote / operateur
+#   #####################################   ##################################
+#   [Donnees locales : format specialise / MP4 / images]
+#   pipeline MOT+SOT                        [tools/mjpeg_receiver.py] <- port 8080
+#                          frames annotees ###################>
+#                [MJPEGServer] (port 8080)
+#                         <### POST /click, /key ################
+#
+# Cas d'usage :
+#   On dispose des donnees sur ce PC (pas de flux entrant reseau).
+#   On execute le pipeline localement SANS affichage local (headless).
+#   Le resultat annote est streame vers un PC operateur qui clique dessus.
+#   Les clics (gauche=SOT1, droit=SOT2, molette=KILL) reviennent via POST /click.
+#
+# Etapes de demarrage :
+#
+#   1. Sur ce PC (traitement) :
+#      python main.py --config config_examples/distributed_pc_local_stream_out.yaml
+#
+#   2. Sur le PC operateur (affichage + interaction) :
+#      python tools/mjpeg_receiver.py --host <ip_ce_pc> --port 8080
+#      OU navigateur : http://<ip_ce_pc>:8080/
+#################################
+
+run_name: "distributed_pc_local_stream"
+
+#####Sequence (donnees locales) #####################
+# Modifier le chemin selon la sequence disponible sur ce PC.
+sequence_dir:    "data/sequences/sample_sequence/sequence.mp4"
+annotation_file: ""
+camera_name:     ""
+
+#####Pipeline #########################
+n_targets: 2
+
+# mode=interactive : les clics reseau (POST /click) sont injectes dans
+# click_handler via session.py -> click_handler.inject_click/inject_right_click.
+mode: "interactive"
+start_frame_idx: 1000
+
+#####Rendu#####################################
+light_render:  true    # bboxes seules -> rapide
+local_display: false   # PAS d'imshow local - operateur est sur PC distant
+
+#####Streaming sortie -> PC operateur ######################
+stream_mode: "mjpeg"

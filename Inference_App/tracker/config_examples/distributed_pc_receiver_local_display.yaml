@@ -1,0 +1,54 @@
+#################################
+# PC recepteur : donnees reseau -> pipeline local -> affichage interactif
+#################################
+#
+# Architecture :
+#
+#   PC emetteur (192.168.1.50)              PC recepteur (nous)
+#   #########################               ##################################
+#   [Video source]                          sequence_dir: http://.../stream
+#   tools/frame_sender.py -> frames ->      pipeline MOT+SOT
+#                                           local_display: true  <- imshow interactif
+#                                           stream_mode: none    <- pas de diffusion sortante
+#
+# Cas d'usage :
+#   Le PC emetteur envoie une video brute (format specialise, MP4, images), le recepteur
+#   execute la totalite du pipeline de tracking et affiche en local avec la
+#   souris comme moyen d'interaction (clic gauche = SOT1, droit = SOT2, molette = KILL).
+#
+# Etapes de demarrage :
+#
+#   1. Sur le PC emetteur :
+#      python tools/frame_sender.py --input data/sequences/video.mp4 --fps 10
+#
+#   2. Sur ce PC (recepteur) :
+#      python main.py --config config_examples/distributed_pc_receiver_local_display.yaml
+#################################
+
+run_name: "distributed_pc_receiver_local"
+
+#####Sequence (entree reseau depuis PC emetteur) ############
+# Remplacer l'IP par celle du PC emetteur sur le reseau.
+sequence_dir:    "http://192.168.1.50:9090/stream"
+annotation_file: ""
+camera_name:     ""
+
+#####Pipeline #########################
+tracker_sot: "tracking_tophat"
+
+# Clics via souris locale (cv2.setMouseCallback)
+mode: "interactive"
+
+#####Rendu#####################################
+light_render:  true
+local_display: true    # <- affichage imshow local (fenetre cv2)
+
+#####CMC / Reprojection #######################
+# Pas de LDV depuis flux reseau -> CMC image (ORB)
+use_ldv_cmc: false
+
+detector_mot: "tophat"
+
+tracking_tophat:
+  white_tophat_kernels:    [3, 7]
+  feature_match_threshold: 0.40

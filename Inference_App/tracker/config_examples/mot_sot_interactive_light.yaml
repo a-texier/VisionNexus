@@ -1,0 +1,49 @@
+#################################
+# MOT continu + passage SOT sur clic operateur - detection top-hat (sans YOLO)
+#################################
+#
+# Comportement :
+#   - MOT (BoT-SORT + top-hat) demarre immediatement et suit tous les objets.
+#   - Clic operateur sur un objet -> passage en SOT (CSRT) sur cet objet.
+#   - Si le SOT perd la cible (N frames d'echec) -> retour automatique en MOT.
+#   - Pendant le SOT, le MOT est en PAUSE (economie CPU/GPU).
+#
+# Variante sans reseau de detection (detector_mot=tophat) : utile quand aucun
+# poids YOLO n'est disponible, ou pour un pipeline 100% CPU/leger.
+#
+# Usage :
+#   python main.py --config config_examples/mot_sot_interactive_light.yaml
+#   -> Fenetre interactive : clic gauche sur une cible pour declencher le SOT.
+#################################
+
+run_name: "mot_sot_interactive_light"
+log_level: "DEBUG"
+
+#####Sequence #####################
+sequence_dir:    "data/sequences/sample_sequence/sequence.mp4"
+annotation_file: ""
+
+#####Pipeline #####################
+tracker_mot: "botsort"
+tracker_sot: "csrt"
+n_targets:   2
+mode: "interactive"
+start_frame_idx: 1200
+
+#####Rendu #######################
+save_video:     false
+local_display:  true
+show_raw_det:   false
+
+render:
+  sot_bbox_thickness: 4
+
+detector_mot: "tophat"   # pas de YOLO requis
+
+tophat_mot:
+  tophat_kernels: [15]
+  min_thresh_abs: 20
+  max_candidates: 10
+
+debug_tracking:
+  csrt_log_psr: false

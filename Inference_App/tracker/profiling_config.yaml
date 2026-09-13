@@ -1,0 +1,53 @@
+#################################
+# profiling_config.yaml
+# Configuration du profiler frame-par-frame du pipeline.
+#################################
+#
+# Activer le profiling (master switch) :
+#   enabled: true
+#
+# Chaque section peut etre activee/desactivee independamment.
+# Le profiler instrumente le code SANS modifier la logique metier.
+#
+# Sections disponibles :
+#   frame_load  : push buffers internes (frame_buffer + ldv_buffer) - PAS la lecture source.
+#                 La lecture source (format specialise, MP4, dossier images) est HORS profiling
+#                 (dans loader.__next__). Elle apparait dans le bar chart sous
+#                 "data read †" (wall - proc total).
+#   ldv_cmc     : calcul H_ldv (homographie inertielle LDV)
+#   image_cmc   : calcul H_image (ORB/ECC/sparseOptFlow)
+#   detect_mot  : detection plein cadre (YOLO ou top-hat)
+#   compensate  : compensation externe des detections (ByteTrack uniquement)
+#   mot_update  : mise a jour du tracker MOT
+#   sot_update  : mise a jour du tracker SOT (quand SOT actif)
+#   render      : rendu visualizer (affichage + encodage video)
+#   other       : temps non mesure = total frame - somme sections actives
+#
+# Rapport HTML (Plotly.js, auto-contenu, sans serveur) :
+#   per_frame_chart : graphe barre empilee ms par frame
+#   mean_summary    : pie chart + tableau moyen/min/max par section
+#   html_path       : chemin de sortie. Variables disponibles :
+#                     {run_dir}  -> repertoire de sortie du run (outputs/run_xxx)
+#                     {run_name} -> cfg.run_name
+#################################
+
+enabled: true   # Passer a true pour activer le profiling
+
+# --- Sections a mesurer (true = mesurer, false = sauter) ---
+sections:
+  frame_load:  true
+  ldv_cmc:     true
+  image_cmc:   true
+  detect_mot:  true
+  compensate:  true
+  mot_update:  true
+  sot_update:  true
+  render:      true
+  other:       true   # temps residuel (garbage + overhead)
+
+# --- Rapport HTML ---
+output:
+  per_frame_chart: true    # graphe barre empilee par frame (peut etre lourd sur >1000 frames)
+  mean_summary:    true    # pie chart + tableau des moyennes
+  html_path: "{run_dir}/profiling.html"
+

@@ -1,0 +1,25 @@
+#################################
+# Exemple minimal : les seules cles vraiment utiles pour demarrer.
+#################################
+#
+# Toutes les autres cles (une centaine) prennent leur valeur par defaut
+# depuis config/config.yaml -- ce scenario n'a besoin de les redefinir que si
+# vous voulez un comportement different. Voir config/config.yaml pour la liste
+# complete des parametres et leur documentation.
+#
+# Usage :
+#   python main.py --config config_examples/sample_minimal.yaml
+#################################
+
+run_name: "sample_minimal"
+
+# Sequence + verite terrain optionnelle (laisser vide pour desactiver les metriques).
+sequence_dir:    "data/sequences/sample_sequence"
+annotation_file: "data/annotations/sample_sequence.ver"
+
+# Tracker MOT (multi-objets) + SOT (mono-objet, declenche par clic).
+tracker_mot: "custom_kalman"   # CPU uniquement, aucune dependance
+tracker_sot: "csrt"            # CPU uniquement, OpenCV
+
+# Fenetre interactive : clic gauche sur une cible pour declencher le SOT.
+mode: "interactive"

@@ -1,0 +1,82 @@
+"""""Tu vas refactoriser cette application pour qu'elle adopte l'architecture définie dans
+blueprint_core_based.md et s'appuie sur le launcher
+launcher.py comme modèle de démarrage.
+
+Commence par lire ces deux fichiers en entier avant de faire quoi que ce soit.
+---
+
+OBJECTIF
+
+Appliquer l'architecture du blueprint_core_based  .md sans toucher à la logique métier.
+Les transformations attendues sont :
+
+1. WORKSPACE
+   - Créer backend/config.py sur le modèle du §3 du blueprint_core_based  .md
+   - Toutes les données persistantes (DB, cache, exports, settings) doivent
+     aller dans WORKSPACE (lu depuis env var <NOM_APP>_WORKSPACE)
+   - Aucun chemin en dur dans les routers ou la logique métier
+
+2. LAUNCHER
+   - Créer launcher.py à la racine en copiant la logique de
+     launcher.py
+   - Adapter : APP_ROOT_PATH, CONDA_ENV, les noms de variables d'env
+     (remplacer EXPLORER_* par <NOM_APP>_*)
+   - Conserver AUTO_PORTS=True et le registre .instances.json
+
+3. BASE DE DONNÉES
+   - Si SQL existant : migrer vers SQLModel + SQLite workspace (§5)
+   - Si pas de DB : créer la structure minimale (engine, get_session,
+     create_db_and_tables)
+   - Ajouter le pattern de migration légère dans le lifespan (ALTER TABLE
+     si colonne manquante)
+
+4. SETTINGS UTILISATEUR
+   - Créer backend/api/settings.py avec AppSettings (§6)
+   - Remplacer tout fichier de config utilisateur codé en dur par
+     settings.json dans le workspace
+
+5. FASTAPI MAIN.PY
+   - Appliquer la structure lifespan du §8 :
+     tables → migrations → recovery des tâches bloquées → modèles → yield
+   - StaticFiles montés APRÈS les routers
+   - Routes spécifiques déclarées AVANT les routes avec {id}
+
+6. FRONTEND (si présent)
+   - vite.config.ts : proxy /api + chemins statiques → backend dynamique
+     via VITE_BACKEND_PORT (§10)
+   - client.ts : séparer URL proxy (axios) de BACKEND_BASE (SSE/fetch direct)
+   - types/api.ts : miroir TypeScript de tous les schémas Pydantic
+   - useSettings hook (§6)
+
+7. TÂCHES LONGUES (si présentes)
+   - Convertir les endpoints bloquants en pattern SSE non-bloquant (§9) :
+     POST déclenche + retourne immédiatement, frontend poll via fetch+ReadableStream
+   - État SSE stocké module-level (hors composant React)
+
+---
+
+CONTRAINTES
+
+- Ne pas modifier la logique métier (algorithmes, calculs, formats de données)
+- Conserver tous les endpoints API existants (même URLs, mêmes réponses)
+- Pas d'Alembic — migrations légères ALTER TABLE dans le lifespan
+- Pas d'émojis dans les logs Python
+- Commentaires en français OK
+- Type hints Python partout
+
+---
+
+ORDRE DE TRAVAIL
+
+1. Lire blueprint_core_based .md + launcher.py de référence
+2. Lire et cartographier l'appli existante (routes, modèles, config actuelle)
+3. Créer config.py (workspace + chemins)
+4. Créer/adapter les modèles SQLModel
+5. Adapter main.py (lifespan, ordre routers/static, CORS dynamique)
+6. Créer launcher.py
+7. Adapter le frontend (vite.config, client.ts, types, hooks)
+8. Vérifier : aucun chemin en dur, aucune donnée dans le repo, ports depuis env
+
+À chaque étape, explique brièvement ce que tu changes et pourquoi
+avant d'écrire le code.
+"""""

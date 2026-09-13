@@ -1,0 +1,85 @@
+#################################
+# Scenario F : Flux ZMQ generique + MOT + SOT interactif
+#################################
+#
+# Source : tools/zmq_cpp (sender generique) qui envoie frames + metadonnees via
+#          le protocole JSON+JPEG generique (voir data/zmq/protocol.py).
+#          Le pipeline recoit via ZmqFrameReader (host/port fixes, pas de sync).
+#
+# Metadonnees LDV :
+#   meta JSON = {"az","el","chh","frame_id"} (voir tools/zmq_cpp/json_utils.hpp).
+#   Converties en degres par ZmqFrameReader ; roulis toujours 0.0 (non fourni
+#   par ce protocole generique).
+#   use_ldv_cmc: true -> CMC LDV active (bypass sparseOptFlow interne BoT-SORT).
+#
+# Comportement :
+#   - MOT (BoT-SORT + YOLO) demarre immediatement et suit tous les objets.
+#   - Clic gauche operateur -> passage en SOT (CSRT) sur l'objet selectionne.
+#   - Clic droit            -> SOT cible 2 (n_targets: 2).
+#   - Si le SOT perd la cible -> retour automatique en MOT.
+#
+# Mode interactif (ce fichier) :
+#   Python affiche les frames avec bboxes (fenetre OpenCV locale).
+#   Les clics sont captures par ClickHandler (Python).
+#
+# Mode headless avec affichage C++ (voir F2_zmq_single_csv_headless.yaml) :
+#   Python ne fait aucun rendu. Les bboxes (JSON) sont envoyees au C++
+#   (tools/zmq_cpp --display) qui les affiche avec imshow.
+#   -> Requiert mode: "headless".
+#
+# Demarrage (mode interactif) :
+#
+#   # 1. Lancer le sender C++ (terminal 1)
+#   ./tools/zmq_cpp/sender --video <video.mp4> --csv <meta.csv> --port 5555
+#
+#   # 2. Lancer le pipeline (terminal 2)
+#   python main.py --config config_examples/F_zmq_single_csv_interactive.yaml
+#
+#   Le C++ doit etre lance AVANT ou APRES Python (PULL/PUSH ZMQ se reconnecte
+#   automatiquement).
+#
+#################################
+
+run_name: "scenF_zmq_single_csv"
+
+#####Source ZMQ generique #####################
+# "tcp"        -> host=127.0.0.1, port=zmq_port (5555 par defaut, cf --port cote C++)
+# "tcp://host" -> idem, host explicite
+sequence_dir: "tcp"
+
+# Pas de CSV cote pipeline : les metadonnees arrivent dans le meta JSON.
+camera_name:  ""
+metadata_csv: []
+
+#####Annotations / metriques ######################
+annotation_file: ""
+compute_metrics: false
+
+#####Pipeline ######################
+tracker_mot:    "botsort"
+tracker_sot:    "csrt"
+n_targets:      2
+
+mode: "interactive"
+
+#####Rendu ########################
+local_display:          true
+debug_dialog_on_frames: true
+trail:     25
+show_comp_det: false
+show_gt:       false
+
+render:
+  sot_bbox_thickness: 4   # track SOT plus epaisse (visee ZMQ)
+
+#####SOT #########################
+sot_loss_threshold: 15
+
+#####CMC #########################
+# use_ldv_cmc: true (defaut) -> LDV recu via ZMQ est prioritaire, sparseOptFlow
+# interne de BoT-SORT bypasse.
+homography_method_image: ""    # desactive : LDV ZMQ suffit
+max_delay_frames:        50
+
+csrt:
+  padding: 6.0

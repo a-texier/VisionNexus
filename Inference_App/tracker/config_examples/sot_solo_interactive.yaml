@@ -1,0 +1,72 @@
+#################################
+# SOT solo interactif (clic operateur en temps reel, sans MOT)
+#################################
+#
+# Comportement (mode SOT-only : tracker_mot=none) :
+#   - Aucun tracker MOT, aucune detection plein cadre.
+#   - Etat initial : IDLE (attente de clic).
+#   - Clic operateur sur la fenetre cv2 -> detector_roi (top-hat ROI) cherche
+#     le blob le plus proche du clic.
+#     Si blob trouve  -> init CSRT sur cette bbox  -> etat SOT.
+#     Si aucun blob   -> WARNING [KO] "Impossible d accrocher" -> reste IDLE.
+#   - Nouveau clic en mode SOT -> reset + detector_roi -> nouveau SOT.
+#   - Si le SOT perd la cible (N frames) -> retour IDLE (pas de MOT a relancer).
+#   - H_ldv toujours calcule pour la reprojection des clics (CMC clic uniquement).
+#
+# Difference avec sot_solo_command.yaml :
+#   - mode interactive (fenetre cv2) au lieu de mode command (fichier de clics).
+#
+# Cas d'usage operationnel :
+#   Suivi mono-cible precis sans detection large zone. L operateur pointe
+#   directement la cible d interet dans l image. Charge CPU/GPU minimale.
+#
+# Usage :
+#   python main.py --config config_examples/sot_solo_interactive.yaml
+#   -> Fenetre interactive : clic gauche sur une cible pour declencher le SOT.
+#      Nouveau clic = nouvel accrochage.
+#################################
+
+run_name: "sot_solo_interactive"
+log_level: "DEBUG"
+
+#####Sequence #####################
+sequence_dir:    "data/sequences/sample_sequence/sample_sequence.mp4"
+weights_yolo: ""   # Pas de YOLO (detector_mot=none, tracker_mot=none)
+
+#####Pipeline #####################
+tracker_mot:    "none"     # Mode SOT-only : pas de tracker MOT, pas de detector_mot.
+                          # Etats machine : IDLE <-> SOT (jamais MOT).
+tracker_sot:    "tracking_tophat"
+mode: "interactive"   # Fenetre cv2, clic gauche -> SOT
+start_frame_idx: 280
+device: "cpu"   # CSRT/Tracking_TOPHAT CPU uniquement, pas de GPU requis
+
+#####Rendu #######################
+save_video:             true
+local_display:          true
+debug_dialog_on_frames: true
+trail:     25
+show_raw_det:  false   # Pas de detections MOT (detector_mot=none)
+show_comp_det: false
+
+#####SOT ########################
+sot_loss_threshold: 5   # Frames d echec SOT avant retour IDLE
+
+#####CMC / Reprojection du clic ###################
+homography_method_image: ""    # Desactive (LDV seule pour reprojection des clics)
+
+csrt:
+  padding: 6.0
+
+tracking_tophat:
+  white_tophat_kernels: [3, 5, 7]
+  max_dist_px: 50
+  search_radius_px: 40
+  w_appearance: 0.15
+
+detector_mot: "none"
+
+tophat_roi:
+  roi_size_px:   150   # ROI large pour tolerer un clic imprecis de l operateur
+  threshold_rel: 0.25  # Seuil bas : tolere des cibles faibles
+  max_area_px2:  3000

@@ -1,0 +1,55 @@
+# ============================================================
+# Tracker - image air-gap générique pour cible x86_64 avec GPU NVIDIA
+# CUDA 12.1 / cuDNN 8 / Python 3.10 -> aligne sur requirements.txt
+#
+# Build (depuis la RACINE du repo, pas depuis deploy/) :
+#   podman build -t vision-tracker:latest -f deploy/conteneur/Containerfile .
+# ============================================================
+FROM nvcr.io/nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# ── Dépendances système ──────────────────────────────────────
+# python3.10 = python3 par defaut sur ubuntu22.04, pas besoin de PPA.
+# build-essential + python3.10-dev : compilation cython_bbox / Cython (pytracking).
+# libgtk-3-0 + libgl1/libglib/libsm6/libxext6/libxrender1 : opencv-contrib-python
+#   (PAS headless - cv2.imshow utilise dans pipeline/session.py, utils/visualizer.py,
+#    tools/receiver/mjpeg_receiver.py) a besoin d'un backend GUI + X11.
+# ffmpeg : encodage/lecture video (utils/stream_server.py).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 python3.10-dev python3-pip \
+        build-essential \
+        libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgtk-3-0 \
+        libgomp1 \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 \
+ && ln -sf /usr/bin/python3.10 /usr/bin/python
+
+WORKDIR /app
+
+# ── Dépendances Python ───────────────────────────────────────
+# Copier uniquement requirements.txt d'abord (cache de layer podman).
+COPY requirements.txt .
+
+# torch DOIT etre installe en premier avec l'URL cu121 (voir en-tete
+# de requirements.txt) sinon pip installe la roue CPU par defaut.
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 \
+        --extra-index-url https://download.pytorch.org/whl/cu121 \
+ && pip install --no-cache-dir -r requirements.txt
+
+# Application code, optional adapters, model weights and trackers
+# Voir .containerignore a la racine du repo : exclut data/, outputs/, .git,
+# __pycache__ pour ne pas embarquer des GB de sequences/résultats de test.
+COPY . /app/
+
+# Dossiers runtime (au cas où absents / vides après .containerignore)
+RUN mkdir -p /app/outputs /app/data/sequences /app/cmd_send
+
+# ── Point d'entrée ──────────────────────────────────────────
+ENTRYPOINT ["python3", "main.py"]
+CMD ["--config", "config_examples/B_mot_sot_command.yaml"]

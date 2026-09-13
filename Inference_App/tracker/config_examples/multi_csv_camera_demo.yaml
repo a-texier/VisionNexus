@@ -1,0 +1,97 @@
+#################################
+# Demo camera multi_csv : MOT continu + passage SOT sur clic operateur
+#################################
+#
+# Illustre camera_name: "multi_csv" (3 CSV auto-decouverts par suffixe, voir
+# config/config.yaml) sur un fichier .mp4, avec YOLO exporte en TensorRT (.engine).
+#
+# Comportement :
+#   - MOT (BoT-SORT + YOLO) demarre immediatement et suit tous les objets.
+#   - Clic operateur sur un objet -> passage en SOT (Tracking_TOPHAT) sur cet objet.
+#   - Si le SOT perd la cible (N frames d'echec) -> retour automatique en MOT.
+#
+# Usage :
+#   python main.py --config config_examples/multi_csv_camera_demo.yaml
+#   -> Fenetre interactive : clic gauche sur une cible pour declencher le SOT.
+#################################
+
+run_name: demo_poc
+log_level: DEBUG
+sequence_dir: data/sequences/sample_sequence/sample_sequence.mp4
+metadata_csv: null   # [] ou null = auto-decouverte des 3 CSV par suffixe (multi_csv)
+output_dir: outputs/Demo_POC/
+weights_yolo: weights/detector.engine
+tracker_mot: boosttrack
+tracker_sot: tracking_tophat
+n_targets: 2
+mode: interactive
+slice_size: 20
+start_frame_idx: 715
+local_display: true
+debug_dialog_on_frames: true
+trail: 25
+show_comp_det: false
+render:
+  sot_bbox_thickness: 4
+sot_loss_threshold: 15
+mot_keepalive_after_sot_s: 2
+max_delay_frames: 50
+homography_method_image: ''
+boosttrack:
+  use_ecc: true
+  track_thresh: 0
+  match_thresh: 1.0e-05
+  max_age: 10
+  min_hits: 0
+  lambda_iou: 0.1
+  lambda_mhd: 0.75
+  use_dlo_boost: false
+  use_duo_boost: false
+  kalman_R_pos: 0.1
+  kalman_R_h: 0.1
+  kalman_R_a: 0.1
+  kalman_Q_scale: 10
+  kalman_Q_vel: 10
+  show_kalman_predict: true
+sot_kalman:
+  kf_process_noise: 2
+  kf_measure_noise: 1
+csrt:
+  padding: 6.0
+tracking_tophat:
+  white_tophat_kernels:
+  - 5
+  - 10
+  search_radius_px: 80
+  max_search_radius_px: 160
+  min_thresh_abs: 10
+  w_appearance: 0
+tophat_mot:
+  tophat_kernels:
+  - 5
+  - 20
+  threshold_rel: 0.3
+  min_area_px2: 5
+  max_area_px2: 1000
+  use_adaptive_thresh: true
+  k_sigma_levels:
+  - 2.5
+  max_candidates: 20
+tophat_roi:
+  roi_size_px: 200
+  white_kernels:
+  - 8
+  - 13
+  black_kernels:
+  - 8
+  - 13
+  max_area_px2: 5000
+  use_adaptive_thresh: true
+  k_sigma_levels:
+  - 2.5
+debug_tracking:
+  tophat_roi_save: true
+  csrt_kalman_box_visu: true
+  tophat_mot_save_binary_video: true
+  tracking_tophat_sot_save_video: true
+  tracking_tophat_binary_save_video: true
