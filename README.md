@@ -26,9 +26,10 @@ command line or opened in the Electron client. The Orchestrator then links
 them together into visual MLOps pipelines.
 
 <!-- branch-licence:start -->
-> **`main` branch**: in-house YOLOX engine, no Ultralytics dependency.
-> Distributed under `AGPL-3.0-only` or a commercial license. A variant with
-> the Ultralytics plugin, AGPL-3.0 only, lives on the `ultralytics` branch.
+> **Branche `ultralytics`** : `main` + le plugin Ultralytics (`plugins/visionnexus_ultralytics`).
+> Distribuee sous `AGPL-3.0-only` uniquement : la licence commerciale ne la
+> couvre pas. Pour une version compatible licence commerciale, utiliser la
+> branche `main`.
 <!-- branch-licence:end -->
 
 > The repository contains the source and lock files. Node dependencies,
