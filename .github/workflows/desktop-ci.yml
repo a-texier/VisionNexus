@@ -1,0 +1,30 @@
+# CI du lanceur Electron : typecheck + tests de non-regression.
+# Les memes verifications tournent en local a chaque build de l'exe
+# (npm run dist:win execute `npm test`), donc un exe ne peut pas etre produit
+# avec une regression ; ce workflow les rejoue sur chaque push cote depot.
+name: desktop-ci
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-ci.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-ci.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run build
+      - run: npm test

@@ -1,0 +1,74 @@
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Frontend dependencies and generated artifacts
+**/node_modules/
+node-v*-linux-*/
+node-v*-linux-*.tar.*
+**/dist/
+**/release/
+**/build/
+**/.tsbuildinfo
+
+# Workspaces, datasets, logs and generated runs
+.run/
+workspaces/
+All_workspaces/
+/*/data/
+/*/runs/
+/*/exports/
+/Autre/*/data/
+/Autre/*/runs/
+/Autre/*/exports/
+**/*.log
+**/mlruns/
+**/bob_test/
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Optional private format adapter
+**/backend/utils/format specialise.py
+
+# Model payloads; see MODEL_WEIGHTS.md
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.engine
+*.tflite
+*.h5
+*.hdf5
+*.weights
+*.pb
+pytorch_model.bin
+**/models/huggingface/
+
+# Internal dev docs and course material (never published)
+CLAUDE.md
+cours_*.html
+/Inference_App/docs/setup.md
+/OLD_Inference_App/
+
+# Platform/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

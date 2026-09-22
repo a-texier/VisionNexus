@@ -1,0 +1,25 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+# E501 : longueur de ligne non bloquante (deja gere par le formatter).
+# B008 : Depends(...) en defaut d'argument est l'idiome FastAPI standard.
+ignore = ["E501", "B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "backend/tests"]
+markers = [
+    "slow: entrainement reel (meme court) -- plus lent qu'un test unitaire pur.",
+]

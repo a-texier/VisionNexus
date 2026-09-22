@@ -1,0 +1,16 @@
+engine: yolox
+model_size: yolox-s
+mode: infer
+tracker: none
+confidence: 0.25
+iou: 0.45
+imgsz: 640
+device: ""
+class_names: []
+track_high_thresh: 0.5
+track_low_thresh: 0.1
+new_track_thresh: 0.6
+match_thresh: 0.3
+track_buffer: 30
+save_output: true
+max_frames: 0

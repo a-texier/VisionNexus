@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>VisionNexus</title>
+<style>
+  :root{
+    color-scheme: dark; /* dit a Chromium de rendre les controles natifs (dropdown,
+                            scrollbars, cases) en theme sombre -- sans ca, la liste
+                            deroulante d'un <select> peut rester rendue en clair par
+                            l'OS et devenir illisible sur un fond sombre custom. */
+    --bg:#0a0e14; --panel:#111826; --panel2:#161f30; --border:#232f42;
+    --text:#dbe4f0; --muted:#7d8ba3; --blue:#58a6ff; --teal:#2dd4bf; --red:#f85149; --amber:#e3b341; --green:#3fb950;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,'Segoe UI',Roboto,sans-serif; height:100vh; display:flex; flex-direction:column;
+    overflow:hidden; transition:box-shadow .15s;
+  }
+  /* Survol d'une fenetre detachee en train d'etre glissee (cv:dock-hint) --
+     glow tout autour de la fenetre + pulse sur l'onglet VisionNexus, pour
+     que "lacher ici pour redocker" soit sans ambiguite pendant le drag. */
+  body.dockHintActive{box-shadow:inset 0 0 0 3px var(--blue), inset 0 0 40px rgba(88,166,255,.15);}
+  body.dockHintActive #homeTab{animation:cvPulse .7s ease-in-out infinite; border-color:var(--blue);}
+  /* header sert aussi de barre de titre custom (main.ts: titleBarStyle
+     'hidden' + titleBarOverlay sur Windows -- la barre native, blanche et
+     non stylisable en CSS, est retiree). -webkit-app-region:drag rend TOUT
+     le header deplaçable comme une vraie barre de titre ; chaque element
+     cliquable a l'interieur doit explicitement repasser en no-drag, sinon
+     le clic est intercepte par le systeme de fenetrage au lieu du bouton. */
+  header{
+    display:flex; align-items:center; gap:10px; padding:6px 14px; border-bottom:1px solid var(--border);
+    flex-shrink:0; -webkit-app-region:drag;
+    padding-right:150px; /* reserve la place des boutons systeme (min/max/close) de l'overlay */
+  }
+  header img{height:22px; width:22px; object-fit:contain; flex-shrink:0;}
+  header h1{font-size:12.5px; margin:0; font-weight:700; color:#fff; white-space:nowrap; flex-shrink:0;}
+  header button, header input, header .menuDropdown, #winTabStrip{-webkit-app-region:no-drag;}
+  header .headBtns{display:flex; gap:8px; flex-shrink:0;}
+  header .headBtns button{padding:6px 12px; font-size:11.5px;}
+
+  /* ---- Barre de menu custom (remplace le menu natif Fichier/Edit/... --
+     rendu OS impossible a re-styliser, reste toujours blanc). ---- */
+  #appMenuBar{display:flex; gap:2px; flex-shrink:0;}
+  #appMenuBar .menuItem{position:relative;}
+  #appMenuBar > .menuItem > button{
+    appearance:none; background:transparent; border:none; color:var(--muted);
+    font-size:11.5px; font-weight:600; padding:5px 9px; border-radius:5px; cursor:pointer;
+  }
+  #appMenuBar > .menuItem > button:hover, #appMenuBar > .menuItem.open > button{
+    background:var(--panel2); color:#fff;
+  }
+  .menuDropdown{
+    display:none; position:absolute; top:100%; left:0; margin-top:4px; min-width:200px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 10px 24px rgba(0,0,0,.5); padding:4px; z-index:80; flex-direction:column; gap:1px;
+  }
+  .menuItem.open .menuDropdown{display:flex;}
+  .menuDropdown button{
+    appearance:none; background:transparent; border:none; color:var(--text); text-align:left;
+    font-size:12px; font-weight:500; padding:7px 10px; border-radius:5px; cursor:pointer; width:100%;
+  }
+  .menuDropdown button:hover{background:rgba(88,166,255,.14); color:#fff;}
+
+  /* ---- Bandeau sous-apps sur l'onglet Orchestrator ----
+     #subAppsFlyout est un panneau INDEPENDANT (position:fixed, repositionne
+     en JS a l'ouverture), PAS imbrique dans le <button class="wtab"> : un
+     <button> ne peut pas contenir un autre <button> (le parseur HTML ferme
+     implicitement le bouton parent des le 1er <button> imbrique rencontre --
+     regle du "stack of open elements"), ce qui expulsait silencieusement
+     tout le menu hors de l'arbre de l'onglet : jamais affiche (le selecteur
+     CSS qui ciblait ".wtab.subAppsOpen .subAppsDropdown" ne matchait plus
+     rien) et ses boutons "data-subapp" jamais cables. Cause reelle du "une
+     fleche depliable mais rien a deplier" signale par l'utilisateur -- pas
+     un simple souci d'affichage. */
+  .subAppsTrigger{
+    font-size:10px; font-weight:700; color:var(--teal); background:rgba(45,212,191,.12);
+    border:1px solid rgba(45,212,191,.35); padding:1px 6px; border-radius:8px; line-height:1.5; cursor:pointer;
+  }
+  .subAppsTrigger:hover{background:rgba(45,212,191,.22);}
+  /* Controle de disposition (split 1/2/4) -- boutons a icone */
+  #splitCtl{display:inline-flex; gap:2px; margin-right:6px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:2px;}
+  .splitBtn{
+    appearance:none; border:none; background:transparent; color:var(--muted);
+    padding:4px 7px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center;
+  }
+  .splitBtn svg{display:block;}
+  .splitBtn:hover{background:rgba(255,255,255,.06); color:var(--text);}
+  .splitBtn.active{background:var(--blue); color:#fff;}
+  /* Placeholders noirs des volets vides */
+  #emptyPanes{position:fixed; inset:0; z-index:5; pointer-events:none;}
+  .emptyPane{
+    position:fixed; box-sizing:border-box; background:#000; border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; text-align:center; padding:8px;
+  }
+  #splitHandles{position:fixed; inset:0; z-index:360; pointer-events:none;}
+  .splitHandle{position:fixed; pointer-events:auto; background:#182235; border:1px solid #33445f; display:flex; align-items:center; justify-content:center; touch-action:none; user-select:none;}
+  .splitHandle::after{content:''; display:block; border-radius:4px; background:#6b7f9f; transition:.12s;}
+  .splitHandle.x{width:8px; cursor:col-resize;}
+  .splitHandle.x::after{width:2px; height:34px;}
+  .splitHandle.y{height:8px; cursor:row-resize;}
+  .splitHandle.y::after{height:2px; width:34px;}
+  .splitHandle:hover,.splitHandle.dragging{background:rgba(88,166,255,.35); border-color:var(--blue);}
+  .splitHandle:hover::after,.splitHandle.dragging::after{background:#d7eaff;}
+  /* Mode composition du dock */
+  #dockCompose{position:fixed; inset:0; z-index:400; display:none; background:rgba(13,17,23,.35);}
+  #dockCompose.open{display:block;}
+  #dockSquares{position:absolute; inset:0;}
+  .dockSquare{
+    position:fixed; box-sizing:border-box; border:2px dashed rgba(88,166,255,.7);
+    background:rgba(88,166,255,.10); border-radius:10px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px; color:var(--blue); font-size:13px; font-weight:700;
+  }
+  .dockSquare.hover{background:rgba(88,166,255,.28); border-color:var(--blue); border-style:solid;}
+  .dockSquare .dsNum{font-size:11px; opacity:.7;}
+  .dockSquare .dsApp{display:flex; align-items:center; gap:7px; color:var(--text); background:var(--panel2);
+    border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-weight:700;}
+  .dockSquare .dsApp img{width:18px; height:18px;}
+  .dockSquare .dsClear{font-size:10px; color:var(--muted); cursor:pointer; text-decoration:underline;}
+  #dockMsg{position:fixed; left:0; right:0; top:104px; text-align:center; color:#cfe4ff; font-size:13px; font-weight:700; z-index:401; pointer-events:none; text-shadow:0 1px 3px #000;}
+  #dockTray{position:fixed; left:50%; transform:translateX(-50%); bottom:64px; z-index:401;
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width:80vw;
+    background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:8px 10px; box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  .dockThumb{display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--border);
+    border-radius:8px; padding:6px 10px; cursor:grab; color:var(--text); font-size:12px; font-weight:700;}
+  .dockThumb:hover{border-color:var(--blue);}
+  .dockThumb.picked{border-color:var(--blue); background:rgba(88,166,255,.15);}
+  .dockThumb img{width:18px; height:18px;}
+  #dockActions{position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:401; display:flex; gap:8px;}
+  #dockApply{appearance:none; border:none; background:var(--blue); color:#fff; font-weight:700; padding:7px 16px; border-radius:8px; cursor:pointer;}
+  #dockApply:hover{filter:brightness(1.1);}
+  #subAppsFlyout{
+    display:none; position:fixed; min-width:260px; max-width:320px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 10px 24px rgba(0,0,0,.5); padding:4px; z-index:200; flex-direction:column; gap:1px;
+  }
+  #subAppsFlyout.open{display:flex;}
+  #subAppsFlyout .subAppsAll{
+    appearance:none; border:none; border-bottom:1px solid var(--border); border-radius:5px 5px 0 0;
+    background:transparent; color:var(--text); display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:7px 9px; margin-bottom:2px; font-size:11.5px; font-weight:700; cursor:pointer; width:100%;
+  }
+  #subAppsFlyout .subAppsAll:hover{background:rgba(88,166,255,.14);}
+  #subAppsFlyout .subAppsAll:disabled{opacity:.5; cursor:default; background:transparent;}
+  .subAppRow{display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:5px;}
+  .subAppRow:hover{background:rgba(255,255,255,.05);}
+  .subAppRow img{width:15px; height:15px; object-fit:contain; flex-shrink:0;}
+  .subAppRow .statusDot{width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .subAppRow .statusDot.running{background:#3fb950; box-shadow:0 0 5px rgba(63,185,80,.7);}
+  .subAppRow .statusDot.launching{background:var(--blue); animation:cvPulse 1s ease-in-out infinite;}
+  .subAppRow .statusDot.error{background:var(--red);}
+  .subAppRow .subAppLabel{flex:1; min-width:0; font-size:12px; font-weight:500; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .subAppRow button{
+    appearance:none; border:1px solid var(--border); background:var(--panel); color:var(--text);
+    font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:5px; cursor:pointer; flex-shrink:0; width:auto;
+  }
+  .subAppRow button:hover{background:rgba(88,166,255,.14); border-color:var(--blue);}
+  .subAppRow button.open{color:var(--teal); border-color:rgba(45,212,191,.4);}
+  .subAppRow button.openBrowser{color:var(--muted); padding:3px 7px;}
+  .subAppRow button:disabled{opacity:.5; cursor:default;}
+
+  /* ---- Menu contextuel (clic droit) sur un onglet -- "Copier l'URL" /
+     "Ouvrir dans le navigateur" : un onglet n'est qu'une vue pointee sur
+     http://127.0.0.1:<port> (cf. getTabUrl cote main), donc reutilisable
+     tel quel hors de VisionNexus tant que le process (et son eventuel
+     tunnel SSH pour une app sur VM) tourne encore. ---- */
+  #tabCtxMenu{
+    display:none; position:fixed; min-width:210px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 10px 24px rgba(0,0,0,.5); padding:4px; z-index:200; flex-direction:column; gap:1px;
+  }
+  #tabCtxMenu.open{display:flex;}
+  #tabCtxMenu button{
+    appearance:none; background:transparent; border:none; color:var(--text); text-align:left;
+    font-size:12px; font-weight:500; padding:7px 10px; border-radius:5px; cursor:pointer; width:100%;
+  }
+  #tabCtxMenu button:hover{background:rgba(88,166,255,.14); color:#fff;}
+  #tabCtxMenu button:disabled{opacity:.45; cursor:default; background:transparent;}
+  #tabUrlToast{
+    position:fixed; bottom:20px; left:50%; transform:translate(-50%, 8px); z-index:210;
+    background:var(--panel2); border:1px solid var(--border); border-left:3px solid var(--teal);
+    border-radius:7px; padding:8px 14px; font-size:12px; font-weight:600; color:var(--text);
+    box-shadow:0 10px 24px rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .15s, transform .15s;
+  }
+  #tabUrlToast.show{opacity:1; transform:translate(-50%, 0);}
+
+  /* ---- Panneau "Ports" -- debug visuel des ports TCP en ecoute (local +
+     VM), pour reperer un process qui traine avant que ca ne s'accumule
+     entre plusieurs sessions/utilisateurs sur une meme VM partagee. ---- */
+  #portsPanel{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300;
+    align-items:center; justify-content:center;
+  }
+  #portsPanel.open{display:flex;}
+  #portsPanel .box{
+    width:min(860px, 92vw); max-height:82vh; overflow:auto;
+    background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 20px 50px rgba(0,0,0,.55); padding:16px 18px;
+  }
+  #portsPanel .head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px;}
+  #portsPanel h2{margin:0 0 4px; font-size:14px;}
+  #portsPanel h3{margin:0 0 6px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;}
+  #portsPanel .sub{color:var(--muted); font-size:11.5px;}
+  #portsPanel .headActions{display:flex; gap:8px; flex-shrink:0;}
+  #portsPanel table{width:100%; border-collapse:collapse; font-size:12px; margin-bottom:16px;}
+  #portsPanel th{text-align:left; color:var(--muted); font-weight:600; padding:5px 8px; border-bottom:1px solid var(--border);}
+  #portsPanel td{padding:5px 8px; border-bottom:1px solid rgba(255,255,255,.05);}
+  #portsPanel tr.orphan td{color:#ffb454;}
+  #portsPanel tr.known td{color:var(--teal);}
+  /* Declaree dans .run/.instances.json mais pas pilotee par cet onglet :
+     typiquement une sous-app d'un Orchestrator ferme, ou l'instance d'un
+     collegue sur la VM. Elle VIT bien derriere ce port -- couleur distincte
+     du vrai orphelin, qu'on ne sait rattacher a rien. */
+  #portsPanel tr.registry td{color:var(--blue);}
+  #portsPanel .badge.reg{background:rgba(88,166,255,.15); border-color:rgba(88,166,255,.4); color:var(--blue);}
+  #portsPanel .badge{background:rgba(255,180,84,.15); border:1px solid rgba(255,180,84,.4); color:#ffb454; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700;}
+  #portsPanel button.killBtn{
+    appearance:none; border:1px solid var(--border); background:var(--panel); color:var(--red);
+    font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:5px; cursor:pointer;
+  }
+  #portsPanel button.killBtn:hover{background:rgba(248,81,73,.14); border-color:var(--red);}
+  #portsPanel button.killBtn:disabled{opacity:.5; cursor:default;}
+  .subAppsEmpty{color:var(--muted); font-size:11.5px; padding:8px 10px;}
+
+  /* ---- Barre d'onglets (apps dockees/detachees + "VisionNexus" accueil) ----
+     Fusionnee dans le header (a droite du logo, avant Logs/Documentation) --
+     comble l'espace vide qui restait entre le titre et ces deux boutons, et
+     evite une 2e rangee complete (retour : "bandeau trop haut"). Style pilule
+     compacte plutot que l'ancienne metaphore "onglet de navigateur soude au
+     contenu en dessous" (perd son sens hors d'une rangee dediee). */
+  #winTabStrip{
+    display:flex; align-items:center; gap:4px; flex:1; min-width:0;
+    overflow-x:auto; overflow-y:hidden; height:100%;
+  }
+  .wtab{
+    appearance:none; border:1px solid transparent; background:var(--panel2); color:var(--muted);
+    font-size:11.5px; font-weight:600; padding:5px 8px 5px 10px; border-radius:7px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; white-space:nowrap; position:relative; flex-shrink:0;
+    opacity:.6; filter:saturate(.6); transition:opacity .12s, filter .12s;
+  }
+  .wtab:hover{opacity:.9;}
+  .wtab img{width:14px; height:14px; object-fit:contain;}
+  /* L'onglet ACTIF doit sauter aux yeux immediatement : fond clair distinct,
+     texte blanc plein, bordure bleue -- tous les autres sont nettement
+     attenues (opacity+desaturation ci-dessus) pour que le contraste soit
+     sans ambiguite (retour : "c'est pas clair lequel est regarde"). */
+  .wtab.active{
+    background:rgba(88,166,255,.14); color:#fff; border-color:var(--blue);
+    opacity:1; filter:none;
+  }
+  .wtab .statusDot{width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .wtab .statusDot.launching{background:var(--blue); animation:cvPulse 1s ease-in-out infinite;}
+  .wtab .statusDot.running{background:#3fb950; box-shadow:0 0 5px rgba(63,185,80,.7);}
+  .wtab .statusDot.error, .wtab .statusDot.closed{background:var(--red);}
+  .wtab .natTag{font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--teal); opacity:.85;}
+  .wtab .natTag.fallback{color:var(--amber);}
+  .wtab .closeX, .wtab .dockBtn{
+    margin-left:1px; opacity:.5; font-weight:900; font-size:13px; line-height:1; padding:2px 5px; border-radius:5px;
+  }
+  .wtab .dockBtn{font-size:12px;}
+  .wtab .closeX:hover, .wtab .dockBtn:hover{opacity:1; background:rgba(255,255,255,.1);}
+  .wtab.dragging{opacity:.3;}
+  .wtab.detached{border-style:dashed;}
+
+  label{color:var(--text);}
+  select, input{
+    background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    border-radius:6px; padding:7px 10px; font-size:12.5px; width:100%;
+  }
+  select option{background:var(--panel2); color:var(--text);}
+  input::placeholder{color:var(--muted);}
+  button{
+    appearance:none; border:none; cursor:pointer; font-weight:700; font-size:12.5px;
+    padding:8px 16px; border-radius:7px; background:var(--blue); color:#031627;
+  }
+  button.ghost{background:var(--panel2); color:var(--text); border:1px solid var(--border);}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  #langToggle{display:flex; gap:6px;}
+  #langToggle button{flex:1;}
+  #langToggle button.active{color:#fff; border-color:var(--blue); background:rgba(88,166,255,.14);}
+
+  #body{flex:1; display:flex; overflow:hidden;}
+
+  /* ---- Colonne gauche : diagramme de flux ---- */
+  #left{flex:1; overflow:auto; padding:20px; min-width:0;}
+  .flow{position:relative; width:900px; height:565px; margin:0 auto;}
+  .flow svg{position:absolute; inset:0; pointer-events:none; z-index:1;}
+  .suiteFrame{
+    position:absolute; left:12px; top:0; width:876px; height:405px; z-index:0;
+    border:1px solid rgba(148,163,184,.24); border-radius:18px;
+    background:linear-gradient(145deg, rgba(148,163,184,.10), rgba(71,85,105,.055));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.035), 0 14px 40px rgba(0,0,0,.10);
+  }
+  .suiteFrame span{
+    position:absolute; right:16px; top:12px; color:#94a3b8; font-size:10px;
+    font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+  }
+  .standaloneLabel{
+    position:absolute; top:418px; left:0; width:100%; z-index:1; text-align:center;
+    color:#7f8da5; font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+  }
+  .tile{
+    position:absolute; width:150px; height:92px; background:var(--panel);
+    border:1.5px solid var(--border); border-radius:12px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    transition:.15s; padding:8px;
+  }
+  .tile:hover:not(:disabled){transform:translateY(-2px); box-shadow:0 6px 18px -4px rgba(0,0,0,.5);}
+  .tile:disabled{opacity:.4; cursor:not-allowed; transform:none;}
+  .tile img{width:36px; height:36px; object-fit:contain;}
+  .tile span{font-size:11.5px; font-weight:600; text-align:center; color:var(--text);}
+  .tile.primary{background:linear-gradient(160deg, rgba(124,58,237,.15), var(--panel));}
+  .tile.standalone{
+    width:170px; height:102px; z-index:2;
+    background:linear-gradient(145deg, rgba(37,99,235,.18), rgba(124,58,237,.14) 58%, var(--panel));
+    border-color:rgba(96,165,250,.48)!important;
+    box-shadow:0 10px 28px rgba(37,99,235,.12), inset 0 1px 0 rgba(255,255,255,.055);
+  }
+  .tile.standalone:hover:not(:disabled){box-shadow:0 14px 34px rgba(59,130,246,.24);}
+  .tile.standalone img{width:48px; height:48px;}
+  .tile.standalone span:not(.statusDot):not(.nativeTag){font-size:12.5px; font-weight:750;}
+  .tile .nativeTag{
+    position:absolute; top:6px; right:6px; font-size:9px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--teal); background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35);
+    padding:1px 5px; border-radius:8px;
+  }
+  .tile .statusDot{
+    position:absolute; top:8px; left:8px; width:8px; height:8px; border-radius:50%;
+    background:var(--muted); opacity:.35;
+  }
+  .tile .statusDot.launching{background:var(--blue); opacity:1; animation:cvPulse 1s ease-in-out infinite;}
+  .tile .statusDot.running{background:var(--green); opacity:1; box-shadow:0 0 6px rgba(63,185,80,.6);}
+  .tile .statusDot.error, .tile .statusDot.closed, .tile .statusDot.idle{background:var(--red); opacity:1;}
+  @keyframes cvPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  #logPanel{margin-top:14px; border-top:1px solid var(--border); padding-top:14px; display:none; flex-direction:column; width:900px; margin-left:auto; margin-right:auto;}
+  #logPanel.open{display:flex;}
+  #logPanel .head{font-size:11px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;}
+  #logTabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
+  #logTabs button{
+    appearance:none; border:1px solid var(--border); background:var(--panel2); color:var(--muted);
+    font-size:11px; font-weight:600; padding:5px 11px; border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; gap:6px;
+  }
+  #logTabs button.active{color:#fff; border-color:var(--blue); background:rgba(88,166,255,.1);}
+  #logTabs button .pill{width:7px; height:7px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  #logTabs button .pill.launching{background:var(--blue); animation:cvPulse 1s ease-in-out infinite;}
+  #logTabs button .pill.running{background:var(--green);}
+  #logTabs button .pill.error{background:var(--red);}
+  #logTabs button .pill.closed{background:var(--muted);}
+  #logActiveHead{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+  #logActiveHead img{width:18px; height:18px; object-fit:contain;}
+  #logActiveHead span{font-size:12.5px; font-weight:700; color:var(--text);}
+  #logActiveHead .spacer2{flex:1;}
+  #logActiveHead #logStopBtn{padding:4px 12px; font-size:11px; color:var(--red); border-color:rgba(248,81,73,.35);}
+  #logActiveHead #logStopBtn:hover{background:rgba(248,81,73,.12);}
+  #logStatusLine{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
+  #logStatusLine.running{color:#3fb950;}
+  #logStatusLine.error{color:var(--red);}
+  #logStatusLine.launching{color:var(--blue);}
+  #logLines{
+    height:240px; overflow-y:auto; background:#05070a; border:1px solid var(--border); border-radius:8px;
+    padding:10px 14px; font-family:Consolas,monospace; font-size:11.5px; color:#8aa0c4; white-space:pre-wrap;
+  }
+
+  /* ---- Colonne droite : parametres, TOUJOURS visible ---- */
+  #right{
+    width:300px; flex-shrink:0; border-left:1px solid var(--border); background:var(--panel);
+    padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+  }
+  #right h2{font-size:12.5px; margin:0 0 4px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field span{font-size:11.5px; color:var(--muted);}
+  .field .hint{font-size:10.5px; color:var(--muted); font-style:italic;}
+
+  .warn{
+    padding:10px 12px; border-radius:8px; background:rgba(227,179,65,.1);
+    border:1px solid rgba(227,179,65,.3); color:var(--amber); font-size:11.5px; display:none;
+  }
+  .warn.show{display:block;}
+  .ok{
+    padding:10px 12px; border-radius:8px; background:rgba(63,185,80,.1);
+    border:1px solid rgba(63,185,80,.3); color:#3fb950; font-size:11.5px; display:none;
+  }
+  .ok.show{display:block;}
+
+  .mountStatus{display:flex; align-items:center; gap:8px; margin-top:2px;}
+  .mountStatus .dot{width:9px; height:9px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .mountStatus .dot.green{background:#3fb950; box-shadow:0 0 6px rgba(63,185,80,.6);}
+  .mountStatus .dot.red{background:var(--red); box-shadow:0 0 6px rgba(248,81,73,.5);}
+  .mountStatus #mountLabel{font-size:11px; color:var(--muted); flex:1;}
+  .mountStatus button{padding:4px 10px; font-size:11px;}
+
+  /* ---- Popup de resultat du test de partage reseau (coin bas-droit, auto-disparait) ---- */
+  #mountToast{
+    position:fixed; right:18px; bottom:18px; z-index:999; max-width:340px;
+    background:var(--panel2); border:1px solid var(--border); border-left:4px solid var(--muted);
+    border-radius:8px; padding:12px 14px; box-shadow:0 8px 24px rgba(0,0,0,.4);
+    font-size:12.5px; color:var(--text); opacity:0; transform:translateY(8px);
+    pointer-events:none; transition:opacity .18s, transform .18s;
+  }
+  #mountToast.show{opacity:1; transform:translateY(0);}
+  #mountToast.ok{border-left-color:#3fb950;}
+  #mountToast.err{border-left-color:var(--red);}
+  #mountToast b{display:block; margin-bottom:3px;}
+  #mountToast .sub{color:var(--muted); font-size:11px;}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="../assets/logo.png" onerror="this.style.display='none'" alt="">
+  <h1>VisionNexus</h1>
+  <!-- Entree du tutoriel interactif (ui/tour.js). Halo orange tant qu'il n'a
+       jamais ete lance sur ce poste (reglage tutorials.nexus du lanceur). -->
+  <button class="ghost" id="tutoBtn" type="button">Tutoriel</button>
+  <nav id="appMenuBar">
+    <div class="menuItem">
+      <button type="button" data-menu="file">Fichier</button>
+      <div class="menuDropdown">
+        <button type="button" id="menuQuit">Quitter</button>
+      </div>
+    </div>
+    <div class="menuItem">
+      <button type="button" data-menu="help">Aide</button>
+      <div class="menuDropdown">
+        <button type="button" id="menuDocs">Documentation</button>
+        <button type="button" id="menuLogs">Dossier des logs</button>
+        <button type="button" id="menuDevtools">Outils de developpement</button>
+      </div>
+    </div>
+  </nav>
+  <div id="winTabStrip">
+    <button class="wtab home active" id="homeTab">
+      <img src="../assets/logo.png" onerror="this.style.display='none'">
+      <span>VisionNexus</span>
+    </button>
+  </div>
+  <div class="headBtns">
+    <div id="splitCtl" title="Disposition des vues">
+      <button type="button" class="splitBtn active" data-layout="single" title="Une seule vue">
+        <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button type="button" class="splitBtn" data-layout="v2" title="2 vues cote a cote (gauche/droite)">
+        <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="1" x2="8" y2="13" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button type="button" class="splitBtn" data-layout="h2" title="2 vues empilees (haut/bas)">
+        <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button type="button" class="splitBtn" data-layout="grid4" title="4 vues (grille 2x2)">
+        <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="1" x2="8" y2="13" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+    <button class="ghost" id="portsBtn">Ports</button>
+    <button class="ghost" id="sidebarToggleBtn" title="Masquer/afficher le bandeau de l'app active (Ctrl+B)">Bandeau</button>
+    <button class="ghost" id="logsBtn">Logs</button>
+    <button class="ghost" id="docsBtn">Documentation</button>
+  </div>
+</header>
+<div id="subAppsFlyout"></div>
+<!-- Placeholders NOIRS des volets vides (rendus SOUS les vues natives : visibles
+     seulement la ou aucune app n'est posee). -->
+<div id="emptyPanes"></div>
+<div id="splitHandles"></div>
+<!-- Mode composition du dock : overlay bleu (carres = volets) + vignettes des apps
+     a deposer + message. Affiche au clic sur un bouton de disposition. -->
+<div id="dockCompose">
+  <div id="dockMsg">Glissez une app dans chaque volet</div>
+  <div id="dockSquares"></div>
+  <div id="dockTray"></div>
+  <div id="dockActions">
+    <button type="button" id="dockCancel" class="ghost">Annuler</button>
+    <button type="button" id="dockApply">Valider</button>
+  </div>
+</div>
+<div id="tabCtxMenu">
+  <button type="button" id="tabCtxCopy">Copier l'URL</button>
+  <button type="button" id="tabCtxOpen">Ouvrir dans le navigateur</button>
+</div>
+<div id="tabUrlToast"></div>
+<div id="portsPanel">
+  <div class="box">
+    <div class="head">
+      <div>
+        <h2>Ports en cours d'utilisation</h2>
+        <div class="sub">Ports TCP en ecoute, local et VM -- pour reperer un process qui traine (orphelin) avant que ca s'accumule.</div>
+      </div>
+      <div class="headActions">
+        <button class="ghost" id="portsKillAllBtn">Tout arreter</button>
+        <button class="ghost" id="portsRefreshBtn">Rafraichir</button>
+        <button class="ghost" id="portsCloseBtn">Fermer</button>
+      </div>
+    </div>
+    <div id="portsContent"></div>
+  </div>
+</div>
+
+<div id="body">
+  <div id="left">
+    <div class="flow">
+      <div class="suiteFrame"><span>Orchestrator + 7 applications</span></div>
+      <div class="standaloneLabel">Application standalone</div>
+      <svg viewBox="0 0 900 410" width="900" height="410">
+        <defs></defs>
+        <g stroke="#3a4a68" stroke-width="2.5" fill="none">
+          <line x1="190" y1="196" x2="230" y2="196"/>
+          <line x1="390" y1="196" x2="430" y2="196"/>
+          <line x1="590" y1="196" x2="630" y2="196"/>
+          <line x1="715" y1="242" x2="715" y2="288"/>
+          <line x1="640" y1="344" x2="550" y2="344"/>
+          <line x1="390" y1="344" x2="300" y2="344"/>
+        </g>
+        <g fill="#3a4a68">
+          <polygon points="230,190 230,202 240,196"/>
+          <polygon points="430,190 430,202 440,196"/>
+          <polygon points="630,190 630,202 640,196"/>
+          <polygon points="709,288 721,288 715,298"/>
+          <polygon points="550,338 550,350 540,344"/>
+          <polygon points="300,338 300,350 290,344"/>
+        </g>
+      </svg>
+      <div id="tiles"></div>
+    </div>
+
+    <div id="logPanel">
+      <div class="head">Lancements</div>
+      <div id="logTabs"></div>
+      <div id="logActiveHead">
+        <img id="logActiveIcon" src="" onerror="this.style.display='none'" alt="">
+        <span id="logActiveName"></span>
+        <div class="spacer2"></div>
+        <button class="ghost" id="logStopBtn" title="Arreter/fermer proprement cette app">Stop</button>
+      </div>
+      <div id="logStatusLine"></div>
+      <div id="logLines"></div>
+    </div>
+  </div>
+
+  <div id="right">
+    <h2>Parametres</h2>
+    <div class="warn" id="warnBar">Renseigne les champs ci-dessous pour pouvoir lancer une app.</div>
+    <div class="ok" id="okBar">Reglages complets -- les apps sont lancables.</div>
+
+    <div class="field">
+      <span>Langue des apps</span>
+      <div id="langToggle">
+        <button class="ghost" id="langEnBtn" type="button">EN</button>
+        <button class="ghost" id="langFrBtn" type="button">FR</button>
+      </div>
+      <span class="hint">Langue de depart des apps lancees depuis VisionNexus. Chaque app reste libre de basculer localement (son propre bouton FR/EN), ce reglage ne fixe que l'etat au lancement.</span>
+    </div>
+    <div class="field">
+      <span>Utilisateur</span>
+      <input id="fUser" placeholder="bob">
+    </div>
+    <div class="field">
+      <span>Workspace</span>
+      <input id="fWs" placeholder="/data/ws ou D:\ws">
+    </div>
+    <div class="field">
+      <span>Racine Computer_Vision_App</span>
+      <input id="fRoot" placeholder="chemin vu par la cible">
+      <span class="hint" id="rootHint">Local : chemin Windows (C:\...). VM : chemin Linux (/home/...).</span>
+    </div>
+    <div class="field">
+      <span>Chemin conda</span>
+      <input id="fConda" placeholder="chemin vers conda">
+    </div>
+    <div class="field">
+      <span>VM cible</span>
+      <select id="vmSelect"></select>
+    </div>
+    <div class="field">
+      <span>VM(s) connue(s)</span>
+      <input id="fVms" placeholder="vm-gpu-01">
+      <span class="hint">Une seule VM ? Ecris juste son nom. Plusieurs : separe-les par une virgule (vm-gpu-01, vm-gpu-02).</span>
+    </div>
+
+    <div class="field">
+      <span>Partage reseau natif (optionnel)</span>
+      <input id="fMount" placeholder="ex: share-host.example.net">
+      <span class="hint">"Natif" = l'app compatible lit les images directement sur ce partage reseau au lieu de passer par la connexion SSH -- plus rapide. Hote d'un partage deja monte cote Windows (SMB ou autre). Si joignable, les apps marquees "natif" sur leur tuile l'utilisent en priorite ; sinon HTTP normal, rien ne casse -- laisse vide si tu ne sais pas.</span>
+      <div id="mountStatus" class="mountStatus">
+        <span id="mountDot" class="dot"></span>
+        <span id="mountLabel">Non teste</span>
+        <button class="ghost" id="mountTestBtn" type="button">Tester</button>
+      </div>
+      <div id="mountShares" class="hint"></div>
+    </div>
+
+    <div id="mountToast">
+      <b id="mountToastTitle"></b>
+      <span class="sub" id="mountToastSub"></span>
+    </div>
+
+    <button id="saveBtn">Enregistrer</button>
+  </div>
+</div>
+
+<script>
+const cv = window.cvLauncher
+
+function updateRootHint() {
+  const isVm = !!document.getElementById('vmSelect').value
+  document.getElementById('rootHint').textContent = isVm
+    ? 'VM selectionnee : chemin Linux (/home/... ou /mnt/...).'
+    : 'Aucune VM (local) : chemin Windows (C:\\...).'
+}
+
+async function refreshSettingsUI() {
+  const s = await cv.getSettings()
+  document.getElementById('fUser').value = s.username
+  document.getElementById('fWs').value = s.workspace
+  document.getElementById('fRoot').value = s.cvRoot
+  document.getElementById('fConda').value = s.condaPath
+  document.getElementById('fVms').value = s.vms.join(', ')
+  document.getElementById('fMount').value = s.nativeMountHost
+  document.getElementById('langEnBtn').classList.toggle('active', s.uiLanguage !== 'fr')
+  document.getElementById('langFrBtn').classList.toggle('active', s.uiLanguage === 'fr')
+
+  if (s.nativeMountHost.trim()) void testMount(s.nativeMountHost)
+  else setMountStatus(null, [], '')
+
+  const vmSelect = document.getElementById('vmSelect')
+  vmSelect.innerHTML = '<option value="">(local, pas de VM)</option>'
+  for (const vm of s.vms) {
+    const opt = document.createElement('option')
+    opt.value = vm; opt.textContent = vm
+    if (vm === s.selectedVm) opt.selected = true
+    vmSelect.appendChild(opt)
+  }
+  updateRootHint()
+
+  const valid = !!(s.username.trim() && s.workspace.trim() && s.cvRoot.trim() && s.condaPath.trim())
+  document.getElementById('warnBar').classList.toggle('show', !valid)
+  document.getElementById('okBar').classList.toggle('show', valid)
+  setTilesEnabled(valid)
+  return valid
+}
+
+let settingsValid = false
+
+function setTilesEnabled(valid) {
+  settingsValid = valid
+  document.querySelectorAll('.tile').forEach((t) => {
+    // Une tuile en cours de lancement reste desactivee meme si les reglages
+    // sont valides (evite un double-clic qui relancerait la meme app
+    // par-dessus elle-meme) -- sinon suit uniquement la validite des reglages.
+    const st = appState[t.dataset.appId]
+    t.disabled = !valid || (st && st.status === 'launching')
+  })
+}
+
+function setMountStatus(ok, shares, error) {
+  const dot = document.getElementById('mountDot')
+  const label = document.getElementById('mountLabel')
+  dot.className = 'dot' + (ok === true ? ' green' : ok === false ? ' red' : '')
+  label.textContent = ok === true ? 'Joignable'
+    : ok === false ? (error || 'Injoignable')
+    : 'Non teste'
+  document.getElementById('mountShares').textContent = shares && shares.length
+    ? `Zones accessibles : ${shares.join(', ')}`
+    : ''
+}
+
+let mountToastTimer = null
+function showMountToast(ok, host, shares, error) {
+  const el = document.getElementById('mountToast')
+  const title = document.getElementById('mountToastTitle')
+  const sub = document.getElementById('mountToastSub')
+  title.textContent = ok
+    ? `Partage "${host}" joignable (port SMB 445 ouvert)`
+    : `Partage "${host}" injoignable`
+  sub.textContent = ok
+    ? (shares && shares.length ? `Zones accessibles : ${shares.join(', ')}` : 'Aucune zone de la liste confirmee (verifie "Zones connues"), mais le serveur repond -- le chemin natif s\'activera quand meme.')
+    : (error || 'Verifie le nom, le VPN/reseau.')
+  el.className = ok ? 'show ok' : 'show err'
+  if (mountToastTimer) clearTimeout(mountToastTimer)
+  mountToastTimer = setTimeout(() => { el.className = el.className.replace('show', '').trim() }, ok ? 5000 : 8000)
+}
+
+async function testMount(host) {
+  if (!host || !host.trim()) { setMountStatus(null, [], ''); return }
+  setMountStatus(null, [], '')
+  document.getElementById('mountLabel').textContent = 'Test en cours...'
+  const res = await cv.checkMount(host.trim())
+  setMountStatus(res.ok, res.shares, res.error)
+  showMountToast(res.ok, host.trim(), res.shares, res.error)
+}
+
+document.getElementById('mountTestBtn').addEventListener('click', () => {
+  testMount(document.getElementById('fMount').value)
+})
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const vms = document.getElementById('fVms').value.split(',').map((v) => v.trim()).filter(Boolean)
+  const current = await cv.getSettings()
+  await cv.saveSettings({
+    username: document.getElementById('fUser').value.trim(),
+    workspace: document.getElementById('fWs').value.trim(),
+    cvRoot: document.getElementById('fRoot').value.trim(),
+    condaPath: document.getElementById('fConda').value.trim(),
+    vms,
+    selectedVm: vms.includes(current.selectedVm) ? current.selectedVm : (vms[0] || ''),
+    nativeMountHost: document.getElementById('fMount').value.trim(),
+  })
+  await refreshSettingsUI()
+})
+
+document.getElementById('vmSelect').addEventListener('change', async (e) => {
+  const s = await cv.getSettings()
+  s.selectedVm = e.target.value
+  await cv.saveSettings(s)
+  updateRootHint()
+})
+
+async function setUiLanguage(lang) {
+  const s = await cv.getSettings()
+  if (s.uiLanguage === lang) return
+  s.uiLanguage = lang
+  await cv.saveSettings(s)
+  await refreshSettingsUI()
+}
+document.getElementById('langEnBtn').addEventListener('click', () => setUiLanguage('en'))
+document.getElementById('langFrBtn').addEventListener('click', () => setUiLanguage('fr'))
+
+document.getElementById('docsBtn').addEventListener('click', () => cv.openDocs())
+document.getElementById('logsBtn').addEventListener('click', () => cv.openLogsFolder())
+
+// ---- Panneau "Ports" -- debug visuel, local + VM ----
+// Chaine setTimeout, JAMAIS setInterval : un scan VM ouvre une connexion SSH
+// complete (handshake + auth), ce qui depasse largement 4 s sur une liaison
+// lente. Avec setInterval les scans se recouvraient et empilaient un ssh.exe
+// toutes les 4 s ; au-dela de 10 connexions non authentifiees simultanees le
+// serveur applique MaxStartups et refuse/ralentit les suivantes -- d'ou le
+// gel du panneau au bout d'une minute et la session SSH ejectee. On ne
+// reprogramme donc le tick QU'APRES la fin du scan precedent, et un flag
+// coupe tout scan concurrent (bouton "Rafraichir" pendant un scan en cours).
+let portsPollTimer = null
+let portsScanInFlight = false
+let portsPanelOpen = false
+const PORTS_POLL_MS = 10000
+
+function schedulePortsPoll() {
+  if (portsPollTimer) clearTimeout(portsPollTimer)
+  if (!portsPanelOpen) return
+  portsPollTimer = setTimeout(() => { refreshPortsPanel() }, PORTS_POLL_MS)
+}
+function openPortsPanel() {
+  cv.setShellOverlay(true)
+  document.getElementById('portsPanel').classList.add('open')
+  portsPanelOpen = true
+  refreshPortsPanel()
+}
+function closePortsPanel() {
+  document.getElementById('portsPanel').classList.remove('open')
+  portsPanelOpen = false
+  if (portsPollTimer) clearTimeout(portsPollTimer)
+  portsPollTimer = null
+  cv.setShellOverlay(false)
+}
+function renderPortsTable(title, rows, known, target) {
+  const knownPorts = new Map(known.map((k) => [k.port, k.label]))
+  if (!rows.length) {
+    return `<h3>${title}</h3><div class="sub" style="margin-bottom:16px">Aucun port en ecoute detecte.</div>`
+  }
+  // Ports lies a une app (nous ou Orchestrator) en priorite en haut, en
+  // evidence (teal) -- le reste (orphelins potentiels) reste en dessous,
+  // toujours signale en ambre comme avant.
+  const rank = (port) => {
+    const label = knownPorts.get(port)
+    if (!label) return 2
+    return label.includes('registre') ? 1 : 0
+  }
+  const sorted = [...rows].sort((a, b) => rank(a.port) - rank(b.port) || a.port - b.port)
+  const body = sorted.map((r) => {
+    const label = knownPorts.get(r.port)
+    // Trois etats distincts : pilote par un onglet VisionNexus (teal), declare
+    // dans le registre partage sans onglet chez nous (bleu), inconnu (ambre).
+    const fromRegistry = !!label && label.includes('registre')
+    const rowClass = !label ? 'orphan' : (fromRegistry ? 'registry' : 'known')
+    const statusCell = label
+      ? (fromRegistry ? `<span class="badge reg">app active</span> ${label}` : label)
+      : '<span class="badge">a verifier</span>'
+    const killCell = r.pid
+      ? `<button type="button" class="killBtn" data-target="${target}" data-port="${r.port}">Tuer</button>`
+      : ''
+    return `<tr class="${rowClass}">
+      <td>${r.port}</td>
+      <td>${r.process}${r.pid ? ` (pid ${r.pid})` : ''}</td>
+      <td>${r.user || '-'}</td>
+      <td>${statusCell}</td>
+      <td>${killCell}</td>
+    </tr>`
+  }).join('')
+  return `<h3>${title}</h3>
+    <table>
+      <thead><tr><th>Port</th><th>Process</th><th>Utilisateur</th><th>Statut</th><th></th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`
+}
+async function refreshPortsPanel() {
+  if (portsScanInFlight) return
+  portsScanInFlight = true
+  const content = document.getElementById('portsContent')
+  try {
+    const res = await cv.scanPorts()
+    let html = renderPortsTable('Local (cette machine)', res.local, res.known, 'local')
+    if (res.remote) {
+      html += renderPortsTable(`VM (${res.remote.vm})`, res.remote.rows, res.known, 'remote')
+    }
+    content.innerHTML = html
+    content.querySelectorAll('.killBtn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true
+        btn.textContent = '...'
+        await cv.killPort(btn.dataset.target, parseInt(btn.dataset.port, 10))
+        refreshPortsPanel()
+      })
+    })
+  } catch {
+    content.innerHTML = '<div class="sub">Erreur pendant la lecture des ports.</div>'
+  } finally {
+    portsScanInFlight = false
+    schedulePortsPoll()
+  }
+}
+document.getElementById('portsBtn').addEventListener('click', openPortsPanel)
+document.getElementById('portsCloseBtn').addEventListener('click', closePortsPanel)
+document.getElementById('portsRefreshBtn').addEventListener('click', refreshPortsPanel)
+// Destructif et non annulable (tue aussi des process d'anciennes sessions, et
+// sur une VM partagee ce sont des ports qu'un collegue peut regarder) : on
+// confirme, et on nomme ce qui va etre arrete plutot qu'un "Etes-vous sur ?".
+document.getElementById('portsKillAllBtn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget
+  const names = openTabs.map((t) => t.label).join(', ')
+  const detail = names ? `Applications ouvertes : ${names}.` : 'Aucun onglet ouvert.'
+  if (!confirm(`Arreter toutes les applications lancees par VisionNexus ?\n\n${detail}\nLes ports connus seront aussi liberes, en local et sur la VM.`)) return
+  btn.disabled = true
+  const previous = btn.textContent
+  btn.textContent = 'Arret...'
+  try {
+    const res = await cv.killAll()
+    btn.textContent = `${res.stopped} arretee(s)`
+  } catch {
+    btn.textContent = 'Echec'
+  }
+  setTimeout(() => { btn.textContent = previous; btn.disabled = false }, 2500)
+  refreshPortsPanel()
+})
+document.getElementById('portsPanel').addEventListener('click', (e) => {
+  if (e.target.id === 'portsPanel') closePortsPanel()
+})
+
+// ---- Barre de menu custom (Fichier / Aide) -- remplace le menu natif OS ----
+document.querySelectorAll('#appMenuBar > .menuItem > button').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const item = btn.closest('.menuItem')
+    const wasOpen = item.classList.contains('open')
+    document.querySelectorAll('#appMenuBar .menuItem.open').forEach((el) => el.classList.remove('open'))
+    if (!wasOpen) item.classList.add('open')
+    cv.setShellOverlay(!wasOpen)
+  })
+})
+document.addEventListener('click', (e) => {
+  const menuWasOpen = Boolean(document.querySelector('#appMenuBar .menuItem.open'))
+  document.querySelectorAll('#appMenuBar .menuItem.open').forEach((el) => el.classList.remove('open'))
+  if (menuWasOpen && !portsPanelOpen) cv.setShellOverlay(false)
+  if (subAppsFlyoutOpen && !e.target.closest('#subAppsFlyout, .subAppsTrigger')) closeSubAppsFlyout()
+  if (tabCtxMenuAppId && !e.target.closest('#tabCtxMenu')) closeTabCtxMenu()
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('#appMenuBar .menuItem.open').forEach((el) => el.classList.remove('open'))
+    closeSubAppsFlyout()
+    closeTabCtxMenu()
+    closePortsPanel()
+  }
+})
+document.getElementById('menuQuit').addEventListener('click', () => cv.quit())
+document.getElementById('menuDocs').addEventListener('click', () => cv.openDocs())
+document.getElementById('menuLogs').addEventListener('click', () => cv.openLogsFolder())
+document.getElementById('menuDevtools').addEventListener('click', () => cv.toggleDevTools())
+document.getElementById('sidebarToggleBtn').addEventListener('click', () => cv.toggleActiveSidebar())
+
+// ---- Barre d'onglets : apps dockees dans CETTE fenetre + accueil "VisionNexus" ----
+// Le contenu de l'onglet actif (WebContentsView d'une app, ou #body pour
+// l'accueil) est gere cote main (main.ts) -- ce script gere uniquement
+// l'affichage de la barre et les clics/drag dessus.
+let openTabs = []      // [{appId, label, icon}] -- source de verite = main (cv.onTabs)
+let activeTabId = null // null = accueil "VisionNexus"
+let orchestratorSubApps = [] // [{app_id, label, launched, status, frontend_url}] -- cv.onOrchestratorSubApps
+// #subAppsFlyout est un panneau flottant independant (voir CSS) -- son etat
+// ouvert/ferme survit aux re-render de renderTabStrip() (poll Orchestrator
+// ~1s) puisqu'il n'est plus recree a chaque fois, contrairement a la barre
+// d'onglets elle-meme.
+let subAppsFlyoutOpen = false
+
+document.getElementById('homeTab').addEventListener('click', () => cv.switchTab(null))
+cv.onOrchestratorSubApps((apps) => {
+  orchestratorSubApps = apps
+  renderTabStrip()
+  if (subAppsFlyoutOpen) renderSubAppsFlyoutContent() // garde compteur/statuts a jour pendant que le flyout est ouvert
+})
+
+function closeSubAppsFlyout() {
+  subAppsFlyoutOpen = false
+  document.getElementById('subAppsFlyout').classList.remove('open')
+  // Restaure la vue de l'app active (masquee a l'ouverture pour que le flyout
+  // ne soit plus cache derriere la WebContentsView -- cf. cv:set-subapps-flyout).
+  cv.setSubAppsFlyout(false)
+}
+
+function renderSubAppsFlyoutContent() {
+  const flyout = document.getElementById('subAppsFlyout')
+  const total = orchestratorSubApps.length
+  // Une session persistee reste `launched=true` meme apres arret. Le compteur du
+  // bandeau doit refleter les apps reellement actives, sinon il affiche 7/7 et
+  // desactive "Lancer tout" alors que toutes les sessions sont stopped/error.
+  const launchedCount = orchestratorSubApps.filter((a) => a.status === 'starting' || a.status === 'running').length
+  const rows = total
+    ? orchestratorSubApps.map((a) => {
+        const icon = (typeof appIcons !== 'undefined' && appIcons[a.app_id]) || 'app.ico'
+        const dotClass = !a.launched ? '' : (a.status === 'running' ? 'running' : a.status === 'error' ? 'error' : 'launching')
+        // Gate sur le STATUT REEL (running) et pas sur `launched` (vrai meme pour une
+        // session morte persistee -> onglet blanc). running -> Ouvrir (onglet) + Nav
+        // (navigateur) ; starting -> desactive ; sinon -> Lancer.
+        let actionBtn
+        if (a.status === 'running') {
+          actionBtn = `<button type="button" class="open" data-open="${a.app_id}">Ouvrir</button>`
+                    + `<button type="button" class="openBrowser" data-browser="${a.app_id}" title="Ouvrir dans le navigateur">Nav</button>`
+        } else if (a.launched && a.status === 'starting') {
+          actionBtn = `<button type="button" disabled>Demarrage...</button>`
+        } else {
+          actionBtn = `<button type="button" data-launch="${a.app_id}">Lancer</button>`
+        }
+        return `<div class="subAppRow">
+          <img src="../assets/${icon}" onerror="this.style.display='none'">
+          <span class="statusDot ${dotClass}"></span>
+          <span class="subAppLabel" title="${a.label}">${a.label}</span>
+          ${actionBtn}
+        </div>`
+      }).join('')
+    : '<div class="subAppsEmpty">Orchestrator ne connait aucune sous-app.</div>'
+  flyout.innerHTML = `
+    <button type="button" class="subAppsAll" id="subAppsLaunchAll"${(!total || launchedCount === total) ? ' disabled' : ''}>
+      <span>Lancer tout</span><span>${launchedCount}/${total}</span>
+    </button>
+    ${rows}`
+  const allBtn = document.getElementById('subAppsLaunchAll')
+  if (allBtn) allBtn.addEventListener('click', async (e) => {
+    e.stopPropagation()
+    allBtn.disabled = true
+    allBtn.querySelector('span').textContent = 'Lancement...'
+    const r = await cv.launchAllOrchestratorSubApps()
+    if (r && !r.ok) {
+      showTabUrlToast(r.error || 'Lancement impossible')
+      renderSubAppsFlyoutContent()
+    }
+  })
+  flyout.querySelectorAll('button[data-launch]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      btn.disabled = true
+      btn.textContent = '...'
+      cv.launchOrchestratorSubApp(btn.dataset.launch)
+    })
+  })
+  flyout.querySelectorAll('button[data-open]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      closeSubAppsFlyout()
+      const r = await cv.openOrchestratorSubApp(btn.dataset.open)
+      if (r && !r.ok) showTabUrlToast(r.error || 'Ouverture impossible')
+    })
+  })
+  flyout.querySelectorAll('button[data-browser]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      closeSubAppsFlyout()
+      const r = await cv.openOrchestratorSubAppInBrowser(btn.dataset.browser)
+      if (r && !r.ok) showTabUrlToast(r.error || 'Ouverture navigateur impossible')
+    })
+  })
+}
+
+function openSubAppsFlyout(anchorEl) {
+  renderSubAppsFlyoutContent()
+  const flyout = document.getElementById('subAppsFlyout')
+  const rect = anchorEl.getBoundingClientRect()
+  flyout.style.left = Math.round(rect.left) + 'px'
+  flyout.style.top = Math.round(rect.bottom + 4) + 'px'
+  flyout.classList.add('open')
+  subAppsFlyoutOpen = true
+  // Au lieu de MASQUER toute la vue active (ce qui revelait le catalog VisionNexus
+  // derriere -> sensation d'etre projete hors de l'onglet), on ROGNE la vue par le
+  // haut jusqu'au bas du flyout : l'app reste visible dessous, seul un fin bandeau
+  // en haut (ou s'affiche le flyout) est libere. On passe le bas reel du flyout.
+  const fb = Math.round(flyout.getBoundingClientRect().bottom)
+  cv.setSubAppsFlyout(true, fb)
+}
+
+// ---- Menu contextuel d'onglet (clic droit) : copier/ouvrir l'URL reelle ----
+let tabCtxMenuAppId = null
+let tabUrlToastTimer = null
+function showTabUrlToast(text) {
+  const el = document.getElementById('tabUrlToast')
+  el.textContent = text
+  el.classList.add('show')
+  if (tabUrlToastTimer) clearTimeout(tabUrlToastTimer)
+  tabUrlToastTimer = setTimeout(() => el.classList.remove('show'), 2200)
+}
+function closeTabCtxMenu() {
+  tabCtxMenuAppId = null
+  document.getElementById('tabCtxMenu').classList.remove('open')
+}
+function openTabCtxMenu(appId, x, y) {
+  tabCtxMenuAppId = appId
+  const menu = document.getElementById('tabCtxMenu')
+  menu.classList.add('open')
+  // Positionne d'abord pour connaitre sa vraie taille, puis recale si ca
+  // deborde de la fenetre (menu ouvert pres du bord droit/bas).
+  menu.style.left = x + 'px'
+  menu.style.top = y + 'px'
+  const rect = menu.getBoundingClientRect()
+  if (rect.right > window.innerWidth) menu.style.left = Math.max(4, window.innerWidth - rect.width - 4) + 'px'
+  if (rect.bottom > window.innerHeight) menu.style.top = Math.max(4, window.innerHeight - rect.height - 4) + 'px'
+}
+document.getElementById('tabCtxCopy').addEventListener('click', async () => {
+  const appId = tabCtxMenuAppId
+  closeTabCtxMenu()
+  if (!appId) return
+  const ok = await cv.copyTabUrl(appId)
+  showTabUrlToast(ok ? 'URL copiee dans le presse-papiers' : "Onglet ferme, plus d'URL disponible")
+})
+document.getElementById('tabCtxOpen').addEventListener('click', async () => {
+  const appId = tabCtxMenuAppId
+  closeTabCtxMenu()
+  if (!appId) return
+  const ok = await cv.openTabInBrowser(appId)
+  if (!ok) showTabUrlToast("Onglet ferme, plus d'URL disponible")
+})
+
+function renderTabStrip() {
+  const strip = document.getElementById('winTabStrip')
+  strip.querySelectorAll('.wtab:not(.home)').forEach((el) => el.remove())
+  document.getElementById('homeTab').classList.toggle('active', activeTabId === null)
+  if (!openTabs.some((t) => t.appId === 'orchestrator' && t.location !== 'detached')) closeSubAppsFlyout()
+
+  for (const t of openTabs) {
+    const isDetached = t.location === 'detached'
+    const btn = document.createElement('button')
+    const isOrchestratorTab = t.appId === 'orchestrator' && t.location !== 'detached'
+    btn.className = 'wtab' + (t.appId === activeTabId ? ' active' : '') + (isDetached ? ' detached' : '')
+    btn.dataset.appId = t.appId   // repere pour le tutoriel (ui/tour.js)
+    btn.draggable = !isDetached
+    btn.title = isDetached
+      ? 'Fenetre detachee -- clic pour la ramener au premier plan, ou re-docker avec le bouton'
+      : 'Glisser hors de la barre pour detacher dans sa propre fenetre'
+
+    // Pastille de statut (vivant/mort) -- reprend l'etat suivi par le
+    // panneau de logs (appState), deja alimente par cv.onStatus ailleurs
+    // dans ce fichier -- pas de 2e source de verite a synchroniser.
+    const st = (typeof appState !== 'undefined' && appState[t.appId]) ? appState[t.appId].status : 'running'
+    const natTag = t.native.supported
+      ? `<span class="natTag${t.native.active ? '' : ' fallback'}" title="${t.native.reason}">${t.native.active ? 'SMB' : 'HTTP'}</span>`
+      : ''
+    const trailingBtn = isDetached
+      ? '<span class="dockBtn" title="Redocker dans cette fenetre">&#8676;</span>'
+      : '<span class="closeX" title="Fermer">&times;</span>'
+    // Orchestrator lance ses propres sous-apps (annotation, explorer, ...) hors
+    // de notre launchApp() habituel -- ce bandeau les rend accessibles comme
+    // de vrais onglets ici, sans avoir a ouvrir un navigateur a la main.
+    const isOrchestrator = isOrchestratorTab
+    const launchedCount = isOrchestrator
+      ? orchestratorSubApps.filter((a) => a.status === 'starting' || a.status === 'running').length
+      : 0
+    const subAppsMenu = isOrchestrator
+      ? `<span class="subAppsTrigger" title="Sous-apps Orchestrator">&#9662; ${launchedCount}/${orchestratorSubApps.length}</span>`
+      : ''
+    btn.innerHTML = `<span class="statusDot ${st}"></span><img src="../assets/${t.icon}" onerror="this.style.display='none'"><span>${t.label}</span>${natTag}${subAppsMenu}${trailingBtn}`
+
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.closeX, .dockBtn, .subAppsTrigger')) return
+      cv.switchTab(t.appId)
+    })
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      openTabCtxMenu(t.appId, e.clientX, e.clientY)
+    })
+    const closeEl = btn.querySelector('.closeX')
+    if (closeEl) closeEl.addEventListener('click', (e) => { e.stopPropagation(); cv.closeTab(t.appId) })
+    const dockEl = btn.querySelector('.dockBtn')
+    if (dockEl) dockEl.addEventListener('click', (e) => { e.stopPropagation(); cv.dockTab(t.appId) })
+    if (isOrchestrator) {
+      const trigger = btn.querySelector('.subAppsTrigger')
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation()
+        // Menu NATIF (rendu au niveau OS, jamais masque par la WebContentsView de
+        // l'onglet actif) -- remplace l'ancien flyout HTML qui splittait/masquait la vue.
+        cv.showSubAppsMenu()
+      })
+    }
+
+    if (!isDetached) {
+      // Deposer AILLEURS que sur la barre d'onglets = detacher -- que ce
+      // soit encore dans cette fenetre (ex. lache sur la zone de contenu)
+      // ou completement hors fenetre. dragend fournit screenX/screenY meme
+      // si le curseur a quitte la fenetre -- comportement standard du drag
+      // HTML natif dans Chromium.
+      let dragging = false
+      btn.addEventListener('dragstart', (e) => {
+        dragging = true
+        btn.classList.add('dragging')
+        e.dataTransfer.setData('text/plain', t.appId)
+        e.dataTransfer.effectAllowed = 'move'
+      })
+      btn.addEventListener('dragend', (e) => {
+        btn.classList.remove('dragging')
+        if (!dragging) return
+        dragging = false
+        if (composeMode) return   // en composition : le drop sur un carre gere l'assignation, pas de detach
+        const stripRect = document.getElementById('winTabStrip').getBoundingClientRect()
+        const stripScreenLeft = window.screenX + stripRect.left
+        const stripScreenTop = window.screenY + stripRect.top
+        const insideStrip = e.screenX >= stripScreenLeft && e.screenX <= stripScreenLeft + stripRect.width &&
+                             e.screenY >= stripScreenTop && e.screenY <= stripScreenTop + stripRect.height
+        if (!insideStrip) cv.detachTab(t.appId, e.screenX, e.screenY)
+      })
+      // Reordonnement : deposer un onglet SUR un autre onglet de la barre
+      // (toujours a l'interieur de la barre, donc jamais en conflit avec le
+      // detachement ci-dessus qui ne se declenche que hors barre).
+      btn.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+      })
+      btn.addEventListener('drop', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const draggedId = e.dataTransfer.getData('text/plain')
+        if (!draggedId || draggedId === t.appId) return
+        const rect = btn.getBoundingClientRect()
+        const before = (e.clientX - rect.left) < rect.width / 2
+        reorderTabs(draggedId, t.appId, before)
+      })
+    }
+
+    strip.appendChild(btn)
+  }
+}
+
+let currentLayout = { mode: 'single', panes: [], ratioX: .5, ratioY: .5 }
+cv.onTabs((tabs, activeId, layout) => {
+  openTabs = tabs
+  activeTabId = activeId
+  if (layout) {
+    currentLayout = layout
+    document.querySelectorAll('#splitCtl .splitBtn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.layout === layout.mode)
+    })
+  }
+  renderTabStrip()
+  renderEmptyPanes()
+  renderSplitHandles()
+  if (composeMode) renderComposeTray()   // maj des vignettes si une app s'ouvre pendant la compo
+})
+
+// ── Geometrie des volets cote renderer (mirror de main.slotBoundsFor) ──────────
+function slotRects(mode) {
+  const r = document.getElementById('body').getBoundingClientRect()
+  const x = Math.round(r.x), y = Math.round(r.y), w = Math.round(r.width), h = Math.round(r.height)
+  const gap = 8, usableW = Math.max(0, w-gap), usableH = Math.max(0, h-gap)
+  const rx = currentLayout.ratioX ?? .5, ry = currentLayout.ratioY ?? .5
+  const w2 = Math.floor(usableW * rx), h2 = Math.floor(usableH * ry)
+  if (mode === 'v2') return [{ x, y, width: w2, height: h }, { x: x + w2 + gap, y, width: usableW - w2, height: h }]
+  if (mode === 'h2') return [{ x, y, width: w, height: h2 }, { x, y: y + h2 + gap, width: w, height: usableH - h2 }]
+  if (mode === 'grid4') return [
+    { x, y, width: w2, height: h2 }, { x: x + w2 + gap, y, width: usableW - w2, height: h2 },
+    { x, y: y + h2 + gap, width: w2, height: usableH - h2 }, { x: x + w2 + gap, y: y + h2 + gap, width: usableW - w2, height: usableH - h2 }]
+  return [{ x, y, width: w, height: h }]
+}
+
+function renderSplitHandles() {
+  const host = document.getElementById('splitHandles'); host.innerHTML = ''
+  if (!currentLayout || currentLayout.mode === 'single' || activeTabId === null) return
+  const body = document.getElementById('body').getBoundingClientRect(), rects = slotRects(currentLayout.mode)
+  const add = (axis, pos) => {
+    const h = document.createElement('div'); h.className = `splitHandle ${axis}`
+    if (axis === 'x') { h.style.left=`${pos}px`; h.style.top=`${body.top}px`; h.style.height=`${body.height}px` }
+    else { h.style.left=`${body.left}px`; h.style.top=`${pos}px`; h.style.width=`${body.width}px` }
+    h.title = axis === 'x' ? 'Tirer pour redimensionner gauche/droite' : 'Tirer pour redimensionner haut/bas'
+    h.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); h.classList.add('dragging'); h.setPointerCapture(e.pointerId)
+      const move = (ev) => {
+        const ratio = axis === 'x' ? (ev.clientX-body.left)/(body.width-8) : (ev.clientY-body.top)/(body.height-8)
+        currentLayout[axis === 'x' ? 'ratioX' : 'ratioY'] = Math.max(.2,Math.min(.8,ratio))
+        if (axis === 'x') h.style.left = `${body.left + (body.width-8) * currentLayout.ratioX}px`
+        else h.style.top = `${body.top + (body.height-8) * currentLayout.ratioY}px`
+        renderEmptyPanes(); cv.resizeDock(axis, ratio)
+      }
+      const up = () => { h.classList.remove('dragging'); h.removeEventListener('pointermove',move); h.removeEventListener('pointerup',up) }
+      h.addEventListener('pointermove',move); h.addEventListener('pointerup',up)
+    })
+    host.appendChild(h)
+  }
+  if (currentLayout.mode === 'v2' || currentLayout.mode === 'grid4') add('x', rects[0].x + rects[0].width)
+  if (currentLayout.mode === 'h2' || currentLayout.mode === 'grid4') add('y', rects[0].y + rects[0].height)
+}
+
+// Placeholders NOIRS des volets vides (visibles la ou aucune vue native n'est posee).
+function renderEmptyPanes() {
+  const host = document.getElementById('emptyPanes'); host.innerHTML = ''
+  if (!currentLayout || currentLayout.mode === 'single' || activeTabId === null) return
+  slotRects(currentLayout.mode).forEach((s, i) => {
+    if (currentLayout.panes[i]) return   // volet occupe -> vue native par-dessus
+    const d = document.createElement('div'); d.className = 'emptyPane'
+    d.style.left = s.x + 'px'; d.style.top = s.y + 'px'; d.style.width = s.width + 'px'; d.style.height = s.height + 'px'
+    d.textContent = 'Volet vide — utilisez un bouton de disposition pour y placer une app'
+    host.appendChild(d)
+  })
+}
+window.addEventListener('resize', () => { renderEmptyPanes(); renderSplitHandles(); if (composeMode) refreshCompose() })
+
+// ── Controle de disposition : boutons a icone -> composition guidee ────────────
+document.querySelectorAll('#splitCtl .splitBtn').forEach((b) => {
+  b.addEventListener('click', () => {
+    const mode = b.dataset.layout
+    if (mode === 'single') { closeCompose(); cv.applyDock('single', [activeTabId]) }
+    else enterCompose(mode)
+  })
+})
+
+// ── Mode composition (overlay bleu + carres de volet + vignettes d'apps) ───────
+let composeMode = null, composePanes = [], composePick = null
+async function enterCompose(mode) {
+  composeMode = mode
+  const n = mode === 'grid4' ? 4 : 2
+  composePanes = []
+  for (let i = 0; i < n; i++) {
+    const pre = currentLayout.mode === mode ? currentLayout.panes[i] : (i === 0 ? activeTabId : null)
+    composePanes.push(pre ?? null)
+  }
+  composePick = null
+  const bounds = await cv.beginDockCompose(mode)   // masque les vues natives
+  const rects = (bounds && bounds.length) ? bounds : slotRects(mode)
+  document.getElementById('emptyPanes').innerHTML = ''
+  renderComposeSquares(rects)
+  renderComposeTray()
+  document.getElementById('dockCompose').classList.add('open')
+}
+function renderComposeSquares(rects) {
+  const host = document.getElementById('dockSquares'); host.innerHTML = ''
+  rects.forEach((s, i) => {
+    const sq = document.createElement('div'); sq.className = 'dockSquare'
+    sq.style.left = s.x + 'px'; sq.style.top = s.y + 'px'; sq.style.width = s.width + 'px'; sq.style.height = s.height + 'px'
+    const appId = composePanes[i]
+    if (appId) {
+      const t = openTabs.find((x) => x.appId === appId)
+      sq.innerHTML = `<div class="dsNum">Volet ${i + 1}</div>`
+        + `<div class="dsApp"><img src="../assets/${(t && t.icon) || 'app.ico'}" onerror="this.style.display='none'"><span>${(t && t.label) || appId}</span></div>`
+        + `<div class="dsClear">retirer</div>`
+      sq.querySelector('.dsClear').addEventListener('click', (e) => { e.stopPropagation(); composePanes[i] = null; refreshCompose() })
+    } else {
+      sq.innerHTML = `<div class="dsNum">Volet ${i + 1}</div><div>Déposez une app ici</div>`
+    }
+    sq.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; sq.classList.add('hover') })
+    sq.addEventListener('dragleave', () => sq.classList.remove('hover'))
+    sq.addEventListener('drop', (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) placeInPane(i, id) })
+    sq.addEventListener('click', () => { if (composePick) placeInPane(i, composePick) })
+    host.appendChild(sq)
+  })
+}
+function renderComposeTray() {
+  const tray = document.getElementById('dockTray'); tray.innerHTML = ''
+  const apps = openTabs.filter((t) => t.location === 'docked')
+  if (!apps.length) { tray.innerHTML = '<span style="color:var(--muted);font-size:12px">Aucune app ouverte a placer</span>'; return }
+  apps.forEach((t) => {
+    const th = document.createElement('div'); th.className = 'dockThumb' + (composePick === t.appId ? ' picked' : ''); th.draggable = true
+    th.innerHTML = `<img src="../assets/${t.icon || 'app.ico'}" onerror="this.style.display='none'"><span>${t.label}</span>`
+    th.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', t.appId); e.dataTransfer.effectAllowed = 'move' })
+    th.addEventListener('click', () => { composePick = composePick === t.appId ? null : t.appId; renderComposeTray() })
+    tray.appendChild(th)
+  })
+}
+function placeInPane(i, appId) {
+  const cur = composePanes.indexOf(appId)
+  if (cur >= 0 && cur !== i) composePanes[cur] = composePanes[i] ?? null   // echange, pas de doublon
+  composePanes[i] = appId
+  composePick = null
+  refreshCompose()
+}
+function refreshCompose() {
+  if (!composeMode) return
+  renderComposeSquares(slotRects(composeMode))
+  renderComposeTray()
+}
+function closeCompose() {
+  composeMode = null; composePick = null
+  document.getElementById('dockCompose').classList.remove('open')
+  document.getElementById('dockSquares').innerHTML = ''
+}
+document.getElementById('dockApply').addEventListener('click', () => {
+  if (!composeMode) return
+  const mode = composeMode, panes = [...composePanes]
+  closeCompose()
+  cv.applyDock(mode, panes)
+})
+document.getElementById('dockCancel').addEventListener('click', () => { closeCompose(); cv.cancelDock() })
+
+// Reordonne localement (retour visuel immediat) PUIS persiste cote main --
+// broadcastTabs() renverra ensuite le meme ordre via cv.onTabs, confirmant.
+function reorderTabs(draggedId, targetId, before) {
+  const docked = openTabs.filter((t) => t.location === 'docked')
+  const rest = openTabs.filter((t) => t.location !== 'docked')
+  const dragged = docked.find((t) => t.appId === draggedId)
+  if (!dragged) return
+  const withoutDragged = docked.filter((t) => t.appId !== draggedId)
+  const targetIdx = withoutDragged.findIndex((t) => t.appId === targetId)
+  if (targetIdx === -1) return
+  withoutDragged.splice(before ? targetIdx : targetIdx + 1, 0, dragged)
+  openTabs = [...withoutDragged, ...rest]
+  renderTabStrip()
+  cv.reorderTabs(withoutDragged.map((t) => t.appId))
+}
+
+cv.onDockHint((appId) => {
+  document.body.classList.toggle('dockHintActive', !!appId)
+})
+
+// ---- Rapporte a main.ts le rectangle exact ou afficher la vue active ----
+// #body est le contenu de l'onglet "VisionNexus" (diagramme + parametres) --
+// une vue d'app active est bornee EXACTEMENT sur ce meme rectangle, donc le
+// recouvre entierement (pas besoin de cacher #body en JS, la vue est juste
+// au-dessus). Redeclenche a chaque redimensionnement de la fenetre.
+function reportContentBounds() {
+  const r = document.getElementById('body').getBoundingClientRect()
+  cv.reportContentBounds({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) })
+}
+new ResizeObserver(reportContentBounds).observe(document.getElementById('body'))
+window.addEventListener('resize', reportContentBounds)
+
+// Etat par app -- garde tout l'historique (jamais efface entre deux
+// lancements, contrairement a avant) : {status, detail, lines[], label}.
+// 'idle' -> jamais lance cette session ; 'launching' -> clic recu, ports
+// pas encore connus ; 'running' -> fenetre ouverte ; 'error' -> echec ;
+// 'closed' -> fenetre de l'app fermee par l'utilisateur.
+const appState = {}
+let activeLogAppId = null
+let appLabels = {}
+let appIcons = {}
+
+function getState(appId) {
+  if (!appState[appId]) appState[appId] = { status: 'idle', detail: '', lines: [] }
+  return appState[appId]
+}
+
+const STATUS_LABEL = {
+  idle: 'Jamais lance',
+  launching: 'Lancement en cours...',
+  running: 'En cours d\'execution',
+  error: 'Erreur',
+  closed: 'Fenetre fermee',
+}
+
+async function buildTiles() {
+  const apps = await cv.listApps()
+  appLabels = Object.fromEntries(apps.map((a) => [a.id, a.label]))
+  appIcons = Object.fromEntries(apps.map((a) => [a.id, a.icon]))
+  const container = document.getElementById('tiles')
+  container.innerHTML = ''
+  for (const app of apps) {
+    const btn = document.createElement('button')
+    btn.className = 'tile' + (app.id === 'orchestrator' ? ' primary' : '') + (app.standalone ? ' standalone' : '')
+    btn.disabled = true // prudent par defaut, leve seulement si les reglages sont valides (voir init())
+    btn.dataset.appId = app.id
+    btn.style.left = app.x + 'px'
+    btn.style.top = app.y + 'px'
+    btn.style.borderColor = app.color + '55'
+    const nativeTag = app.supportsNativeMount
+      ? '<span class="nativeTag" title="Cette app peut lire ses images directement sur le partage reseau natif (Parametres) au lieu de passer par SSH, si configure et joignable -- sinon HTTP normal automatiquement">SMB</span>'
+      : ''
+    btn.innerHTML = `<span class="statusDot idle" title="${STATUS_LABEL.idle}"></span><img src="../assets/${app.icon}" onerror="this.style.opacity=0"><span>${app.label}</span>${nativeTag}`
+    btn.addEventListener('click', () => launch(app.id))
+    container.appendChild(btn)
+  }
+}
+
+function updateTileDot(appId) {
+  const btn = document.querySelector(`.tile[data-app-id="${appId}"]`)
+  if (!btn) return
+  const st = getState(appId)
+  const dot = btn.querySelector('.statusDot')
+  dot.className = 'statusDot ' + st.status
+  dot.title = STATUS_LABEL[st.status] + (st.detail ? ` -- ${st.detail}` : '')
+}
+
+function renderLogTabs() {
+  const tabsEl = document.getElementById('logTabs')
+  tabsEl.innerHTML = ''
+  for (const appId of Object.keys(appState)) {
+    const st = appState[appId]
+    const btn = document.createElement('button')
+    btn.className = appId === activeLogAppId ? 'active' : ''
+    btn.innerHTML = `<span class="pill ${st.status}"></span>${appLabels[appId] || appId}`
+    btn.addEventListener('click', () => { activeLogAppId = appId; renderLogTabs(); renderActiveLog() })
+    tabsEl.appendChild(btn)
+  }
+}
+
+function renderActiveLog() {
+  const st = getState(activeLogAppId)
+  const logLines = document.getElementById('logLines')
+  logLines.textContent = st.lines.join('\n')
+  logLines.scrollTop = logLines.scrollHeight
+  const statusLine = document.getElementById('logStatusLine')
+  statusLine.className = st.status
+  statusLine.textContent = `${appLabels[activeLogAppId] || activeLogAppId} -- ${STATUS_LABEL[st.status]}${st.detail ? ' : ' + st.detail : ''}`
+
+  document.getElementById('logActiveIcon').src = `../assets/${appIcons[activeLogAppId] || 'app.ico'}`
+  document.getElementById('logActiveName').textContent = appLabels[activeLogAppId] || activeLogAppId
+  document.getElementById('logStopBtn').disabled = st.status === 'closed' || st.status === 'idle'
+}
+
+document.getElementById('logStopBtn').addEventListener('click', () => {
+  if (activeLogAppId) cv.stopApp(activeLogAppId)
+})
+
+async function launch(appId) {
+  const st = getState(appId)
+  st.status = 'launching'
+  st.detail = ''
+  updateTileDot(appId)
+  setTilesEnabled(settingsValid) // recalcule (desactive juste CETTE tuile, garde les autres cliquables)
+
+  activeLogAppId = appId
+  document.getElementById('logPanel').classList.add('open')
+  renderLogTabs()
+  renderActiveLog()
+
+  const res = await cv.launch(appId)
+  if (!res.ok) {
+    // Filet de securite : le statut 'error' arrive normalement via onStatus
+    // avant que cette promesse ne se resolve, mais au cas ou (erreur non
+    // catchee cote main), on le force ici pour ne jamais laisser une tuile
+    // bloquee sur "Lancement en cours..." indefiniment.
+    st.status = 'error'
+    st.detail = res.error || ''
+    updateTileDot(appId)
+    if (activeLogAppId === appId) renderActiveLog()
+    renderLogTabs()
+    setTilesEnabled(settingsValid)
+  }
+}
+
+// Cap dur du buffer de logs par app. Sans ca : st.lines croissait sans limite ET
+// logLines.textContent += line est O(n^2) -> avec le flot d'access logs (polls
+// sante frequents) le renderer catalog gelait (boutons de volet non reactifs).
+const MAX_LOG_LINES = 800
+cv.onLog((appId, line) => {
+  const isNewTab = !appState[appId]
+  const st = getState(appId)
+  st.lines.push(line)
+  if (st.lines.length > MAX_LOG_LINES) st.lines.splice(0, st.lines.length - MAX_LOG_LINES)
+  if (isNewTab) renderLogTabs()
+  if (activeLogAppId === appId) {
+    const logLines = document.getElementById('logLines')
+    // Rebuild borne (<= MAX_LOG_LINES) au lieu d'une concatenation illimitee.
+    logLines.textContent = st.lines.join('\n')
+    logLines.scrollTop = logLines.scrollHeight
+  }
+})
+
+cv.onStatus((appId, status, detail) => {
+  const st = getState(appId)
+  st.status = status
+  st.detail = detail || ''
+  updateTileDot(appId)
+  renderLogTabs()
+  // renderActiveLog() (pas une simple maj manuelle de logStatusLine) -- elle
+  // recalcule AUSSI logStopBtn.disabled. Avant ce fix, une fermeture (Stop,
+  // ou croix de l'onglet) mettait bien st.status a jour en memoire, mais le
+  // bouton Stop restait visuellement actif/rouge : rien ne redonnait la main
+  // a renderActiveLog() en dehors de launch()/changement d'onglet de log.
+  if (activeLogAppId === appId) renderActiveLog()
+  // Une tuile qui sort de 'launching' redevient cliquable (relancer,
+  // relancer apres erreur, ou juste ouvrir une 2e instance) -- seule
+  // 'launching' bloque sa propre tuile, cf. setTilesEnabled().
+  setTilesEnabled(settingsValid)
+})
+
+// Ordre garanti : tuiles construites (desactivees par defaut) PUIS etat des
+// reglages applique -- evite que les tuiles restent cliquables avant que la
+// validation n'ait eu la chance de s'appliquer dessus.
+async function init() {
+  await buildTiles()
+  await refreshSettingsUI()
+}
+void init()
+</script>
+<!-- Tutoriel interactif : moteur + script des etapes, charge en dernier pour
+     que tous les elements cibles existent deja. -->
+<script src="tour.js"></script>
+</body>
+</html>

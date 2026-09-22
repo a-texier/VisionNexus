@@ -1,0 +1,41 @@
+# ============================================================
+# requirements.txt
+# Dépendances backend — utilise l'environnement conda IA_env
+# La plupart sont déjà installées dans IA_env.
+# Installer les manquantes avec :
+#   conda activate IA_env && pip install -r requirements.txt
+# ============================================================
+
+# --- Framework API ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+websockets>=13.0
+python-multipart>=0.0.12
+
+# --- Base de données ---
+sqlmodel>=0.0.21
+sqlalchemy>=2.0.0
+
+# --- IA / Vision ---
+# torch et torchvision : déjà dans IA_env (2.10.0+cu128)
+# SAM2 : pip install git+https://github.com/facebookresearch/segment-anything-2.git
+# XFeat : clone git dans ./xfeat/ (pas de package pip disponible)
+opencv-python>=4.10.0
+Pillow>=10.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# --- Traitement vidéo ---
+ffmpeg-python>=0.2.0
+
+# --- Tracking ---
+lap>=0.4.0          # Hungarian algorithm pour ByteTrack
+filterpy>=1.4.5     # Filtre de Kalman pour le tracker
+
+# --- Tâches asynchrones ---
+celery>=5.4.0
+redis>=5.1.0
+aiofiles>=24.1.0
+
+# --- Utilitaires ---
+PyYAML>=6.0

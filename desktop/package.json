@@ -1,0 +1,52 @@
+{
+  "name": "cv-launcher",
+  "productName": "VisionNexusElectron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lanceur natif independant pour les apps Computer_Vision_App -- catalogue + lancement SSH (reproduit VisionNexus, code separe) + chemin SMB pour Annotation App.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/tunnelClassify.test.js",
+    "copy-docs": "node scripts/copy-docs.js",
+    "start": "npm run build && electron .",
+    "dist:win": "npm run build && npm test && npm run copy-docs && electron-builder --win portable --x64",
+    "dist:linux": "npm run build && npm test && npm run copy-docs && electron-builder --linux AppImage --x64"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "~5.9.3"
+  },
+  "build": {
+    "appId": "com.computervision.visionnexuselectron",
+    "productName": "VisionNexusElectron",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.test.js",
+      "!dist/**/*.test.js.map",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "ui", "to": "ui" },
+      { "from": "assets", "to": "assets" },
+      { "from": "docs-bundle", "to": "appdocs" }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/app.ico"
+    },
+    "portable": {
+      "artifactName": "VisionNexusElectron.exe"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/logo.png",
+      "category": "Development"
+    }
+  }
+}
