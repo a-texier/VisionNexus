@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -1073,10 +1073,12 @@ def propagate_homography(
                         new_ann["_source_confidence"] = ann.get("_source_confidence", ann["confidence"])
                         new_annotations.append(new_ann)
 
+                        # Seule la boite est transformee (pas les points d'un polygone) : le resultat
+                        # est donc toujours une bbox, sinon un polygone sans points serait ecrit en base.
                         db_ann = Annotation(
                             frame_id=frame_id,
                             class_id=new_ann["class_id"],
-                            annotation_type=new_ann["annotation_type"],
+                            annotation_type=AnnotationType.BBOX,
                             cx=new_ann["cx"],
                             cy=new_ann["cy"],
                             width=new_ann["width"],
@@ -1084,6 +1086,7 @@ def propagate_homography(
                             confidence=confidence_score,
                             is_auto=True,
                             is_interpolated=True,
+                            source_algorithm="optical_flow" if data.use_optical_flow else "homography",
                             track_id=new_ann.get("track_id"),
                         )
                         db.add(db_ann)
@@ -1389,6 +1392,8 @@ def run_guided_tracking(
                             img_width=frame.width,
                             img_height=frame.height,
                         )
+                        # SAM3 n'a pas de seuil d'entree : on filtre sur le score, comme /sam3/predict-text.
+                        detections = [d for d in detections if d.get("score", 1.0) >= data.box_threshold]
                 except Exception as exc:
                     anomalies.append({
                         "frame_index": frame.frame_index,
@@ -2356,6 +2361,7 @@ def debug_homography(
     project_id: int,
     frame_a_id: int,
     frame_b_id: int,
+    min_inlier_ratio: Optional[float] = Query(None, ge=0.0, le=1.0),
     session: Session = Depends(get_session),
 ):
     """
@@ -2383,7 +2389,7 @@ def debug_homography(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Images introuvables sur le disque")
 
-    debug_info = homography_service.compute_homography_debug(img_a, img_b)
+    debug_info = homography_service.compute_homography_debug(img_a, img_b, min_inlier_ratio=min_inlier_ratio)
     debug_info["frame_a_index"] = frame_a.frame_index
     debug_info["frame_b_index"] = frame_b.frame_index
 

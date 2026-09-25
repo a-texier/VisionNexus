@@ -212,13 +212,14 @@ def start_training(run_name: str, trace: dict | None = None) -> bool:
                         "metrics": metrics,
                     },
                 )
-                _db_update(
-                    run_name,
-                    current_epoch=payload["epoch"],
-                    progress_pct=payload["progress_pct"],
-                    best_map50=metrics.get("metrics/mAP50(B)"),
-                    best_map5095=metrics.get("metrics/mAP50-95(B)"),
-                )
+                fields = {"current_epoch": payload["epoch"], "progress_pct": payload["progress_pct"]}
+                # Une epoque sans evaluation n'a pas de mAP : garder la derniere
+                # valeur connue au lieu de l'effacer dans l'historique.
+                if "metrics/mAP50(B)" in metrics:
+                    fields["best_map50"] = metrics["metrics/mAP50(B)"]
+                if "metrics/mAP50-95(B)" in metrics:
+                    fields["best_map5095"] = metrics["metrics/mAP50-95(B)"]
+                _db_update(run_name, **fields)
 
             trainer = EngineCls(
                 model_size=model_size,

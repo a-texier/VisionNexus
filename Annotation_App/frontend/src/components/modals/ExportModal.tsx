@@ -13,6 +13,7 @@ import { X, Download, Package, Link, FolderOpen } from 'lucide-react'
 import { appModeAPI, exportAPI } from '../../services/api'
 import { useTaskPolling } from '../../hooks/useTaskPolling'
 import { useT } from '../../i18n/useLang'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 interface ExportModalProps {
   isOpen: boolean
@@ -41,6 +42,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [appMode, setAppMode] = useState<'orchestrator' | 'solo' | null>(null)
   const [defaultExportsDir, setDefaultExportsDir] = useState('')
   const [customExportDir, setCustomExportDir] = useState('')
+
+  const exportSettings = useSettingsStore((s) => s.settings?.export)
+
+  // Depart du formulaire = Parametres > Export (modifiable ici pour cet export seulement)
+  useEffect(() => {
+    if (!isOpen || !exportSettings) return
+    setTrainRatio(Math.round(exportSettings.train_ratio * 100))
+    setValRatio(Math.round(exportSettings.val_ratio * 100))
+    setSymlinkImages(exportSettings.symlink_images)
+  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isOpen) return
@@ -83,6 +94,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         split_val: valRatio / 100,
         split_test: testRatio / 100,
         symlink_images: symlinkImages,
+        include_unannotated: exportSettings?.include_unannotated ?? true,
       }
       // En mode solo, transmettre le dossier de destination si renseigné
       if (appMode === 'solo' && customExportDir.trim()) {
@@ -110,7 +122,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const isFailed = taskStatus?.status === 'error'
   const progress = taskStatus?.progress ?? 0
   const folderPath = taskStatus?.folder_path
-  const hasZip = isCompleted && !folderPath && taskStatus?.zip_path
+  // Un export .ver renvoie toujours folder_path ; seul le mode copie produit aussi un ZIP.
+  const hasZip = isCompleted && !!taskStatus?.zip_path
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -344,8 +357,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               />
             </div>
 
-            {/* Chemin dossier (mode symlink) */}
-            {isCompleted && folderPath && (
+            {/* Chemin dossier (mode symlink : pas de ZIP) */}
+            {isCompleted && folderPath && !hasZip && (
               <div className="p-2 bg-slate-900/60 rounded-lg border border-slate-700">
                 <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
                   <Link size={11} className="text-blue-400" /> {t('Dataset créé avec symlinks')} :

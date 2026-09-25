@@ -7,10 +7,6 @@
 #
 # 100 % defensif : si mlflow est absent ou echoue, l'entrainement/l'eval
 # continue normalement (les erreurs sont avalees et logguees).
-#
-# Ce module est identique dans Training_App / Evaluation_App / Inference_App
-# (chaque app est packagee en standalone -> duplication assumee, comme le
-# registre d'instances du launcher).
 # ============================================================
 
 import os

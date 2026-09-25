@@ -46,3 +46,26 @@ export const APPS: AppDef[] = [
 export function findApp(id: string): AppDef | undefined {
   return APPS.find((a) => a.id === id)
 }
+
+/**
+ * Ressource de calcul : service backend seul, sans frontend ni onglet, allume
+ * et eteint par un interrupteur. Liste SEPAREE de APPS a dessein : APPS pilote
+ * le diagramme, les onglets, la liste des docs et les reglages, ou un service
+ * n'a pas sa place.
+ */
+export interface ServiceDef {
+  id: string
+  label: string
+  icon: string
+  backendPort: number   // defaut indicatif, le vrai port est annonce par launcher.py
+  /** Cle i18n de la description d'une ligne (ui/i18n.js). */
+  descKey: string
+}
+
+export const SERVICES: ServiceDef[] = [
+  { id: 'docs', label: 'Docs Assistant', icon: 'icon_docs.png', backendPort: 8068, descKey: 'svcDocsDesc' },
+]
+
+export function findService(id: string): ServiceDef | undefined {
+  return SERVICES.find((s) => s.id === id)
+}

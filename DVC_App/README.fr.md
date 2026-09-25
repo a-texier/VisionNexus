@@ -53,4 +53,4 @@ Un repo git+DVC initialise (`git init && dvc init`) est recommande dans le dossi
 mais le backend demarre sans (les routes renvoient alors un statut "repo non trouve") et la
 route orchestrator peut l'initialiser elle-meme au besoin.
 
-Voir aussi [docs/ECOSYSTEM.md](../docs/ECOSYSTEM.md) pour la place de cette app dans la suite.
+Voir aussi [docs/README.fr.md](../docs/README.fr.md) pour la place de cette app dans la suite.

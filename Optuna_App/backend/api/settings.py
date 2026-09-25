@@ -17,6 +17,13 @@ class AppSettings(BaseModel):
     user_name:      str = "unknown"
     theme:          str = "dark"
 
+    # ---- Langue de l'interface (repli uniquement) ----
+    # La source de verite est VisionNexus (reglage centralise "Langue des apps"
+    # dans son panneau Settings) : quand l'app est lancee depuis le launcher,
+    # ?lang= impose la langue au chargement et rien n'est ecrit ici. Ce champ
+    # ne sert que hors du lanceur (navigateur, dev, ligne de commande).
+    ui_language: str = "en"
+
 
 def _defaults() -> AppSettings:
     return AppSettings(workspace_path=str(WORKSPACE), user_name=CURRENT_USER)

@@ -21,7 +21,7 @@ export const HelpPanel: React.FC = () => {
     { id: 'shortcuts', label: t('Raccourcis'), Icon: Keyboard },
     { id: 'features', label: t('Modes & Fonctions'), Icon: Info },
     { id: 'models', label: t('Modèles'), Icon: Cpu },
-    { id: 'video', label: 'Workflow', Icon: Video },
+    { id: 'video', label: t('Workflow'), Icon: Video },
   ]
 
   return (
@@ -46,14 +46,14 @@ export const HelpPanel: React.FC = () => {
           <div className="space-y-3">
             {SHORTCUT_GROUPS.map(({ group, items }) => (
               <div key={group}>
-                <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{group}</p>
+                <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">{t(group)}</p>
                 <div className="space-y-0.5">
                   {items.map(({ key, desc }, i) => (
                     <div key={`${key}-${i}`} className="flex items-center gap-2 py-1 border-b border-slate-800/50 last:border-0">
                       <kbd className="bg-slate-700 text-slate-200 text-xs px-1.5 py-0.5 rounded font-mono min-w-[62px] text-center flex-shrink-0">
-                        {key}
+                        {t(key)}
                       </kbd>
-                      <span className="text-xs text-slate-400">{desc}</span>
+                      <span className="text-xs text-slate-400">{t(desc)}</span>
                     </div>
                   ))}
                 </div>
@@ -69,8 +69,8 @@ export const HelpPanel: React.FC = () => {
               <div className="space-y-2">
                 {TOOL_MODES.map(({ name, desc }) => (
                   <div key={name} className="p-2 bg-slate-800/50 rounded border border-slate-700/50">
-                    <p className="text-xs font-medium text-slate-200 mb-0.5">{name}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                    <p className="text-xs font-medium text-slate-200 mb-0.5">{t(name)}</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
                   </div>
                 ))}
               </div>
@@ -80,8 +80,8 @@ export const HelpPanel: React.FC = () => {
               <div className="space-y-2">
                 {TRACKING_MODES.map(({ name, desc }) => (
                   <div key={name} className="p-2 bg-slate-800/50 rounded border border-slate-700/50">
-                    <p className="text-xs font-medium text-slate-200 mb-0.5">{name}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                    <p className="text-xs font-medium text-slate-200 mb-0.5">{t(name)}</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
                   </div>
                 ))}
               </div>
@@ -91,8 +91,8 @@ export const HelpPanel: React.FC = () => {
               <div className="space-y-2">
                 {FEATURES.map(({ name, desc }) => (
                   <div key={name} className="p-2 bg-slate-800/50 rounded border border-slate-700/50">
-                    <p className="text-xs font-medium text-slate-200 mb-0.5">{name}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                    <p className="text-xs font-medium text-slate-200 mb-0.5">{t(name)}</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
                   </div>
                 ))}
               </div>
@@ -111,9 +111,9 @@ export const HelpPanel: React.FC = () => {
                     : status === 'Auto' ? 'bg-blue-900/50 text-blue-400'
                     : status === 'Inclus' ? 'bg-emerald-900/50 text-emerald-400'
                     : 'bg-yellow-900/50 text-yellow-400'
-                  }`}>{status}</span>
+                  }`}>{t(status)}</span>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
               </div>
             ))}
           </div>
@@ -127,7 +127,7 @@ export const HelpPanel: React.FC = () => {
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 text-xs flex items-center justify-center font-medium">
                   {i + 1}
                 </span>
-                <p className="text-xs text-slate-300 leading-relaxed">{step}</p>
+                <p className="text-xs text-slate-300 leading-relaxed">{t(step)}</p>
               </div>
             ))}
           </div>

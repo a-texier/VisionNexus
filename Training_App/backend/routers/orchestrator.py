@@ -66,7 +66,7 @@ def orchestrator_train(
     """
     Lance un entrainement depuis l'Orchestrator.
     Detecte automatiquement data.yaml si seul dataset_path est fourni.
-    Retourne immediatement avec le run_name — le polling se fait via /run-status.
+    Bloque jusqu'a la fin du run (TRAINING_ORCH_BLOCKING=0 : reponse des le demarrage).
     """
     # Resoudre le chemin data.yaml
     data_yaml = body.data_yaml

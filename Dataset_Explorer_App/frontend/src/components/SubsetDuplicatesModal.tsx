@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query'
 import { subsetsAPI, datasetsAPI } from '../api/client'
 import ImageModal from './ImageModal'
 import type { DuplicateGroup, DuplicateImageInfo, SubsetSummary } from '../types/api'
+import { useT } from '../i18n/useLang'
 
 interface Props {
   subset: SubsetSummary
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Props) {
+  const t = useT()
   const [threshold, setThreshold] = useState(0.97)
   const [pendingThreshold, setPendingThreshold] = useState(0.97)
   const [decisions, setDecisions] = useState<Record<number, boolean>>({})
@@ -43,7 +45,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
     const updates: Record<number, boolean> = {}
     sorted.forEach((img, idx) => { updates[img.image_id] = idx < n })
     setDecisions(prev => ({ ...prev, ...updates }))
-    toast(`Groupe #${group.group_id} : ${n} gardée(s), ${sorted.length - n} rejetée(s)`, { duration: 2000 })
+    toast(`${t('Groupe')} #${group.group_id} : ${n} ${t('gardée(s)')}, ${sorted.length - n} ${t('rejetée(s)')}`, { duration: 2000 })
   }
 
   const resetGroup = (group: DuplicateGroup) => {
@@ -63,13 +65,13 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
       sorted.forEach((img, idx) => { updates[img.image_id] = idx < n })
     })
     setDecisions(prev => ({ ...prev, ...updates }))
-    toast.success(`Auto-sélection appliquée sur ${data.groups.length} groupe(s)`)
+    toast.success(`${t('Auto-sélection appliquée sur')} ${data.groups.length} ${t('groupe(s)')}`)
   }
 
   const handleResetAll = () => {
     setDecisions({})
     setKeepN({})
-    toast.success('Toutes les décisions réinitialisées')
+    toast.success(t('Toutes les décisions réinitialisées'))
   }
 
   const handleSave = async () => {
@@ -81,11 +83,11 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
         keep,
       }))
       await datasetsAPI.patchDuplicateDecision(subset.dataset_id, dec)
-      toast.success('Décisions sauvegardées')
+      toast.success(t('Décisions sauvegardées'))
       setDecisions({})
       refetch()
     } catch {
-      toast.error('Erreur sauvegarde')
+      toast.error(t('Erreur sauvegarde'))
     } finally {
       setSaving(false)
     }
@@ -99,11 +101,11 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
     setApplying(true)
     try {
       const res = await subsetsAPI.applyDuplicateFilter(subset.id)
-      toast.success(`Filtre appliqué : ${res.removed} image(s) retirée(s) du subset`)
+      toast.success(`${t('Filtre appliqué :')} ${res.removed} ${t('image(s) retirée(s) du subset')}`)
       onApplied?.()
       onClose()
     } catch {
-      toast.error('Erreur lors de l\'application du filtre')
+      toast.error(t("Erreur lors de l'application du filtre"))
     } finally {
       setApplying(false)
     }
@@ -123,10 +125,10 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <GitMerge size={18} /> Doublons — {subset.name}
+              <GitMerge size={18} /> {t('Doublons')} — {subset.name}
             </h2>
             <p className="text-gray-500 text-xs mt-0.5">
-              Analyse locale au subset ({subset.image_count} images) · ne modifie pas les autres subsets
+              {t('Analyse locale au subset')} ({subset.image_count} {t('images')}) · {t('ne modifie pas les autres subsets')}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white">
@@ -140,8 +142,8 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
           <div className="flex items-start gap-2 bg-orange-900/30 rounded-lg p-3 border border-orange-600/40">
             <AlertTriangle size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-orange-200 space-y-0.5">
-              <p><strong className="text-orange-300">ATTENTION — Sauvegarder</strong> écrit les décisions doublon dans le <strong className="text-orange-300">dataset principal</strong> (flag <code className="text-orange-400">is_duplicate_kept</code>). Les images rejetées seront exclues de la carte UMAP et du rebuild dans le <strong>Playground</strong>.</p>
-              <p className="text-orange-400/80"><strong>Appliquer au subset</strong> = retire les images uniquement de <em>ce</em> subset, sans toucher le dataset.</p>
+              <p><strong className="text-orange-300">{t('ATTENTION — Sauvegarder')}</strong> {t('écrit les décisions doublon dans le')} <strong className="text-orange-300">{t('dataset principal')}</strong> ({t('flag')} <code className="text-orange-400">is_duplicate_kept</code>). {t('Les images rejetées seront exclues de la carte UMAP et du rebuild dans le')} <strong>Playground</strong>.</p>
+              <p className="text-orange-400/80"><strong>{t('Appliquer au subset')}</strong> {t('= retire les images uniquement de ce subset, sans toucher le dataset.')}</p>
             </div>
           </div>
 
@@ -149,9 +151,9 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
           <div className="flex items-start gap-2 bg-gray-800 rounded-lg p-3 border border-gray-700">
             <ShieldCheck size={14} className="text-green-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-gray-400">
-              <strong className="text-green-400">Garder</strong> = inclus dans les exports ·
-              <strong className="text-red-400 ml-1">Rejeter</strong> = exclu des exports ·
-              <strong className="text-gray-300 ml-1">Aucune suppression physique</strong>.
+              <strong className="text-green-400">{t('Garder')}</strong> {t('= inclus dans les exports')} ·
+              <strong className="text-red-400 ml-1">{t('Rejeter')}</strong> {t('= exclu des exports et des recherches')} ·
+              <strong className="text-gray-300 ml-1">{t('Aucune suppression physique')}</strong>.
             </p>
           </div>
 
@@ -159,7 +161,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
           <div className="flex flex-wrap items-center gap-3 bg-gray-800 rounded-xl p-3 border border-gray-700">
             {/* Seuil slider + numérique */}
             <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-sm whitespace-nowrap">Seuil :</label>
+              <label className="text-gray-400 text-sm whitespace-nowrap">{t('Seuil :')}</label>
               <input
                 type="range" min={80} max={100} step={1}
                 value={Math.round(pendingThreshold * 100)}
@@ -177,7 +179,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
                 onClick={() => setThreshold(pendingThreshold)}
                 className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg"
               >
-                Appliquer
+                {t('Appliquer')}
               </button>
             </div>
 
@@ -186,7 +188,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
                 onClick={handleAutoAll}
                 className="flex items-center gap-1.5 px-3 py-1 bg-amber-600/20 text-amber-300 border border-amber-600/40 text-xs rounded-lg hover:bg-amber-600/30 transition-colors"
               >
-                <Zap size={13} /> Auto-sélectionner tous
+                <Zap size={13} /> {t('Auto-sélectionner tous')}
               </button>
             )}
 
@@ -195,7 +197,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
                 onClick={handleResetAll}
                 className="flex items-center gap-1.5 px-3 py-1 bg-gray-700 text-gray-400 text-xs rounded-lg hover:bg-gray-600 transition-colors"
               >
-                <RefreshCw size={12} /> Reset tout
+                <RefreshCw size={12} /> {t('Reset tout')}
               </button>
             )}
 
@@ -206,7 +208,7 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
                   disabled={saving}
                   className="flex items-center gap-1.5 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg disabled:opacity-50"
                 >
-                  {saving ? 'Sauvegarde...' : `Sauvegarder (${Object.keys(decisions).length})`}
+                  {saving ? t('Sauvegarde...') : `${t('Sauvegarder')} (${Object.keys(decisions).length})`}
                 </button>
               )}
               {/* Bouton appliquer — retire les images rejetées du subset */}
@@ -214,9 +216,9 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
                 onClick={handleApplyFilter}
                 disabled={applying}
                 className="flex items-center gap-1.5 px-3 py-1 bg-orange-600/20 text-orange-300 border border-orange-600/40 text-xs rounded-lg hover:bg-orange-600/30 transition-colors disabled:opacity-50"
-                title="Retire définitivement les images 'Rejeter' de ce subset"
+                title={t("Retire définitivement les images 'Rejeter' de ce subset")}
               >
-                <Filter size={12} /> {applying ? 'Application...' : 'Appliquer au subset'}
+                <Filter size={12} /> {applying ? t('Application...') : t('Appliquer au subset')}
               </button>
             </div>
           </div>
@@ -224,17 +226,17 @@ export default function SubsetDuplicatesModal({ subset, onClose, onApplied }: Pr
           {/* Stats */}
           {data && (
             <p className="text-gray-400 text-sm">
-              <span className="text-white font-medium">{data.group_count}</span> groupe(s) ·{' '}
-              <span className="text-white font-medium">{data.duplicate_count}</span> image(s) concernées
+              <span className="text-white font-medium">{data.group_count}</span> {t('groupe(s)')} ·{' '}
+              <span className="text-white font-medium">{data.duplicate_count}</span> {t('image(s) concernées')}
             </p>
           )}
 
-          {isLoading && <p className="text-gray-500">Analyse des embeddings en cours...</p>}
+          {isLoading && <p className="text-gray-500">{t('Analyse des embeddings en cours...')}</p>}
 
           {!isLoading && data?.group_count === 0 && (
             <div className="text-center py-12 text-gray-500">
               <GitMerge size={40} className="mx-auto mb-3 opacity-30" />
-              <p>Aucun doublon dans ce subset avec ce seuil.</p>
+              <p>{t('Aucun doublon dans ce subset avec ce seuil.')}</p>
             </div>
           )}
 
@@ -280,19 +282,20 @@ function SubsetGroupCard({
   onReset: () => void
   onZoom: (url: string, filename: string) => void
 }) {
+  const t = useT()
   const maxN = group.images.length
 
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <span className="text-gray-400 text-sm">
-          Groupe #{group.group_id} · <strong className="text-white">{group.images.length} images</strong>
-          · sim max : <span className="text-yellow-400">{(group.max_sim * 100).toFixed(1)}%</span>
+          {t('Groupe')} #{group.group_id} · <strong className="text-white">{group.images.length} {t('images')}</strong>
+          · {t('sim max :')} <span className="text-yellow-400">{(group.max_sim * 100).toFixed(1)}%</span>
         </span>
         <div className="flex items-center gap-2">
           {/* Keep N slider + numérique, range [0, N] */}
           <div className="flex items-center gap-1.5 bg-gray-900 rounded-lg px-2 py-1 border border-gray-700">
-            <span className="text-gray-500 text-xs">Garder</span>
+            <span className="text-gray-500 text-xs">{t('Garder')}</span>
             <input
               type="range"
               min={0}
@@ -353,6 +356,7 @@ function SubsetDupCard({ img, decision, onKeep, onReject, onZoom }: {
   onReject: () => void
   onZoom: () => void
 }) {
+  const t = useT()
   const isRef = img.similarity_to_representative === 1.0
   const borderColor = decision === true ? 'border-green-500'
     : decision === false ? 'border-red-500'
@@ -365,7 +369,7 @@ function SubsetDupCard({ img, decision, onKeep, onReject, onZoom }: {
       <div className="aspect-video relative group cursor-pointer" onClick={onZoom}>
         {img.thumbnail_url
           ? <img src={img.thumbnail_url} alt={img.filename} className="w-full h-full object-cover" loading="lazy" />
-          : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">No img</div>
+          : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">{t("Pas d'image")}</div>
         }
         {isRef && <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-yellow-500/90 text-black text-xs font-bold rounded">Ref</div>}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors">
@@ -375,18 +379,18 @@ function SubsetDupCard({ img, decision, onKeep, onReject, onZoom }: {
       <div className="p-2">
         <p className="text-white text-xs truncate">{img.filename}</p>
         <p className="text-gray-500 text-xs mt-0.5">
-          {isRef ? <span className="text-yellow-400">Référence</span> : `${(img.similarity_to_representative * 100).toFixed(1)}%`}
+          {isRef ? <span className="text-yellow-400">{t('Référence')}</span> : `${(img.similarity_to_representative * 100).toFixed(1)}%`}
         </p>
         <div className="flex gap-1 mt-1.5">
           <button onClick={onKeep}
             className={`flex-1 flex items-center justify-center gap-1 py-1 rounded text-xs transition-colors
               ${decision === true ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-green-700 hover:text-white'}`}>
-            <CheckCircle size={11} /> Garder
+            <CheckCircle size={11} /> {t('Garder')}
           </button>
           <button onClick={onReject}
             className={`flex-1 flex items-center justify-center gap-1 py-1 rounded text-xs transition-colors
               ${decision === false ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-red-700 hover:text-white'}`}>
-            <XCircle size={11} /> Rejeter
+            <XCircle size={11} /> {t('Rejeter')}
           </button>
         </div>
       </div>

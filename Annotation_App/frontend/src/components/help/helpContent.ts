@@ -23,7 +23,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     group: 'Édition',
     items: [
       { key: 'Suppr', desc: 'Supprimer les annotations sélectionnées' },
-      { key: 'Ctrl+Z', desc: 'Annuler' },
+      { key: 'Ctrl+Z', desc: 'Annuler la dernière action' },
       { key: 'Ctrl+Y', desc: 'Rétablir (aussi Ctrl+Shift+Z)' },
       { key: 'Ctrl+C', desc: 'Copier les annotations sélectionnées' },
       { key: 'Ctrl+V', desc: 'Coller sur la frame courante' },
@@ -73,7 +73,7 @@ export const TRACKING_MODES: ModeItem[] = [
   { name: 'SAMURAI (SAM2 + Kalman)', desc: 'Propage UNE cible (prompt = boîte englobante). Le filtre de Kalman arbitre entre les masques candidats de SAM2 : il retient le plus cohérent avec le mouvement, pas seulement le plus sûr. Mono-cible car l\'état du filtre est porté par le modèle, pas par objet.' },
   { name: 'SAM2 vidéo (multi-objets)', desc: 'Activé automatiquement dès 2 cibles : SAMURAI est désactivé et SAM2 suit N objets nativement, sans modèle de mouvement. Plus rapide que N passes, mais peut confondre deux objets similaires qui se croisent.' },
   { name: 'SAMURAI par objet', desc: 'N passes indépendantes, un filtre de Kalman par cible. Meilleure qualité sur plusieurs objets, coût ≈ N fois le temps de calcul.' },
-  { name: 'Detect. (GD / SAM3 / YOLO)', desc: 'Détecteur appliqué frame par frame, puis appariement au centroïde des cibles. Seuils volontairement bas : le tracking écarte les fausses alarmes éloignées de toute cible.' },
+  { name: 'Detect. (GD / SAM3)', desc: 'Détecteur appliqué frame par frame, puis appariement au centroïde des cibles. Seuils volontairement bas : le tracking écarte les fausses alarmes éloignées de toute cible.' },
   { name: 'Homographie (XFeat/SIFT)', desc: 'Propage une keyframe en compensant le mouvement caméra. Suppose une scène plane et un objet immobile par rapport au décor. Refuse d\'écrire sous 30 % d\'inliers.' },
   { name: 'Flux optique (Lucas-Kanade)', desc: 'Suit chaque bbox par points caractéristiques. Pour les objets en mouvement propre devant une caméra fixe — le cas inverse de l\'homographie.' },
 ]
@@ -86,7 +86,7 @@ export const FEATURES: FeatureItem[] = [
   { name: 'Suppression de blocs de piste', desc: 'Sur la timeline : clic sur un bloc coloré le sélectionne (glow) → Suppr efface uniquement ce bloc ; clic sur le gris / bouton global efface toute la piste.' },
   { name: 'Timeline sparse', desc: 'Cellules virtualisées : vert = frame annotée (avec compteur), rouge = vide. Sélection multi (Ctrl/Shift) et Suppr pour vider. Barre blanche = frame courante sur chaque piste ; % à droite = frames explorées par le tracker.' },
   { name: 'NMS', desc: 'Bouton NMS (seuil IoU réglable) dans la liste d\'annotations : supprime les doublons après SAM Auto / détection.' },
-  { name: 'Export', desc: 'YOLO (un sous-dossier par séquence) ou .ver (natif 10 colonnes, un fichier par séquence). Bouton « Exporter » en haut à droite.' },
+  { name: 'Export', desc: 'YOLO, COCO ou .ver (natif 10 colonnes). Un sous-dossier ou un fichier par séquence. Bouton « Exporter » en haut à droite.' },
   { name: 'Sauvegarde auto', desc: 'Session + backup JSON toutes les 2 min, silencieux. Glisser-déposer un JSON pour restaurer.' },
   { name: 'LUT d\'affichage (16 bits)', desc: 'Bouton LUT flottant : remap 3-sigma / min-max / manuel, réglable par projet OU par séquence (IR et RGB dans le même projet). La LUT est aussi appliquée à l\'entrée des modèles — ils voient exactement votre image.' },
   { name: 'Monitoring', desc: 'Bouton Monitoring sur la page d\'accueil : part de l\'automatique et du manuel, sorties IA conservées / retouchées / supprimées, frames reprises plusieurs fois, historique des runs.' },
@@ -109,8 +109,8 @@ export const VIDEO_STEPS: string[] = [
   'Onglet Tracks → double-clic sur les bbox pour désigner les cibles (partagées entre onglets).',
   'SAMURAI : propage UNE cible avec filtre de Kalman (boxes en temps réel, stop/pause). Plusieurs cibles → SAM2 multi-objets automatiquement.',
   'Homographie (caméra qui bouge, scène fixe) ou Flux optique (caméra fixe, objets qui bougent) : choisir selon ce qui bouge.',
-  'Detect. : GD / SAM3 / YOLO sur les frames suivantes, avec appariement par distance de centroïde.',
+  'Detect. : GD / SAM3 sur les frames suivantes, avec appariement par distance de centroïde.',
   'Corriger : re-annoter sur n\'importe quelle frame (breakpoint) puis relancer depuis là.',
   'Nettoyer la timeline : supprimer un bloc précis (clic bloc + Suppr) ou une piste entière (clic gris + Suppr).',
-  'Exporter en YOLO ou .ver.',
+  'Exporter en YOLO, COCO ou .ver.',
 ]

@@ -43,7 +43,7 @@ Ports par defaut :
 - frontend : `http://localhost:5173`
 - API docs : `http://localhost:8000/docs`
 
-Sur VM Linux accessible depuis Windows via VS Code SSH, lancer le meme launcher dans la VM avec `--host 0.0.0.0` si le launcher l'expose, puis ouvrir le port forwarde `5173` cote Windows. Le frontend proxifie `/api` vers le backend ; si le backend s'arrete, les pollers coupent apres plusieurs echecs pour eviter le spam `ECONNREFUSED`.
+Sur VM Linux accessible depuis Windows via VS Code SSH, lancer le meme launcher dans la VM (les serveurs n'ecoutent que sur `127.0.0.1`), puis ouvrir le port forwarde `5173` cote Windows. Le frontend proxifie `/api` vers le backend ; si le backend s'arrete, les pollers coupent apres plusieurs echecs pour eviter le spam `ECONNREFUSED`.
 
 Par defaut, le launcher demarre uvicorn avec les access logs desactives pour eviter le spam console. Ajouter `--access-log` au launcher si vous voulez voir chaque requete HTTP pendant un diagnostic.
 

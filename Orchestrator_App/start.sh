@@ -9,7 +9,7 @@ BACKEND_PORT=${BACKEND_PORT:-8000}
 FRONTEND_PORT=${ORCHESTRATOR_FRONTEND_PORT:-3000}
 
 echo "[orchestrator-app] Démarrage backend  (port $BACKEND_PORT)..."
-uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
+uvicorn backend.main:app --host "${CV_BIND_HOST:-127.0.0.1}" --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 echo "[orchestrator-app] Démarrage frontend (port $FRONTEND_PORT)..."

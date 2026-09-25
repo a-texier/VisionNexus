@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.api.settings import router as settings_router
 from backend.config import CORS_ORIGINS, CURRENT_USER, DEFAULT_CONFIG_FILE, RUNS_DIR, USER_CONFIG_FILE, WORKSPACE
 from backend.inference_core.detectors import detector_capabilities
 from backend.inference_core.evaluation import evaluate_detection
@@ -32,6 +33,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+app.include_router(settings_router)
 
 
 class InspectRequest(BaseModel):

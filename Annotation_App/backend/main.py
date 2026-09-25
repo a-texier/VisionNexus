@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.models.routers import annotation, dataset, export, projects, sam, samples, settings, storage, tracking, convert, orchestrator as orchestrator_router
+from backend.models.routers import annotation, dataset, docs, export, projects, sam, samples, settings, storage, tracking, convert, orchestrator as orchestrator_router
 from backend.database import create_db_and_tables, engine
 from backend.services.sam_service import sam_service
 from backend.config import DATA_DIR, CORS_ORIGINS  # noqa: F401
@@ -225,6 +225,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # ---- Compression GZip ----
 # Essentiel en usage distant (SSH port-forward vers une VM) : les listes JSON
 # de frames/annotations (plusieurs milliers d'entrees) sont compressees ~10x.
@@ -244,6 +267,7 @@ app.include_router(settings.router)
 app.include_router(storage.router)
 app.include_router(convert.router)
 app.include_router(orchestrator_router.router)
+app.include_router(docs.router)
 
 
 # ---- Fichiers statiques (images, miniatures) ----

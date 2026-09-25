@@ -15,7 +15,7 @@ import {
   AlertTriangle, RefreshCw, Check, X,
 } from 'lucide-react'
 
-import { catalogAPI, datasetsAPI, metadataAPI, subsetsAPI } from '../api/client'
+import { catalogAPI, datasetsAPI, metadataAPI, settingsAPI, subsetsAPI } from '../api/client'
 import type {
   GlobalDuplicatesResponse, GlobalSearchResponse, MetadataSearchResponse,
 } from '../types/api'
@@ -210,6 +210,10 @@ function VisualTab({ datasets }: { datasets: { id: number; name: string }[] }) {
   const t = useT()
   const [query, setQuery] = useState('')
   const [topK, setTopK] = useState(60)
+  // Depart = Parametres > Top-K par defaut ; modifiable ici pour cette recherche
+  useEffect(() => {
+    settingsAPI.get().then(s => { if (s.default_top_k >= 1) setTopK(Math.min(500, s.default_top_k)) }).catch(() => {})
+  }, [])
   const [useThreshold, setUseThreshold] = useState(false)
   const [threshold, setThreshold] = useState(28)
   const [dsFilter, setDsFilter] = useState<number[]>([])
@@ -541,11 +545,12 @@ function DuplicatesTab() {
     return () => clearInterval(t)
   }, [loading])
 
-  const run = async () => {
+  // Le seuil est passe en argument : au clic, `threshold` (etat) n'a pas encore pris la valeur du curseur.
+  const run = async (th: number = threshold) => {
     setLoading(true)
     try {
       const r = await catalogAPI.globalDuplicates({
-        threshold: threshold / 100,
+        threshold: th / 100,
         cross_only: crossOnly,
         max_groups: 50,
       })
@@ -598,7 +603,7 @@ function DuplicatesTab() {
             {t('uniquement les groupes couvrant plusieurs datasets')}
           </label>
           <button
-            onClick={() => { setThreshold(pending); setTimeout(run, 0) }}
+            onClick={() => { setThreshold(pending); void run(pending) }}
             disabled={loading}
             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm rounded flex items-center gap-2"
           >

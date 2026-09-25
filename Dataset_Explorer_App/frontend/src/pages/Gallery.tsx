@@ -495,7 +495,7 @@ export default function Gallery() {
                   ? 'border-purple-500 bg-purple-600/20 text-purple-300 font-medium'
                   : 'border-gray-600 text-gray-500 hover:border-gray-500'
               }`}
-              title={t('Partager ce dataset dans la galerie globale (symlink dans data/dataset_gallery/)')}
+              title={t('Partager ce dataset dans la galerie globale (dossier dans data/dataset_gallery/)')}
             >
               <Share2 size={14} />
               {shareDataset ? t('Partager : ON') : t('Partager')}
@@ -591,7 +591,7 @@ export default function Gallery() {
           {shareDataset && (
             <p className="text-purple-400/70 text-xs flex items-center gap-1.5">
               <Globe size={11} />
-              {t('Un symlink sera créé dans')} <code className="text-purple-300/80">data/dataset_gallery/{datasetName || t('nom')}/</code>.
+              {t('Un dossier sera créé dans')} <code className="text-purple-300/80">data/dataset_gallery/{datasetName || t('nom')}/</code>.
               {' '}{t('5 miniatures seront copiées pour la prévisualisation dans tous les workspaces.')}
             </p>
           )}

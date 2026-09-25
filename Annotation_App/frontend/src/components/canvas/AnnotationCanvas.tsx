@@ -27,6 +27,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { BBoxShape } from './BBoxShape'
 import { samAPI } from '../../services/api'
 import { normalizedPolygonToPixel } from '../../utils/coordinates'
+import { useT } from '../../i18n/useLang'
 import type { Annotation, LabelClass, Point, SAMMask, Track } from '../../types/api'
 
 interface AnnotationCanvasProps {
@@ -164,6 +165,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   samOutputMode = 'bbox',
   liveMode = false,
 }) => {
+  const t = useT()
   const stageRef = useRef<Konva.Stage>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   // Lookup track.id → {color, uid} pour le badge des bbox
@@ -213,10 +215,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   // seul toast à la fois (id fixe).
   const warnNoClass = useCallback(() => {
     if (classes.length === 0) {
-      toast.error("Créez d'abord une classe (onglet Classes, bouton +) pour pouvoir annoter.",
+      toast.error(t("Créez d'abord une classe (onglet Classes, bouton +) pour pouvoir annoter."),
         { id: 'no-class', duration: 4000 })
     } else {
-      toast('Sélectionnez une classe (onglet Classes) avant de dessiner.',
+      toast(t('Sélectionnez une classe (onglet Classes) avant de dessiner.'),
         { id: 'no-class', icon: '🏷️', duration: 3000 })
     }
   }, [classes.length])
@@ -256,6 +258,9 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const showLabels = interfaceSettings?.show_labels ?? true
   const showConfidence = interfaceSettings?.show_confidence ?? false
   const borderWidth = interfaceSettings?.annotation_border_width ?? 2
+  const fillOpacity = interfaceSettings?.annotation_opacity ?? 0.2
+  // Meme opacite pour les polygones (hex sur 2 chiffres, comme BBoxShape)
+  const fillAlpha = Math.round(Math.min(1, Math.max(0, fillOpacity)) * 255).toString(16).padStart(2, '0')
 
   // Etat de la prédiction SAM point (loading)
   const [isSAMPredicting, setIsSAMPredicting] = useState(false)
@@ -309,7 +314,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         )
         setSamPredictedMasks(masks)
       } catch {
-        toast.error('Erreur SAM point — vérifiez que SAM2 est chargé')
+        toast.error(t('Erreur SAM point — vérifiez que SAM2 est chargé'))
       } finally {
         setIsSAMPredicting(false)
       }
@@ -520,10 +525,11 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         points: usePolygon ? bestMask.polygon : null,
         confidence: bestMask.score,
         is_auto: true,
+        source_algorithm: 'sam_point',
       })
       setSamPredictedMasks([])
       clearPoints()
-      toast.success('Masque SAM accepté')
+      toast.success(t('Masque SAM accepté'))
       return
     }
 
@@ -693,6 +699,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       ref={containerRef}
       className="flex-1 relative overflow-hidden bg-slate-900"
       style={{
+        backgroundColor: interfaceSettings?.background_color || undefined,
         cursor: activeTool === 'pan' ? 'grab'
           : activeTool === 'bbox' ? 'crosshair'
           : activeTool === 'sam_point' ? 'cell'
@@ -702,14 +709,14 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       {/* Indicateur SAM point prédit */}
       {isSAMPredicting && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 text-green-400 text-xs px-3 py-1 rounded-full border border-green-500/30">
-          Prédiction SAM en cours...
+          {t('Prédiction SAM en cours...')}
         </div>
       )}
       {samPredictedMasks.length > 0 && activeTool === 'sam_point' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-slate-800/90 text-xs px-4 py-2 rounded-lg border border-slate-600 text-slate-200 shadow-lg">
-          <span className="text-green-400 font-medium">{samPredictedMasks.length} masque{samPredictedMasks.length > 1 ? 's' : ''}</span>
-          {' '}prédit{samPredictedMasks.length > 1 ? 's' : ''} — <kbd className="bg-slate-700 px-1 rounded">Double-clic</kbd> pour accepter le meilleur
-          {' '}· <kbd className="bg-slate-700 px-1 rounded">Échap</kbd> pour annuler
+          <span className="text-green-400 font-medium">{samPredictedMasks.length} {t('masque')}{samPredictedMasks.length > 1 ? 's' : ''}</span>
+          {' '}{t('prédit')}{samPredictedMasks.length > 1 ? 's' : ''} — <kbd className="bg-slate-700 px-1 rounded">{t('Double-clic')}</kbd> {t('pour accepter le meilleur')}
+          {' '}· <kbd className="bg-slate-700 px-1 rounded">{t('Échap')}</kbd> {t('pour annuler')}
         </div>
       )}
 
@@ -756,6 +763,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
                   showLabel={showLabels}
                   showConfidence={showConfidence}
                   borderWidth={borderWidth}
+                  fillOpacity={fillOpacity}
                   trackColor={ann.track_id ? trackInfoById.get(ann.track_id)?.color : undefined}
                   trackUid={ann.track_id ? trackInfoById.get(ann.track_id)?.uid ?? null : null}
                   onSelect={(id, multiSelect) => selectAnnotation(id, multiSelect)}
@@ -791,7 +799,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
                       closed
                       stroke={color}
                       strokeWidth={isSelected ? borderWidth + 0.5 : borderWidth - 0.5}
-                      fill={`${color}33`}
+                      fill={`${color}${fillAlpha}`}
                       onClick={() => selectAnnotation(ann.id, false)}
                       onTap={() => selectAnnotation(ann.id, false)}
                     />

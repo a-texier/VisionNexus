@@ -9,7 +9,7 @@ BACKEND_PORT=${BACKEND_PORT:-8003}
 FRONTEND_PORT=${OPTUNA_APP_FRONTEND_PORT:-3003}
 
 echo "[optuna-app] Demarrage backend (port $BACKEND_PORT)..."
-uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
+uvicorn backend.main:app --host "${CV_BIND_HOST:-127.0.0.1}" --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 echo "[optuna-app] Demarrage frontend (port $FRONTEND_PORT)..."

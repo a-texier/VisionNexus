@@ -44,7 +44,7 @@ Ces pages sont ajoutees a l'onglet Documentation de l'app concernee, uniquement 
 est present.
 
 Le contrat auquel se conforme ce plugin (decouverte, catalogue, plots) est decrit dans
-[docs/plugins/README.md](../../docs/plugins/README.md) a la racine du depot.
+[docs/architecture.md](../../docs/architecture.md#plugin-mechanism) a la racine du depot.
 
 ## Structure
 

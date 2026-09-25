@@ -92,6 +92,39 @@ export const enginesAPI = {
 }
 
 // ------------------------------------------------------------------ //
+// Documentation (pages markdown de docs/, page Guide)                //
+// ------------------------------------------------------------------ //
+export type DocLang = 'en' | 'fr'
+
+export interface DocPageInfo {
+  name: string
+  title: string
+  order: number
+  audience: 'user' | 'dev' | 'both'
+  doc_type: string
+  langs: DocLang[]
+}
+
+export interface DocPage {
+  name: string
+  lang: DocLang
+  title: string
+  frontmatter: Record<string, unknown>
+  body: string
+}
+
+export const docsAPI = {
+  list: (lang: DocLang): Promise<DocPageInfo[]> =>
+    http.get('/api/docs', { params: { lang } }).then(r => r.data),
+
+  get: (name: string, lang: DocLang): Promise<DocPage> =>
+    http.get(`/api/docs/${encodeURIComponent(name)}`, { params: { lang } }).then(r => r.data),
+
+  // Chemin relatif au dossier docs/assets/, tel qu'ecrit dans le markdown.
+  getAssetUrl: (path: string) => `${BACKEND_BASE}/api/docs/assets/${path}`,
+}
+
+// ------------------------------------------------------------------ //
 // Sandgraph                                                          //
 // ------------------------------------------------------------------ //
 export const graphsAPI = {

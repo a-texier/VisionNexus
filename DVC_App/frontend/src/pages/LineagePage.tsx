@@ -40,7 +40,6 @@ import { commitsAPI } from "../api/client";
 import type { Commit } from "../types/api";
 import { useT } from "../i18n/useLang";
 import { t } from "../i18n/translate";
-import { LanguageToggle } from "../components/common/LanguageToggle";
 
 type Kind =
   | "source_dataset"
@@ -607,7 +606,6 @@ function LineageInner() {
             className="w-64 bg-gray-900 border border-gray-700 rounded-lg pl-8 pr-3 py-2 text-xs text-white"
           />
         </div>
-        <LanguageToggle />
       </header>
       <div className="flex-1 flex min-h-0">
         <div className="flex-1">

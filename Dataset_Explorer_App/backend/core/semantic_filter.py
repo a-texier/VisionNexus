@@ -7,7 +7,7 @@ import logging
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from backend.core.embedder import clip_embedder
 from backend.core.indexer import faiss_indexer
@@ -45,29 +45,34 @@ def semantic_search(
     text_vec = clip_embedder.embed_text(query)                   # (512,) float32
     query_matrix = text_vec.reshape(1, -1).astype(np.float32)   # (1, 512)
 
-    # 2. Recherche FAISS
-    try:
-        scores, indices = faiss_indexer.search(dataset_id, query_matrix, top_k)
-    except RuntimeError as exc:
-        raise RuntimeError(f"Index FAISS non disponible : {exc}") from exc
-
-    # 3. Mapping FAISS position → Image
+    # Mapping FAISS position → Image
     # INVARIANT : FAISS position i = Image avec rang i trié par id ascendant
     images_ordered = session.exec(
         select(Image)
         .where(Image.dataset_id == dataset_id)
         .order_by(Image.id)
     ).all()
+    # Les images rejetees (doublons) restent dans l'index mais n'ont pas a etre proposees :
+    # on en demande autant de plus a FAISS pour garder top_k resultats.
+    rejected = sum(1 for im in images_ordered if im.is_duplicate_kept is False)
+
+    # 2. Recherche FAISS
+    try:
+        scores, indices = faiss_indexer.search(dataset_id, query_matrix, top_k + rejected)
+    except RuntimeError as exc:
+        raise RuntimeError(f"Index FAISS non disponible : {exc}") from exc
 
     results = []
-    for rank, (score, idx) in enumerate(zip(scores[0], indices[0])):
+    for score, idx in zip(scores[0], indices[0]):
         if idx == -1 or idx >= len(images_ordered):
             continue
         img = images_ordered[idx]
+        if img.is_duplicate_kept is False:
+            continue
         results.append({
             "image_id": img.id,
             "score": float(score),
-            "rank": rank + 1,
+            "rank": len(results) + 1,
             "filename": img.filename,
             "thumbnail_url": img.thumbnail_path or "",
             "cluster_id": img.cluster_id,
@@ -75,6 +80,8 @@ def semantic_search(
             "umap_x": img.umap_x,
             "umap_y": img.umap_y,
         })
+        if len(results) >= top_k:
+            break
 
     return results
 
@@ -96,6 +103,11 @@ def semantic_search_global(
 
     # Avec un seuil, on balaie tout l'index global puis on coupe par score.
     effective_k = faiss_indexer.global_size() if min_score is not None else top_k
+    if min_score is None:
+        # Les rejetees restent dans l'index global : marge pour garder top_k resultats.
+        effective_k += session.exec(
+            select(func.count(Image.id)).where(Image.is_duplicate_kept == False)  # noqa: E712
+        ).one()
     effective_k = max(effective_k, 1)
 
     hits = faiss_indexer.search_global(text_vec, effective_k, dataset_ids)
@@ -137,8 +149,10 @@ def semantic_search_global(
         if local_pos >= len(ordered):
             continue
         img = images.get(ordered[local_pos])
-        if img is None:
+        if img is None or img.is_duplicate_kept is False:
             continue
+        if top_k and rank >= top_k:
+            break
         rank += 1
         results.append({
             "image_id": img.id,

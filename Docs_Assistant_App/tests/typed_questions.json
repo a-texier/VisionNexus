@@ -1,0 +1,2160 @@
+{
+ "_doc": "Questions au niveau app + type de page (pas de section exacte, voir golden.json). 'diagnostic' sert a comprendre les echecs ; 'validation' n'a pas ete regardee question par question pendant le reglage. apps/types = reponses acceptables pour la premiere place ; null = indifferent ; cat 'oos' = hors sujet, aucune bonne reponse.",
+ "diagnostic": [
+  {
+   "cat": "howto",
+   "q": "comment annoter une video avec SAM2",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment exporter mon projet au format YOLO",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment importer des images depuis un partage reseau",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "explorer",
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment lancer un entrainement YOLOX",
+   "lang": "fr",
+   "apps": [
+    "orchestrator",
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment creer un dataset dans Dataset Explorer",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment lancer une optimisation d'hyperparametres avec Optuna",
+   "lang": "fr",
+   "apps": [
+    "optuna",
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment voir mes runs dans MLflow",
+   "lang": "fr",
+   "apps": [
+    "mlflow"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment versionner un dataset avec DVC",
+   "lang": "fr",
+   "apps": [
+    "dvc",
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment connecter VisionNexus a une VM GPU",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment changer la langue de l'interface",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment lancer un pipeline complet avec l'Orchestrator",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment evaluer un modele avec le mAP",
+   "lang": "fr",
+   "apps": [
+    "inference",
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment activer l'assistant de documentation",
+   "lang": "fr",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment supprimer une annotation",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment fusionner deux datasets",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "l'application ne demarre pas",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "explorer",
+    "orchestrator",
+    "suite"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "le tunnel SSH echoue",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "SAM2 est tres lent sur mon PC",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "erreur memoire GPU pendant l'entrainement",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "inference",
+    "training"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "mes images ne s'affichent pas",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "explorer"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "le port est deja utilise",
+   "lang": "fr",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "impossible de trouver les poids du modele",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "docs",
+    "explorer",
+    "inference",
+    "suite",
+    "training"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "MLflow n'affiche aucun run",
+   "lang": "fr",
+   "apps": [
+    "mlflow",
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "Optuna reste bloque sur running",
+   "lang": "fr",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "l'orchestrateur reste en attente",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to track an object across video frames",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I export annotations to COCO",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to resume a training run",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to set up the native network share mount",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to add a new app to the suite",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "architecture",
+    "code-map"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I compare two experiments in mlflow",
+   "lang": "en",
+   "apps": [
+    "mlflow"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I install the SAM3 weights",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to run inference on a folder of images",
+   "lang": "en",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I change the number of clusters",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I find duplicate images",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I create a sandgraph template",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to reset the docs index",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is a human gate in the orchestrator",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what do FREE and LOCKED mean for nodes",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is the difference between SAM2 and SAMURAI",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "backend not responding",
+   "lang": "en",
+   "apps": null,
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "ssh connection refused",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "CUDA out of memory",
+   "lang": "en",
+   "apps": [
+    "annotation",
+    "explorer",
+    "inference",
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "docs assistant says the model is missing",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "search only works in keyword mode",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "training loss is nan",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "port 8068 already in use",
+   "lang": "en",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "where is the SSE endpoint implemented",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how does the launcher allocate ports",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "which endpoint lists the datasets",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how do I add an endpoint to the docs assistant",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "what is the schema of the index database",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "IPC channel to start a service",
+   "lang": "en",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "ou est defini le registre des apps dans le launcher",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "comment fonctionne le chunker",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "quelle variable d'environnement configure le modele d'embedding",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "kw",
+   "q": "SAM2",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "FAISS",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "DVC remote",
+   "lang": "en",
+   "apps": [
+    "dvc"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "port 8068",
+   "lang": "en",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "mAP",
+   "lang": "en",
+   "apps": [
+    "inference",
+    "training"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "Grounding DINO",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "sandgraph",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "UNC",
+   "lang": "en",
+   "apps": [
+    "annotation",
+    "explorer",
+    "orchestrator",
+    "suite"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "YOLOX",
+   "lang": "en",
+   "apps": [
+    "inference",
+    "training"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "homographie",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": null
+  },
+  {
+   "cat": "kw",
+   "q": "seed index",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": null
+  },
+  {
+   "cat": "typo",
+   "q": "commant exporter en yolo",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "typo",
+   "q": "ca plante quand je lance sam",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "typo",
+   "q": "exportation annotaion coco",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "typo",
+   "q": "faire tourner l entrainement sur la vm",
+   "lang": "fr",
+   "apps": [
+    "suite",
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "typo",
+   "q": "modele d embedding",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": null
+  },
+  {
+   "cat": "exact",
+   "q": "HF_HUB_OFFLINE",
+   "lang": "en",
+   "apps": [
+    "annotation",
+    "docs",
+    "suite"
+   ],
+   "types": null
+  },
+  {
+   "cat": "exact",
+   "q": "/api/graphs/meta/workspace-outputs",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": null
+  },
+  {
+   "cat": "exact",
+   "q": "DOCS_ASSISTANT_MODEL",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": null
+  },
+  {
+   "cat": "exact",
+   "q": "Le backend ne repond pas",
+   "lang": "fr",
+   "apps": [
+    "annotation",
+    "explorer",
+    "orchestrator",
+    "suite"
+   ],
+   "types": [
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "exact",
+   "q": "Index FAISS non charge",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": null
+  },
+  {
+   "cat": "oos",
+   "q": "recette de crepes",
+   "lang": "fr",
+   "apps": [],
+   "types": null
+  },
+  {
+   "cat": "oos",
+   "q": "how to bake bread",
+   "lang": "en",
+   "apps": [],
+   "types": null
+  },
+  {
+   "cat": "oos",
+   "q": "quel est le prix de l'abonnement",
+   "lang": "fr",
+   "apps": [],
+   "types": null
+  },
+  {
+   "cat": "oos",
+   "q": "meteo a Paris demain",
+   "lang": "fr",
+   "apps": [],
+   "types": null
+  }
+ ],
+ "validation": [
+  {
+   "cat": "concept",
+   "q": "quelle est la difference entre un run et une experience dans MLflow",
+   "lang": "fr",
+   "apps": [
+    "mlflow"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "a quoi sert un pruner dans Optuna",
+   "lang": "fr",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment reprendre une etude Optuna interrompue",
+   "lang": "fr",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "how does Optuna choose the next hyperparameters",
+   "lang": "en",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "quel sampler utilise Optuna par defaut",
+   "lang": "fr",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is a search space",
+   "lang": "en",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment ajouter un remote DVC",
+   "lang": "fr",
+   "apps": [
+    "dvc"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "ou sont stockes les fichiers versionnes par DVC",
+   "lang": "fr",
+   "apps": [
+    "dvc"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to see the history of dataset versions",
+   "lang": "en",
+   "apps": [
+    "dvc"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "pourquoi mon commit DVC est vide",
+   "lang": "fr",
+   "apps": [
+    "dvc"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I reduce the embedding dimensions to 2D for the map",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment exporter un sous-ensemble vers l'application d'annotation",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "how are near-duplicate images detected",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment chercher des images avec une phrase",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to convert .optional files",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "le clustering utilise quel algorithme",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "comment choisir la taille du modele YOLOX",
+   "lang": "fr",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is data.yaml and where is it generated",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to stop a training in progress",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment suivre la courbe de loss pendant l'entrainement",
+   "lang": "fr",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "which metrics does the evaluation tab compute",
+   "lang": "en",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment suivre un objet en cliquant dessus",
+   "lang": "fr",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is ByteTrack",
+   "lang": "en",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment configurer les seuils de confiance de l'inference",
+   "lang": "fr",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I run the benchmark",
+   "lang": "en",
+   "apps": [
+    "inference"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "que fait le noeud DVC dans le sandgraph",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to fork a run and change one parameter",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "ou voir le lineage d'un modele",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is an experiment plan",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "comment relancer un graphe qui a echoue",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "which ports are compatible between node types",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "comment choisir le modele SAM",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is the difference between the Auto and SAMURAI tracking modes",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment annoter automatiquement avec un prompt texte",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how do I correct a wrong track on the timeline",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "quels formats d'export sont disponibles",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to use homography to propagate boxes",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "what happens if the SMB share is slow",
+   "lang": "en",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment sauvegarder mon projet",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to open the documentation from the app",
+   "lang": "en",
+   "apps": [
+    "annotation",
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment changer le dossier de travail",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "where are the launcher logs",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "how to kill a process using a port",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is the Ports panel for",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment detacher un onglet dans une fenetre",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how does VisionNexus find the repository root",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "what is a plugin engine",
+   "lang": "en",
+   "apps": [
+    "suite",
+    "training"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment lancer VisionNexus sans VM",
+   "lang": "fr",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "concepts",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "how many passages are indexed",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "howto",
+   "q": "comment forcer la reindexation",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "concept",
+   "q": "which model does the assistant use",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "why is the first search slow",
+   "lang": "en",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "l'assistant repond en anglais alors que je suis en francais",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "les frames se chargent lentement en SSH",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration",
+    "troubleshooting"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "Grounding DINO ne detecte rien",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "the training does not start on the VM",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "mlflow shows no metrics for the evaluation run",
+   "lang": "en",
+   "apps": [
+    "inference",
+    "mlflow",
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "les clusters sont tous identiques",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "erreur 409 dataset deja indexe",
+   "lang": "fr",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "trouble",
+   "q": "un noeud reste bloque en running",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "concepts",
+    "configuration",
+    "readme",
+    "troubleshooting",
+    "user-guide",
+    "workflows"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "where is the CLIP model loaded",
+   "lang": "en",
+   "apps": [
+    "explorer"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how does the SSE reconnect work",
+   "lang": "en",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "which file defines the training engines catalog",
+   "lang": "en",
+   "apps": [
+    "training"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "quelle table stocke les embeddings",
+   "lang": "fr",
+   "apps": [
+    "docs"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how are tunnels closed when the app quits",
+   "lang": "en",
+   "apps": [
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "endpoint pour lancer une propagation SAM2",
+   "lang": "fr",
+   "apps": [
+    "annotation"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "which endpoint returns the MLflow run list",
+   "lang": "en",
+   "apps": [
+    "mlflow"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "ou est le code du pipeline runner",
+   "lang": "fr",
+   "apps": [
+    "orchestrator"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how is the heading anchor number computed",
+   "lang": "en",
+   "apps": [
+    "docs",
+    "suite"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "configuration"
+   ]
+  },
+  {
+   "cat": "dev",
+   "q": "how does Optuna call the training script",
+   "lang": "en",
+   "apps": [
+    "optuna"
+   ],
+   "types": [
+    "api-reference",
+    "architecture",
+    "code-map",
+    "concepts",
+    "configuration",
+    "readme",
+    "user-guide",
+    "workflows"
+   ]
+  }
+ ]
+}

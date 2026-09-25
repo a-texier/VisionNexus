@@ -1,912 +1,269 @@
-*[Read in English](architecture.md)*
-
-# Architecture - Orchestrator App
-
-Retour a [docs/README.md](README.md).
-
-Ce document couvre le fonctionnement interne de l'orchestrateur : conversion graphe -> pipeline,
-execution async du DAG, architecture SSE, mode FREE/LOCKED, auto-launch des sous-apps, et le detail
-fichier par fichier du backend et du frontend.
-
+---
+app: orchestrator
+doc_type: architecture
+audience: dev
+lang: fr
+title: Architecture
+order: 60
+tags: [graph runner, pipeline runner, sse, ports, insights, lineage, plans, react flow]
+sources: [Orchestrator_App/backend/config.py, Orchestrator_App/backend/main.py, Orchestrator_App/backend/api/graphs.py, Orchestrator_App/backend/core/graph_runner.py, Orchestrator_App/backend/core/pipeline_runner.py, Orchestrator_App/backend/core/graph_store.py, Orchestrator_App/backend/core/app_launcher.py, Orchestrator_App/backend/core/proxy_client.py, Orchestrator_App/backend/core/insights.py, Orchestrator_App/backend/core/run_manifest.py, Orchestrator_App/backend/api/lineage.py, Orchestrator_App/backend/core/plan_store.py, Orchestrator_App/backend/core/plan_runner.py, Orchestrator_App/frontend/src/pages/SandgraphPage.tsx, Orchestrator_App/frontend/src/nodes/ports.ts, Orchestrator_App/frontend/src/api/client.ts]
 ---
 
-## Ports
+# Architecture
 
-Table de reference unique pour tout le suite Computer Vision (orchestrateur + sous-apps). Ne pas
-dupliquer cette table ailleurs : README.md pointe ici.
+## Vue d'ensemble des composants d'Orchestrator App
 
-| Service | Port |
-|---------|------|
-| Orchestrator backend | 8060 |
-| Orchestrator frontend | 3000 |
-| Annotation_App | 8000 |
-| Dataset_Explorer_App | 8001 |
-| dvc-app | 8061 |
-| mlflow-app | 8062 |
-| optuna-app | 8063 |
-| Training_App | 8064 |
-| Inference_App | 8065 |
+Orchestrator App est une application a deux etages : un backend FastAPI qui convertit un graphe visuel en pipeline executable et le pilote, et un frontend React construit autour de `@xyflow/react` (l'editeur Sandgraph).
 
-`config.py` lit `APP_URLS` / `APP_FRONTEND_URLS` comme dicts mutables : `graph_runner.py` les
-met a jour en live quand il lance une app (`APP_URLS[key] = session.backend_url`). Ne jamais les
-copier, toujours lire par reference.
+```text
+Frontend (React 18 + TypeScript + Vite + @xyflow/react + TanStack Query)
+  |-- HTTP /api (axios, client type)  --+
+  |-- SSE /api/graphs/{id}/run/{run}/stream (fetch brut, contourne axios) --+--> Proxy Vite --> Backend FastAPI
+  `-- liens profonds vers les frontends des sous-applications (Annotation, DVC, MLflow, ...)
 
----
-
-## Structure workspace
-
-```
-{WORKSPACE}/
-  orchestrator_{user}/
-    graphs/experiments.json    sandgraphs persistes
-    pipelines/                 pipelines generes
-    activity.json
-    sessions.json
-  explorer_{user}/                 workspace Dataset_Explorer_App
-  annotation_{user}/           workspace Annotation_App
-  dvc_{user}/
-  mlflow_{user}/
-  optuna_{user}/
+Backend (FastAPI, un seul worker uvicorn, aucune couche de persistance hors fichiers JSON)
+  |-- api/ : un routeur par domaine (graphs, launcher_api, insights, lineage, plans, engines, ...)
+  |-- core/ : graph_runner (graphe -> pipeline), pipeline_runner (executeur DAG async),
+  |           graph_store / pipeline_store / plan_store / experiment_store / activity_store (persistance JSON),
+  |           app_launcher (lance les processus des sous-applications), proxy_client (appels HTTP aux sous-applications),
+  |           insights.py / run_manifest.py (generation du Run Insight et index canonique du run)
+  `-- workspace sur disque : graphs/experiments.json, pipelines/*.json, insights/, runs/, plans/, activity.json
 ```
 
-Regle critique : les outputs existants (subsets explorer, exports Annotation) viennent toujours du
-workspace filesystem, jamais des repertoires d'application. Voir
-`GET /api/graphs/meta/workspace-outputs`.
-- Subsets explorer : `explorer_{user}/subsets/{name}/`
-- Exports Annotation : `annotation_{user}/exports/{name}.zip`
+Le backend ne touche jamais a la propre base de donnees d'une sous-application ; il n'appelle que son API HTTP (`proxy_client`) et scanne deux dossiers fixes du workspace (`explorer_{user}/subsets/`, `annotation_{user}/exports/`) pour decouvrir les sorties existantes du mode FREE. L'etat de run qui doit survivre a une reprise (le moteur d'execution du DAG) vit uniquement dans la memoire du backend (`_active_runs`), jamais sur disque ; tout le reste (graphes, pipelines, plans, activite, insights) est du JSON simple ecrit dans le workspace.
 
----
+## Démarrage de l'application backend
 
-## FREE / LOCKED node mode (cle du systeme)
+`backend/main.py` construit l'application FastAPI et monte onze routeurs dans un ordre precis : `health`, `pipelines`, `activity`, `settings`, `experiments`, `graphs`, `launcher_api`, `insights`, `lineage`, `plans`, `engines`. L'ordre compte pour `graphs` : ses routes `/meta/*` doivent se resoudre avant la route parametree `/{graph_id}`.
 
-Chaque node `explorer` et `annotation` a deux modes selon sa connectivite :
+Le gestionnaire de lifespan initialise le journal HTML de debug (`WORKSPACE/debug.html`), puis appelle `app_launcher.repatch_app_urls()`, qui lit `launcher_state.json` et reinjecte l'URL reelle de chaque session de sous-application dont le port ecoute reellement dans `APP_URLS` / `APP_FRONTEND_URLS`. C'est necessaire apres un reload d'uvicorn : sans cela, `APP_URLS` reviendrait a ses ports par defaut et le proxy perdrait la trace de chaque sous-application deja lancee.
 
-### MODE FREE (aucune arete entrante)
-- Le node **expose les outputs existants** du workspace (scan filesystem)
-- L'utilisateur **clique** sur un subset/export pour le selectionner -> met a jour `subset_name` / `project_name`
-- Le node est **connectable directement** vers l'aval sans lancer de pipeline
-- **Aucune etape pipeline generee** par ce node -> l'app correspondante n'est pas auto-lancee
-- Badge vert `FREE` affiche dans le header du node
+Le CORS, le filtrage du log d'acces (les endpoints d'interrogation comme `GET /api/apps` et `GET /api/graphs` sont retires du log d'acces uvicorn pour le garder lisible sur une longue session) et les deux endpoints directs de workspace (`/api/workspace/users`, `/api/workspace/history`, `/api/workspace/open`) sont aussi definis directement dans `main.py`.
 
-### MODE LOCKED (au moins une arete entrante)
-- Le node **execute un nouveau pipeline** a partir de son input
-- Affiche l'output qui sera produit apres run (unique)
-- Badge ambre `LOCKED` affiche dans le header du node
+## Types de nœuds et leurs étapes de pipeline
 
-### Implementation technique
-
-**Frontend (`AppNode.tsx`)** :
-- `data.has_input: boolean` - calcule depuis les aretes, jamais persiste
-- En mode FREE : clic sur un item -> `window.dispatchEvent('orch:select-output', {nodeId, nodeType, name})`
-- En mode LOCKED : affichage classique, items non-cliquables
-
-**Frontend (`SandgraphPage.tsx`)** :
-- `useEffect([edges])` -> recalcule `has_input` pour tous les nodes quand la topologie change
-- `window.addEventListener('orch:select-output')` -> met a jour `subset_name`/`project_name`
-- `refreshWorkspaceOutputs()` -> injecte aussi `has_input` via `edgesRef.current`
-- `has_input` est strippe au save/run (etat derive, non persiste)
-
-**Backend (`graph_runner.py`)** :
-- `_is_free_node(node, edges)` -> True si ntype != dataset_source ET aucune arete entrante
-- `graph_to_pipeline()` -> skip les FREE nodes (aucune etape generee)
-- `_needed_app_keys()` -> skip les FREE nodes (app non lancee)
-
----
-
-## Node types et leurs etapes pipeline
-
-Les step IDs suivent la convention `{node_id}__{action}` (double underscore).
+Les ids d'etape suivent la convention `{node_id}__{action}` (double underscore) ; `graph_runner._steps_for_node()` est la seule fonction qui traduit un nœud en une liste d'etapes.
 
 ### dataset_source
-- `{id}__load` -> POST Dataset_Explorer_App `/api/orchestrator/load-dataset`
-- `{id}__embed` -> POST Dataset_Explorer_App `/api/orchestrator/start-embed`
 
-### explorer (LOCKED uniquement - si FREE : aucune etape)
-- `{id}__verifyembed` -> human_gate (verifier les clusters CLIP dans explorer playground)
-- `{id}__subset` -> POST Dataset_Explorer_App `/api/orchestrator/create-subset`
-- `{id}__validatesubset` -> human_gate (verifier les images du subset)
-- `{id}__export` -> POST Dataset_Explorer_App `/api/orchestrator/export-subset`
-- Apres export success : le frontend rescanne le workspace -> `available_subsets` mis a jour
+- `{id}__load` -> `POST Dataset_Explorer_App /api/orchestrator/load-dataset`. La progression live interroge `GET /api/datasets`, appareillee par nom jusqu'a ce que le vrai id soit connu.
+- `{id}__embed` -> `POST Dataset_Explorer_App /api/orchestrator/start-embed`, referencant le `dataset_id` renvoye par `load` (jamais juste le nom, car deux datasets peuvent partager un nom).
 
-### annotation (LOCKED uniquement - si FREE : aucune etape)
-- `{id}__project` -> POST Annotation_App `/api/orchestrator/create-project`
-- Si `full_auto=true` : `{id}__auto_annotate` -> POST Annotation_App `/api/orchestrator/auto-annotate`
-- Si `full_auto=false` : `{id}__annotate` -> human_gate
-- `{id}__exportyolo` -> POST Annotation_App `/api/orchestrator/export-yolo`
-- Apres exportyolo success : le frontend rescanne le workspace -> `available_exports` mis a jour
+### explorer (LOCKED seulement ; un nœud FREE ne produit aucune etape)
 
-### dvc
-- `{id}__commit` -> POST dvc-app `/api/orchestrator/commit`
+- Mode manuel (`full_auto=false`) : un point d'arret humain `manual_create`, puis `{id}__export`.
+- Mode automatique : `{id}__verifyembed` (point d'arret humain) -> `{id}__subset` (`POST /api/orchestrator/create-subset`) -> `{id}__validatesubset` (point d'arret humain) -> `{id}__export` (`POST /api/orchestrator/export-subset`).
+- Apres un export reussi, le frontend rescanne le workspace et rafraichit `available_subsets` sur chaque nœud FREE.
+
+### annotation (LOCKED seulement ; un nœud FREE ne produit aucune etape)
+
+- `{id}__project` -> `POST Annotation_App /api/orchestrator/create-project`, avec `import_path` defini quand un ancetre `dataset_source` fournit un dossier directement (import zero-copie).
+- Automatique (`full_auto=true`) : `{id}__auto_annotate`, suivi optionnellement d'un point d'arret humain `review` si `review_before_export` est coche.
+- Manuel : un point d'arret humain `annotate`.
+- `{id}__exportyolo` (`POST /api/orchestrator/export-yolo`, `reuse_if_exists` defini a l'export choisi au point d'arret manuel) et `{id}__exportver` (`POST /api/orchestrator/export-ver`) s'executent toujours tous les deux apres le point d'arret, pour que les deux formats existent sur disque quel que soit le port aval reellement connecte.
+
+### dvc / mlflow
+
+Aucun des deux types ne genere d'etape : les deux sont de purs observateurs sans aucun port (`NODE_PORTS.dvc` et `.mlflow` valent `{inputs: [], outputs: []}`). `dvc-app` et `mlflow-app` sont quand meme auto-lancees des qu'un nœud de ce type existe dans le graphe (`_needed_app_keys`), independamment de toute arete.
+
+### optuna
+
+- Automatique : `{id}__hpo` (`POST optuna-app /api/orchestrator/hpo`), avec `dataset_path` derive de l'Annotation connectee (directement, ou en remontant les ancetres) et un bloc `trace` pour le tag MLflow.
+- Manuel : un point d'arret humain `hpo`.
 
 ### training
-- `{id}__train` -> POST Training_App `/api/orchestrator/train` (task, automatique)
-- Entrees : dataset YOLO (`annotation`, obligatoire), modele de depart (node `model`, optionnel),
-  best params HPO (`optuna`, optionnel) - voir [Ports types des nodes](#ports-types-des-nodes-portsts)
-- Parametres envoyes : `engine`, `model_size`, `epochs`/`batch`/`imgsz` (generiques, traduits par
-  Training_App vers les cles du moteur) et `hyperparams` (dict propre au moteur, plus les anciennes
-  cles YOLOX stockees a plat par les graphes anterieurs).
-
-### Moteur d'entrainement dans un graphe
-Les noeuds `model`, `training` et `optuna` portent un champ `engine` (vide = moteur par defaut,
-YOLOX). Leurs panneaux se construisent depuis `GET /api/engines` (catalogues de Training_App,
-repli sur le registre local si l'app n'est pas lancee) : aucun nom de moteur n'est ecrit dans le
-frontend, et sans plugin aucun selecteur n'apparait. A la construction du pipeline
-(`graph_runner.py`), refus explicite (`GraphConfigError` -> HTTP 400) plutot qu'un echec en cours de
-run :
-- un node `model` branche impose son moteur et sa taille au `training` (ses poids ne se rechargent
-  qu'avec eux) ;
-- une etude `optuna` et le `training` qu'elle alimente doivent avoir le meme moteur ;
-- une `inference` n'accepte pour l'instant que des poids du moteur par defaut (seul moteur
-  qu'Inference_App sait charger).
-
-### mlflow / optuna
-- `{id}__train` / `{id}__hpo` -> human_gate
-
-MLflow n'est **pas** une etape de pipeline classique : c'est un **observateur** du store MLflow
-du workspace (serverless). MLflow_App est auto-lancee des qu'un node MLflow existe, et le node
-affiche un resume live des runs.
-
-### model
-Pas d'etape pipeline generee : un node `model` n'est jamais LOCKED, il n'a aucune entree. C'est
-une source de valeur pure (moteur, taille et chemin des poids saisis a la main dans
-`NodeConfigPanel`, extension verifiee contre le catalogue du moteur) exposee via son
-port de sortie `model`, consommee par `training` (poids de depart / fine-tuning) ou `inference`
-(modele a tester) sans passer par un Training amont. Voir la section
-[Ports types des nodes](#ports-types-des-nodes-portsts) ci-dessous.
-
----
-
-## Ports types des nodes (ports.ts)
-
-`NODE_ACCEPTS` (l'ancien dict plat `type cible -> types source acceptes` dans SandgraphPage.tsx)
-a ete remplace par `frontend/src/nodes/ports.ts` : un schema **par port**, pas seulement par node.
-Un node declare des **entrees** (a gauche) et des **sorties** (a droite), chacune avec un type de
-donnee (`PortType`) qui determine sa couleur (handle + arete) :
-
-```typescript
-type PortType = 'dataset' | 'subset' | 'yolo' | 'ver' | 'model' | 'params' | 'metrics' | 'any'
-```
-
-Ce que le systeme de ports resout, qu'un `NODE_ACCEPTS` par node ne pouvait pas exprimer :
-- **Plusieurs entrees typees sur un meme node** : `training` a 3 entrees independantes
-  (`dataset` <- annotation, `model` <- node `model` uniquement, `hpo` <- optuna), chacune avec son
-  propre handle et sa propre regle d'acceptation (`accepts`).
-- **Plusieurs sorties typees sur un meme node** : `annotation` a 2 sorties distinctes
-  (`out_yolo` = dataset YOLO complet -> Training/Optuna, `out_ver` = format `.ver` natif
-  Inference_App -> Inference/Eval). `resolveHandles(srcType, tgtType)` choisit automatiquement la
-  bonne paire de handles a la connexion (source dont le TYPE correspond au port cible choisi).
-- **Exclusivite entre deux entrees** (`exclusiveWith`) : sur `inference`, `sequence` (images brutes)
-  et `dataset_yolo` (dataset YOLO, GT incluse) ne peuvent jamais etre branches en meme temps -
-  `wouldViolateExclusivity` bloque la connexion AVANT qu'elle ne se cree.
-- **Dependance entre entrees** (`requiresPeer`) : sur `inference`, `gt` (.ver) n'a de sens que si
-  `sequence` est aussi branche - sinon `validatePortRules` remonte un simple warning (pas bloquant).
-- **Entree obligatoire** (`required`) : `validatePortRules` refuse la sauvegarde/le lancement si un
-  port `required` n'est pas branche, SAUF en mode FREE (explorer/annotation sans arete restent valides).
-
-`dvc` et `mlflow` ont `{ inputs: [], outputs: [] }` : aucun port, donc **inconnectables**. Ce sont
-des observateurs purs du workspace (DVC scanne les artefacts produits par tout le graphe via
-`_gather_graph_artifacts`, MLflow scanne son store), pas des etapes du DAG.
-
-`compatibleNodeTypes(fromType, handleType, handleId)` alimente le popup "node compatible" quand on
-tire un fil depuis un port sans le lacher sur une cible (drag-to-create).
-
-Les nodes `explorer` et `annotation` SANS input entrant restent automatiquement en mode FREE (le
-systeme de ports ne change rien a FREE/LOCKED, voir section dediee plus haut).
-
-Auto-propagation des parametres sur `onConnect` (inchangee) :
-- `dataset_source -> explorer` : copie `dataset_name`
-- `explorer -> explorer` : copie `dataset_name`
-- `explorer -> annotation` : copie `subset_name`
-- `dataset_source -> annotation` : copie `dataset_name` dans `subset_name`
-
-Cas particuliers :
-- **Dataset Explorer -> Dataset Explorer** : subset-de-subset - le 2eme explorer filtre aux images du 1er subset
-- **Inference FREE** : ouvre une session fichier manuelle (YOLO, MOT ou SOT par clic)
-
-### Rendu visuel des ports (`NodePorts.tsx`) et des aretes (`OrthogonalEdge.tsx`)
-
-`NodePorts` est le bandeau "blueprint" affiche au bas de chaque node (via `NODE_PORTS[nodeType]`) :
-une colonne Entrees a gauche, une colonne Sorties a droite, chaque port sur sa propre ligne avec
-son handle ReactFlow. Un port d'entree est colore/allume seulement si CE handle precis recoit une
-arete (`inputHandles.includes(p.id)`) - pas si le node a une arete entrante sur un AUTRE port
-(bug corrige : sur `inference`, `dataset_yolo` et `gt` acceptent tous deux une source `annotation`,
-un check par type aurait allume `gt` des que `dataset_yolo` est branche).
-
-`OrthogonalEdge` remplace l'ancien fallback `smoothstep` + `DetourEdge` : c'est desormais l'UNIQUE
-type d'arete (`edgeTypes = { orthogonal: OrthogonalEdge }`), utilise pour toutes les connexions.
-Le trace est calcule par `routing.ts` (module pur, sans dependance React/xyflow) : detection des
-nodes a contourner, choix d'un mode (`direct` / `zbend` / `corridor`), empilement des couloirs
-paralleles, generation du path SVG. Tant que l'arete n'a pas ete editee a la main, le trace est
-recalcule automatiquement a chaque deplacement de node. Des qu'un waypoint est ajoute (double-clic
-sur l'arete) ou deplace, l'arete passe en `routeMode: 'manual'` et garde ce trace fige (un bouton
-sur le label permet de revenir au routage automatique). Convention : une sortie quitte toujours son
-node vers la droite, une entree recoit toujours depuis la gauche.
-
----
-
-## SSE architecture
-
-1. `start_run` -> cree un `RunState` dans `_active_runs: dict[str, RunState]` (in-memory)
-2. Le pipeline emet des events dans `state.events: list[dict]`
-3. `stream_events(run_id)` est un generateur async qui rejoue tous les events depuis cursor=0 a chaque connexion
-4. `graphs.py` `event_generator` consomme ce flux, met a jour `graph_store`, et yield le SSE au client
-
-### Human gate flow
-- `_run_step` set `state.status = "waiting"`, emet l'event waiting, return
-- `_execute` voit `state.status == "waiting"` -> return
-- `stream_events` sort quand `cursor >= len(events)` a l'event waiting
-- Le frontend affiche le banner "Intervention requise"
-- L'utilisateur clique "Continuer" -> POST `/api/graphs/{id}/resume`
-- `resume_run` marque le step waiting comme success, emet l'event success, rappelle `_execute`
-- Le frontend reconnecte le SSE -> rejoue tous les events depuis cursor=0
-
-### Loop bug fix (mai 2026)
-- Cause racine : au reconnect SSE apres resume, `event_generator` sortait sur l'event historique
-  "waiting" ET `graph_store.update_node_exec` regressait le statut du node vers "waiting"
-- Fix 1 (`graphs.py`) : suppression de `if evt_type in ("done", "waiting"): return` - on ne sort
-  plus que sur "done"
-- Fix 2 (`graph_store.py`) : suppression de "waiting" du bypass "toujours mettre a jour" dans
-  `update_node_exec` ; le statut graph-level ne passe a "waiting" que si le node transitionne
-  reellement depuis un rang inferieur
-
-### Server restart fix
-- `run_in_memory(run_id)` verifie si le run existe dans `_active_runs`
-- Si absent au resume : `reset_graph_execution()` -> HTTP 410 -> le frontend se rafraichit
-
----
-
-## Auto-launch flow
-
-1. `run_graph()` appelle `_preflight_check()` -> liste les apps injoignables necessaires aux nodes du graphe
-2. Pour les nodes FREE : app non incluse dans `_needed_app_keys` -> pas de lancement auto
-3. Pour les nodes LOCKED : auto-launch en background si l'app n'est pas disponible
-4. Chaque step appelle `_wait_for_app(step.app, max_wait=60s)` avant execution - poll `/health` toutes les 2s
-
----
-
-## Canvas behavior (SandgraphPage.tsx)
-
-- `nodesDraggable`, `nodesConnectable`, `deleteKeyCode` tous desactives quand `isRunning || isWaiting`
-- Undo/redo : `useRef` stacks (`historyRef`, `futureRef`) + mirror refs (`nodesRef`, `edgesRef`) pour eviter les stale closures
-- Auto-propagation sur `onConnect` (voir section connexions ci-dessus)
-- `stepNodeMap` (`step_id -> node_id`) est set par `runMut.onSuccess` et reutilise par `resumeMut.onSuccess`
-- `has_input` injecte via `useEffect([edges])` + `refreshWorkspaceOutputs()`, strippe au save/run
-
-Raccourcis :
-
-| Touche | Action |
-|--------|--------|
-| `Ctrl+Z` / `Ctrl+Y` | Annuler / Retablir |
-| `F` | Ajuster la vue |
-| `Suppr` / `Backspace` | Supprimer selection |
-| Canvas verrouille pendant l'execution | - |
-
----
-
-## Annotation node params
-
-Champs dans `node.data` :
-- `annotation_mode` : `"sequence"` | `"random"`
-- `full_auto` : boolean
-- `ai_model` : `"sam3"` | `"grounding_dino"`
-- `ai_text` : string (prompt pour GroundingDINO)
-- `ai_threshold` : number (0-1)
-
----
-
-## Run Insight et lineage (Git / DVC / MLflow)
-
-Un "Run Insight" est le document (JSON + Markdown + plots) genere pour UN run de graphe. Le
-"Lineage" est le graphe qui relie TOUS les runs de TOUS les graphes entre eux (dataset commun,
-forks). Les deux s'appuient sur le meme lineage brut ecrit par `graph_runner`/`graph_store`
-pendant le run (`git_commit`, `dataset`, `dvc_version`, `model_path`, `map50`, tags MLflow), mais
-chacun le traite differemment : l'Insight COLLECTE et FIGE l'etat d'un run, le Lineage LIT cet etat
-deja fige pour construire des relations entre runs.
-
-### `core/insights.py` - generation d'un Insight
-
-Un dossier `WORKSPACE/insights/{graph_id}/{run_id}/` est (re)genere automatiquement a la fin d'un
-run (event SSE `done`) et progressivement pendant le run (apres chaque etape `train`, `exportyolo`,
-`commit`, `hpo`, `export`, `subset` reussie - voir `event_generator` dans `graphs.py`), ou a la
-demande via `POST /api/insights/{graph_id}/generate`.
-
-- `collect(graph_id, run_id)` agrege TOUT ce que les sous-apps savent de ce run : statut/timings
-  des nodes et journal brut des steps (depuis `graph_store`/`experiment_store`), historique
-  d'entrainement epoch par epoch (Training_App, `GET .../metrics-history`), etudes Optuna dont le
-  `run_id` (user_attr) correspond exactement a ce run (pas de fallback par date ou graph_id), runs
-  MLflow tagues `orch_run_id == run_id`, commits DVC dont le trailer `run_id` correspond. Tout est
-  filtre sur l'identite exacte du run : un fork ne recupere jamais les courbes ou artefacts de son
-  parent par erreur.
-- `_build_lineage(...)` assemble l'objet `lineage` (git_commit, dataset, dvc_version resolu par scan
-  des fichiers DVC, model_path, map50 - cherche d'abord le lineage ecrit au run, puis les metriques
-  MLflow, puis le statut Training_App) et une checklist `reproducibility` de 7 verifications
-  honnetes (code Git commite, snapshot du graphe, dataset DVC versionne, run MLflow lie, fichier
-  modele present sur disque, artefacts d'analyse presents, remote DVC configure). `reproducible`
-  n'est vrai QUE si les 7 sont vrais - aucun "vert" par defaut.
-- `generate()` regenere aussi 4 plots matplotlib (`training_curves.png`, `gains.png` - mAP50 finale
-  par entrainement avec delta vs le premier run, `optuna_history.png`, `timeline.png` - Gantt des
-  nodes), rapatrie les images d'analyse du/des training (plots declares par le moteur du run :
-  synthese s'il en produit une, matrice de confusion, courbes PR/F1, distribution des labels,
-  validation), puis ecrit 3 fichiers : `insights.json` (bundle
-  brut complet), `insights.md` (journal lisible, aucune donnee cachee), `metrics.json` (sous-ensemble
-  STABLE et trie - sans timestamp - destine a etre versionne par DVC sans "churner" a chaque
-  regeneration). Termine par `run_manifest.finalize(...)`.
-
-### `api/insights.py`
-
-| Methode | Route | Description |
-|---------|-------|--------------|
-| GET | `/api/insights` | Liste tous les insights generes (tous graphes/runs confondus) |
-| GET | `/api/insights/{graph_id}/{run_id}` | Contenu complet de l'insight (404 si non genere) |
-| GET | `/api/insights/{graph_id}/{run_id}/plot/{name}` | Sert un plot PNG (garde-fou anti path-traversal) |
-| DELETE | `/api/insights/{graph_id}/{run_id}` | Supprime le dossier d'insight (cache d'affichage - le lineage/DVC/MLflow sous-jacents restent intacts, regenerable) |
-| POST | `/api/insights/{graph_id}/generate` | (Re)genere l'insight du run donne, ou du dernier run connu du graphe si `run_id` omis |
-
-### `core/run_manifest.py` - index canonique d'un run
-
-`WORKSPACE/runs/{run_id}/manifest.json` est l'index logique d'un run : les fichiers restent dans
-les workspaces des sous-apps, mais chaque sortie produite (`outputs`) est explicitement rattachee a
-son `run_id` d'origine (`start()` a l'ouverture du run, `finalize()` a la fin). Ecriture atomique
-(fichier temporaire + `os.replace`) pour ne jamais exposer un manifeste JSON partiel. Une sortie du
-run courant ne devient jamais implicitement une sortie du parent (`source_run_id` explicite), y
-compris pour les inputs herites d'un fork (`inputs: [{kind: "fork_base", ...}]`).
-
-### `api/lineage.py` - graphe cross-experiences
-
-`GET /api/lineage?include_failed=bool` construit, a travers TOUS les graphes du workspace, un
-graphe `{nodes, edges}` : chaque run publie (statut done/success/completed par defaut - vue
-"published" ; `include_failed=true` inclut aussi les runs failed/interrompus/partiels - vue
-"audit", avec `excluded_runs` listant ce que la vue published masque). Lecture seule et defensif :
-un run sans aucun lineage apparait quand meme (marque "non versionne"), jamais d'exception qui
-casserait la page entiere pour un run incomplet.
-
-Types de node : `source_dataset` (dataset source commun, dedupe par chemin+nom) | `dataset`
-(subset reellement extrait par CE run, dedupe par source+subset+requete+version DVC - jamais par le
-commit du parent, pour qu'un fork non committe garde sa propre identite) | `run` | `model` (dedupe
-par chemin) | `stage` (un run MLflow individuel, rattache au run pipeline qui l'a produit) |
-`artifact` (annotations/metriques/graph/optuna produits, avec leur etat `versioned` calcule depuis
-les chemins DVC reellement trackes).
-
-Types d'arete : `source` (dataset source -> run), `subset` (run -> subset extrait), `model`
-(run -> modele), `mlflow` (run -> stage MLflow), `artifact` (run -> artefact), `fork` (run parent ->
-run enfant via `graph["forked_from"]` ; si un fork n'a encore aucun run, un node `draft` "non lance"
-apparait quand meme pour representer la branche).
-
-Aucune URL n'est resolue cote serveur - les deep-links vers dvc-app/mlflow-app sont construits cote
-frontend via `/api/graphs/meta/app-urls`. Chaque node de type `run` porte un objet `comparison`
-(`_comparison_snapshot`) : une vue normalisee et stable (dataset source, subset, annotations YOLO,
-annotations `.ver`, HPO - `best_params` uniquement si produit par CE run, jamais herite du parent -,
-params de training, modele, etapes MLflow avec leurs metriques, artefacts, mAP50) utilisee par le
-frontend pour diffuser un run contre un autre section par section.
-
-### `api/graphs.py` - actions liees (fork / promotion MLOps)
-
-Deux actions du router `graphs` completent ce systeme (pas dans les fichiers lineage/insights eux-
-memes, mais indissociables du flux Insight -> Lineage) :
-- `POST /api/graphs/{graph_id}/fork-run` : duplique le graphe (memes nodes dataset/annotation, donc
-  meme subset + memes annotations) et grave la provenance du run source dans `forked_from`
-  (git_commit, dataset, dvc_version, map50, snapshot des parametres reglables du parent). Ne
-  declenche AUCUN pull/re-telechargement DVC - sert uniquement a la tracabilite et a l'ecran de
-  divergence. L'utilisateur ajuste ses parametres puis relance lui-meme.
-- `POST /api/graphs/{graph_id}/track-mlops` : promeut un graphe "experimental" en "mlops" en
-  injectant, s'ils manquent, les nodes FREE `mlflow` + `dvc` (paire couplee). Idempotent, ne lance
-  et ne versionne rien - juste la structure pour que l'utilisateur committe ensuite via le node DVC.
-  Le type derive `mlops` (`graph_store.mlops_status`) sert au badge MLOps/Experimental affiche par
-  `InsightsPage`.
-
-### Frontend - `InsightsPage.tsx`
-
-Page de detail d'un run : carte d'identite (`LineageHeader`) avec badge MLOps/Experimental,
-provenance de fork, 6 champs cliquables (Git, Dataset, DVC version, MLflow Run, Model, mAP50 -
-chacun soit un lien reel soit "non relie", jamais une fausse valeur), actions directes (Open MLflow
-Run, Inspect DVC, Inspect Dataset, View Artifacts, Open Sandgraph, Open Lineage, Track in MLOps,
-Fork this run), un panneau "Reproduce Run" (recette en 4 etapes sans ligne de commande, actif
-uniquement si `reproducibility.reproducible`) et le detail de la checklist de reproductibilite.
-En dessous : apercu du Sandgraph source, courbes Plotly interactives (mAP/pertes/precision-rappel
-par epoch, historique Optuna), images d'analyse du moteur d'entrainement repliables, journal brut des steps,
-logs complets colores (memes blocs que le Sandgraph), et un export "rapport HTML" autonome
-(Plotly inline, consultable hors-ligne sans serveur).
-
-### Frontend - `LineageGraphPage.tsx`
-
-Vue graphe (ReactFlow) de l'arbre de lineage complet, groupee par experience (dataset source commun
-en tete, un cadre pointille par run avec ses productions). Chaque run est aussi represente par un
-"jeton" (`RunToken`) draggable : le deposer dans le panneau `ComparisonPanel` (ou dans la vue Liste)
-compare deux runs section par section via leur `comparison` snapshot, en surlignant uniquement les
-sections qui different (ajoute/supprime/modifie) avec le detail champ par champ. Bascule Graphe/Liste,
-recherche par nom/dataset/subset, compaction des productions par run, panneau de detail par node
-avec liens directs DVC/MLflow et un raccourci "Forker ce run" identique a celui d'InsightsPage.
-
----
-
-## Plans d'experiences
-
-Un "Experiment Plan" est une suite ORDONNEE d'etapes ; chaque etape duplique un graphe de base deja
-construit dans le Sandgraph et lui applique des overrides nommes, puis la lance. C'est l'automatisation
-de "dupliquer + changer 2-3 parametres + relancer" repetee plusieurs fois (ex. balayer plusieurs
-valeurs d'epochs/basic_lr_per_img en partant du meme graphe reutilisation annotation FREE -> training).
-
-### `core/plan_store.py`
-
-Persistence JSON simple dans `WORKSPACE/plans/plans.json`. Un plan = `{plan_id, name, created_at,
-updated_at, steps: [{id, label, base_graph_id, overrides}], last_run}`. `last_run` est ecrit par
-`plan_runner` pendant l'execution (`status`, `started_at`, `finished_at`, `current`/`total`,
-`results: [...]`) et sert d'etat de progression poll par le frontend.
-
-### `core/plan_runner.py`
-
-Le moteur d'execution NE reutilise PAS directement les fonctions Python internes : il rejoue, en
-tache de fond (`asyncio.create_task`), la meme sequence qu'un utilisateur ferait a la main, mais EN
-APPELANT LES ENDPOINTS HTTP INTERNES de l'app elle-meme (`http://127.0.0.1:{BACKEND_PORT}`) - donc
-toute la logique existante (validation, auto-launch, SSE) est reutilisee telle quelle, sans code
-duplique. Pour chaque etape :
-1. `POST /api/graphs/{base_graph_id}/duplicate`
-2. `_apply_overrides(graph, overrides)` - applique les overrides nommes sur des nodes standard
-   identifies par convention d'id (`v1` = explorer, `a1` = annotation, `t1` = training) ; silencieux
-   si un node n'existe pas (un graphe "reutilisation" n'a par exemple que `a1` + `t1`)
-3. `PUT /api/graphs/{id}` pour sauvegarder les overrides
-4. `POST /api/graphs/{id}/run` puis polling toutes les 3s (jusqu'a 40 min) : des que le graphe passe
-   `waiting`, `POST /api/graphs/{id}/resume` automatiquement - un plan est une execution planifiee,
-   il ne doit jamais rester bloque sur une gate humaine
-5. Si le run termine `done` : `POST /api/insights/{id}/generate` puis relecture de l'insight pour
-   recuperer `dvc_version`/`git_commit`/`map50` dans le resultat de l'etape
-
-Important : le commit DVC reste volontairement MANUEL. Un plan ne cree jamais de commit lui-meme -
-les sorties exactes de chaque run restent proposees dans le hub DVC, ou l'utilisateur choisit quoi
-versionner. Le resultat de chaque etape est ensuite navigable dans l'onglet Lineage.
-
-### `api/plans.py`
-
-| Methode | Route | Description |
-|---------|-------|--------------|
-| GET | `/api/plans` | Liste des plans |
-| POST | `/api/plans` | Cree un plan (nom + etapes) |
-| GET/PUT/DELETE | `/api/plans/{plan_id}` | Lire / modifier / supprimer |
-| POST | `/api/plans/{plan_id}/run` | Demarre l'execution en tache de fond (`{ok: false}` si deja en cours - pas d'erreur HTTP) |
-| GET | `/api/plans/{plan_id}/status` | Etat d'execution courant (`last_run`, ou `{status: "idle"}`) |
-
-### Frontend - `PlansPage.tsx`
-
-Editeur de plan : nom + liste d'etapes, chaque etape choisit un graphe de base et des champs
-d'override (subset, projet d'annotation, nb images, seuil, epochs, basic_lr_per_img, batch, run
-label - mappes directement sur les cles lues par `_apply_overrides`). Bouton Lancer, puis polling du statut toutes
-les 2.5s pendant l'execution avec, par etape, le statut et les badges mAP50/dvc/git recuperes de
-l'insight genere.
-
----
-
-## Backend - detail fichier par fichier
+
+- Manuel : un point d'arret humain `train`.
+- Automatique : `{id}__train` (`POST Training_App /api/orchestrator/train`). `dataset_path` vient de l'export YOLO de l'Annotation connectee ; `model_weights` d'un nœud `model` connecte (fine-tuning) ; `optuna_best` d'un nœud Optuna connecte, sous forme de placeholder `${STEP:...}` quand l'etude tourne automatiquement, ou fusionne au moment de la construction quand l'etude etait manuelle. `hyperparams` fusionne le dictionnaire propre au moteur sur le nœud avec un ensemble fixe de cles plates historiques conservees pour les anciens graphes (`basic_lr_per_img`, `mosaic_prob`, ...).
+
+### inference
+
+- FREE (aucune entree) : un point d'arret humain qui ouvre simplement Inference App.
+- LOCKED, manuel (`full_auto=false`) : un point d'arret humain pour une session SOT/MOT interactive.
+- LOCKED, automatique, `task=detection` : `{id}__evaluate` (`kind=detection`), un `model.val()` standard sur le split choisi du `data.yaml` de l'Annotation connectee (en preferant le `data.yaml` exact qu'un Training connecte a deja dezippe, puisque l'export brut est un `.zip`).
+- LOCKED, automatique, `task=tracking` (defaut) : `{id}__infer`, YOLO seul ou avec ByteTrack, contre une sequence et une verite terrain optionnelle (`.ver` prefere, un split YOLO en repli).
+
+## Validation de la lignée de modèle (moteur et taille)
+
+Les nœuds `model`, `training`, `optuna` et `inference` portent un champ `engine` (vide signifie le moteur par defaut, `yolox`) ; leurs panneaux de configuration sont construits depuis `GET /api/engines`, qui proxifie `/api/capabilities` de Training_App et retombe sur le registre local de plugins quand Training_App ne tourne pas. Aucun nom de moteur n'est jamais code en dur dans le frontend : sans aucun plugin installe, seul YOLOX existe et aucun selecteur de moteur n'est meme affiche.
+
+Avant de construire le pipeline, `_model_lineage_spec()` parcourt chaque nœud atteignable dans une lignee de modele (un nœud `training`, `optuna`, `inference` plus ses ancetres) et leve `GraphConfigError` (remontee en HTTP 400, jamais un echec en cours de run) si deux nœuds de la meme lignee declarent des moteurs differents, ou des tailles differentes des qu'une taille est definie quelque part dans la chaine. Un nœud `model` connecte impose son moteur et sa taille au `training` aval, car un checkpoint ne se recharge qu'avec exactement le moteur et la taille qui l'ont produit.
+
+## Ports typés des nœuds
+
+`frontend/src/nodes/ports.ts` (`NODE_PORTS`) a remplace un ancien dictionnaire par nœud `type cible -> types source acceptes` par un schema par port : chaque nœud declare des `inputs` (a gauche) et des `outputs` (a droite) types, chacun avec un `PortType` qui fixe sa couleur (`dataset`, `subset`, `yolo`, `ver`, `model`, `params`, `metrics`, `any`).
+
+Cela permet a `training` d'exposer trois entrees typees independamment sur le meme nœud (`dataset` depuis `annotation` seulement, `model` depuis `model` seulement, `hpo` depuis `optuna` seulement), et permet a `annotation` d'exposer deux sorties typees (`out_yolo`, `out_ver`) pour que `resolveHandles(srcType, tgtType)` choisisse automatiquement la bonne paire de handles quand une arete est tracee. `exclusiveWith` empeche deux ports du meme nœud d'etre jamais connectes ensemble (`sequence` et `dataset_yolo` d'`inference`) ; `requiresPeer` ne produit qu'un avertissement non bloquant (`gt` d'`inference` sans `sequence`) ; `required` bloque sauvegarder/lancer sauf si le nœud est en mode FREE. `compatibleNodeTypes(fromType, handleType, handleId)` alimente le popup de creation par glissement affiche quand un fil est relache sur un canvas vide.
+
+Rendu : `NodePorts.tsx` dessine la bande d'entrees/sorties en bas d'une carte de nœud ; un port ne s'allume que quand son propre id de handle specifique a une arete, jamais juste parce que le nœud a une arete entrante sur un autre port (un bug corrige : sur `inference`, `dataset_yolo` et `gt` acceptent tous deux une source `annotation`, donc une verification naive par type aurait allume `gt` des que `dataset_yolo` seul etait connecte). `OrthogonalEdge.tsx` est le seul type d'arete utilise sur le canvas ; son trace est calcule par le module pur `routing.ts` (aucune dependance React ou xyflow), qui detecte les nœuds a contourner et choisit le mode `direct`, `zbend` ou `corridor`, en empilant les couloirs paralleles. Un trace se recalcule automatiquement a chaque deplacement de nœud jusqu'a ce qu'un point de passage soit ajoute (double-clic sur l'arete), ce qui bascule cette arete en `routeMode: 'manual'`.
+
+## Architecture SSE
+
+1. `run_graph()` cree un `RunState` dans `pipeline_runner._active_runs` (en memoire, indexe par `run_id`).
+2. L'executeur ajoute chaque evenement a `state.events`.
+3. `stream_events(run_id)` est un generateur async qui rejoue toute la liste d'evenements depuis le curseur 0 a chaque connexion, pour qu'un client qui se reconnecte ne manque jamais l'historique.
+4. `event_generator()` de `graphs.py` consomme ce flux, met a jour `graph_store` (statut d'execution du nœud, apercu `next_label`, regeneration progressive de l'Insight apres une etape significative) et transmet chaque evenement en SSE au client. Il ne sort de la boucle que sur `type == "done"` ; sortir sur un evenement historique "waiting" pendant une relecture apres une reprise etait la cause racine d'un bug de boucle infinie ou le meme point d'arret reapparaissait sans cesse (corrige, voir la page Depannage). Il ne met le statut du graphe a `"waiting"` qu'une fois que le flux lui-meme se termine sans evenement `"done"`, jamais pendant une relecture, pour qu'un historique SSE ne puisse jamais rebasculer un graphe termine en attente.
+
+### Flux du point d'arrêt humain
+
+`_run_step()` met `state.status = "waiting"` et emet un evenement `waiting`, puis retourne sans toucher aux etapes suivantes ; `_execute()` voit `status == "waiting"` et retourne sans lever d'erreur. Le frontend affiche le bandeau "Intervention requise". Cliquer **Terminé -> Continuer** appelle `POST /api/graphs/{id}/resume`, qui marque l'etape en attente `success`, reconstruit le pipeline depuis l'etat courant du graphe (recuperant toute edition faite pendant la pause, y compris un `export_name`/`subset_name` fraichement choisi), et appelle `_execute()` a nouveau. Le frontend reconnecte le flux SSE, qui rejoue tous les evenements depuis le debut.
+
+### Repli en cas de redémarrage serveur
+
+`run_in_memory(run_id)` verifie si le run existe encore dans `_active_runs`. Si une reprise cible un run disparu (le backend a redemarre pendant que le graphe etait en pause), `reset_graph_execution()` s'execute et l'endpoint renvoie un HTTP 410, disant au frontend de se rafraichir plutot que de retenter silencieusement.
+
+### Repli de resynchronisation par interrogation
+
+`_sync_graph_from_run()` s'execute a chaque appel de `list_graphs()` et `get_graph()` pour un graphe avec un `active_run_id`. C'est le filet de securite pour le cas ou le flux SSE ne se connecte jamais avec succes du tout (une erreur transitoire au tout premier essai n'est pas retentee par le client `fetch()` brut du frontend, contrairement a un `EventSource` de navigateur) : il rederive le statut d'execution de chaque nœud directement depuis le `RunState` en memoire de `pipeline_runner`, qui reste la seule source de verite quel que soit le client SSE actuellement attache. Il finalise aussi un run dont le `RunState` a disparu (backend redemarre en cours de run) comme `stopped` plutot que de laisser le graphe `running` pour toujours, et ne valide un statut de graphe `waiting` qu'une fois que le graphe fraichement relu le confirme, pour eviter que le statut clignote entre `waiting` et `running` sur des interrogations successives.
+
+## Flux d'auto-lancement
+
+1. `run_graph()` appelle `_preflight_check()`, qui ne fait confiance qu'aux sessions enregistrees par ce processus Orchestrator (`app_launcher._sessions`) ; une session appartenant a un autre processus sur le meme port par defaut n'est jamais reutilisee, et une URL placeholder (`http://localhost:1`) est posee pour toute application a lancer, pour qu'une sonde de disponibilite ulterieure ne puisse pas reussir faussement contre un processus etranger.
+2. Les applications necessaires (`_needed_app_keys()`, qui saute les nœuds FREE sauf `inference`, et inclut toujours `mlflow-app`/`dvc-app` quand leur type de nœud est present) sont lancees **sequentiellement**, dans l'ordre ou le tri topologique du pipeline en a reellement besoin (`_ordered_app_keys()`), en tache de fond. Lancer plusieurs applications en parallele (chacune un uvicorn complet plus un serveur de dev Vite, certaines chargeant des modeles GPU) sature suffisamment le CPU et le disque pour qu'aucune ne reponde avant que la premiere etape du pipeline n'echoue par timeout.
+3. Chaque etape appelle quand meme `_wait_for_app(step.app, max_wait=240s)` avant de s'executer, independamment de la sequence de lancement en arriere-plan, et emet un ping de progression environ toutes les douze secondes pour qu'un long demarrage a froid soit visiblement toujours actif plutot que silencieux.
+4. `_auto_launch_and_wait()` traite une session dont le port ecoute mais dont `/health` reste muet pendant environ quarante secondes comme une instance figee (un processus perime d'un run anterieur, ou un worker uvicorn zombie apres un reload) et la tue puis la relance, plutot que d'interroger un processus mort pendant le timeout complet de quatre minutes.
+
+## Backend, fichier par fichier
 
 ```
 backend/
-  config.py
-  main.py
+  config.py               WORKSPACE, CURRENT_USER (resolu, jamais un placeholder), APP_URLS, ports, CORS
+  main.py                 App FastAPI, lifespan, montage des routeurs, endpoints directs de workspace
   api/
-    graphs.py
-    pipelines.py
-    launcher_api.py
-    experiments.py
-    activity.py
-    health.py
-    settings.py
-    insights.py            Run Insight : liste, detail, plots, generation
-    lineage.py              graphe cross-experiences (fork tree)
-    plans.py                Experiment Plans : CRUD + lancement
+    graphs.py              CRUD sandgraph, run/resume/stop, flux SSE, fork-run, track-mlops,
+                            scan workspace-outputs, hub d'artefacts, dvc-commit, webhook annotation-exported
+    launcher_api.py         lancement/arret manuel des sous-applications (page Applications)
+    insights.py             Run Insight : liste, detail, fichiers de plot, generation a la demande
+    lineage.py               graphe de lineage cross-experiences (arbre de fork, instantanes de comparaison)
+    plans.py                 Plans d'experiences : CRUD + lancement + statut
+    engines.py               GET /api/engines, proxifie depuis Training_App ou le registre local de plugins
+    pipelines.py, experiments.py, activity.py, health.py, settings.py   routeurs historiques/secondaires
   core/
-    graph_runner.py        cerveau du systeme
-    pipeline_runner.py     executeur async
-    graph_store.py
-    app_launcher.py
-    proxy_client.py
-    pipeline_store.py
-    experiment_store.py
-    activity_store.py
-    insights.py             collecte + generation d'un Run Insight
-    run_manifest.py         index canonique des sorties d'un run
-    plan_store.py            persistence des Experiment Plans
-    plan_runner.py           moteur d'execution d'un plan
+    graph_runner.py          traduction graphe -> PipelineDef, validation de lignee de modele, auto-lancement
+    pipeline_runner.py       executeur DAG async : ordonnancement depends_on, human_gate, emission d'evenements SSE,
+                              resolution des placeholders runtime ${STEP:id.field} et ${RUN_ID}
+    graph_store.py           persistance graphs/experiments.json, mlops_status(), etat d'execution des nœuds
+    app_launcher.py          lance/arrete les processus des sous-applications, registre de ports partage, etat de session
+    proxy_client.py          client HTTP async vers les sous-applications (ping de sante, requete generique)
+    pipeline_store.py, experiment_store.py, activity_store.py   persistance JSON secondaire
+    insights.py               collecte + generation d'un Run Insight (plots, markdown, metriques stables)
+    run_manifest.py           index canonique par run des sorties (WORKSPACE/runs/{run_id}/manifest.json)
+    plan_store.py, plan_runner.py   persistance des Plans d'experiences et moteur d'execution pilote par HTTP
+  utils/
+    native_share.py           traduction chemin UNC Windows -> chemin POSIX, appliquee a la construction du graphe
+    debug_logger.py           journal developpeur colorise WORKSPACE/debug.html
+  tools/
+    migrate_run_manifests.py  reparation hors ligne, en une fois, des anciens Insights en manifestes de run stricts
 ```
 
-### `backend/config.py`
-Configuration centralisee : ports, URLs des sous-apps, workspace.
-- `WORKSPACE` (Path) - lu depuis `ORCHESTRATOR_WORKSPACE`
-- `CURRENT_USER` - depuis `ORCHESTRATOR_USER`
-- `APP_URLS` / `APP_FRONTEND_URLS` - dicts mutables, voir section Ports ci-dessus
+### `graph_runner.py`
 
-### `backend/main.py`
-Point d'entree FastAPI - monte les 10 routers (`health`, `pipelines`, `activity`, `settings`,
-`experiments`, `graphs`, `launcher_api`, `insights`, `lineage`, `plans`), configure CORS
-(localhost:3000 et 5173), expose quelques endpoints workspace directs (`/api/workspace/users`,
-`/api/workspace/history`).
+Le cerveau du systeme. `_topo_sort()` (algorithme de Kahn) ordonne les nœuds ; `_is_free_node()` decide FREE contre LOCKED (voir [Concepts](concepts.fr.md#nœuds-free-et-locked)) ; `_steps_for_node()` est le constructeur d'etapes par type decrit ci-dessus. `graph_to_pipeline()` parcourt les nœuds ordonnes, saute les FREE (sauf `inference`, qui recoit quand meme un point d'arret humain), et construit `step_node_map` (`step_id -> node_id`), utilise par le frontend pour colorer les nœuds pendant un run.
 
-Important : l'ordre des routers importe - `graphs` en premier car ses routes `/meta/*` doivent
-etre resolues avant les routes parametrees `/{id}`.
+Plusieurs fonctions resolvent une valeur depuis un ancetre plutot que de faire confiance au propre champ perime du nœud : `_resolve_yolo_dataset()` tolere un export Annotation nomme differemment de `<projet>-yolo` (un export manuel peut utiliser n'importe quel nom) ; `_annotation_yolo_ref()` / `_annotation_ver_output_ref()` renvoient des placeholders `${STEP:...}` pointant vers le chemin exact qu'une etape amont a reellement produit, resolus seulement au moment de l'execution par `pipeline_runner`, plutot qu'une supposition basee sur un nom faite a la construction ; `_optuna_best_ref()` fait de meme pour les best params du HPO.
 
-### `backend/api/graphs.py`
-Router principal du sandgraph : CRUD + execution + streaming SSE + scan workspace.
-- `GET/POST /api/graphs` - list / create
-- `GET/PUT/DELETE /api/graphs/{id}` - read / update / delete
-- `POST /api/graphs/{id}/duplicate`
-- `POST /api/graphs/{id}/run` -> appelle `graph_runner.run_graph()`
-- `GET /api/graphs/{id}/run/{run_id}/stream` -> SSE, rejoue tous les events depuis cursor=0
-- `POST /api/graphs/{id}/resume` - reprend apres une human gate
-- `POST /api/graphs/{id}/reset`
-- `GET /api/graphs/meta/app-urls`
-- `GET /api/graphs/meta/workspace-outputs` -> scan filesystem, retourne subsets + exports existants sans que les apps tournent
+`_normalized_data()` execute `native_share.normalize_input_path()` sur chaque champ de `_PATH_FIELDS` (`dataset_path`, `model_path`, `sequence_dir`, `annotation_file`) une fois, ici, avant qu'aucune valeur ne quitte le processus Orchestrator ; chaque sous-application ne voit ensuite jamais qu'un chemin qui a du sens sur sa propre machine.
 
-Voir la section SSE architecture ci-dessus pour le detail de `event_generator()`.
+### `pipeline_runner.py`
 
-### `backend/api/launcher_api.py`
-Router pour lancer/arreter les sous-apps manuellement depuis l'UI (page Apps).
-- `GET /api/apps` - liste toutes les sessions avec statut (running/stopped/error)
-- `POST /api/apps/launch` - lance une app avec workspace + user + conda_env
-- `POST /api/apps/{id}/stop`
-- `POST /api/apps/launch-all`, `POST /api/apps/stop-all`
-- Health check live par app
+`_execute()` calcule la profondeur de chaque etape depuis sa chaine `depends_on`, puis lance un niveau de profondeur a la fois avec `asyncio.gather()`, pour que les etapes independantes du meme niveau tournent en parallele. Un echec d'etape marque tout ce qui en depend (transitivement) comme echoue et le saute, sans toucher les branches sans rapport. `_run_step()` resout les placeholders `${STEP:id.field}` et `${RUN_ID}` dans les params de l'etape juste avant d'appeler la sous-application, une fois que chaque etape amont qu'il pourrait referencer a deja produit sa sortie. Les etapes dont l'endpoint correspond a `_LONG` (`/train`, `/infer`, `/evaluate`, `/hpo`, `/start-embed`, `/load-dataset`, `/auto-annotate`, `/create-project`) recoivent un timeout HTTP de 3600 secondes au lieu des 600 par defaut, et `/hpo` met en plus a l'echelle son propre timeout par `n_trials * (per_trial + 120)` puisqu'un endpoint HPO synchrone doit survivre a chaque essai qu'il lance.
 
-Important : utilise `app_launcher.launch_app()` du core, meme fonction que l'auto-launch du
-graph_runner. Le workspace est toujours transmis en parametre, jamais hardcode.
+Une etape n'est consideree en echec par l'executeur que si l'appel HTTP lui-meme a echoue au niveau transport, **ou** si le corps de reponse est un contrat JSON `{"ok": false, ...}` de la sous-application ; plusieurs sous-applications (par exemple Optuna sur un `data.yaml` manquant, DVC sur un commit rate) renvoient un HTTP 200 avec un echec metier dans le corps, ce qui ressemblerait sinon a une etape verte et reussie. Un cas special (`hpo_succeeded: false` avec `fallback_to_training_defaults: true`) est marque `warning` plutot que `failed`, pour que l'etape Training dependante tourne quand meme sur ses propres defauts configures tandis que l'echec reste visible.
 
-### `backend/api/insights.py`, `lineage.py`, `plans.py`, `backend/core/insights.py`,
-`run_manifest.py`, `plan_store.py`, `plan_runner.py`
-Detailles dans la section [Run Insight et lineage](#run-insight-et-lineage-git--dvc--mlflow) et
-[Plans d'experiences](#plans-dexperiences) ci-dessus - pas repetes ici pour eviter le doublon.
+### `graph_store.py`
 
-### `backend/api/pipelines.py`, `experiments.py`, `activity.py`, `health.py`, `settings.py`
-Routers secondaires, moins critiques pour le flux principal.
-- **pipelines.py** : CRUD pipelines JSON + POST run avec SSE (ancien systeme, garde pour compatibilite)
-- **experiments.py** : list/get/resume des experiments (schema Pydantic complet avec metriques)
-- **activity.py** : `GET /api/activity?limit=50` - retourne `activity.json`
-- **health.py** : `GET /api/health` - ping concurrent des sous-apps, retourne latences
-- **settings.py** : `GET/PUT /api/settings` - preferences utilisateur persistees
+Persistance JSON simple dans `graphs/experiments.json`. `mlops_status()` derive (ne stocke jamais) le type d'un graphe : `"mlops"` seulement quand un nœud `mlflow` ET un nœud `dvc` sont presents, `"experimental"` sinon, avec un indicateur `tracking_partial` quand un seul des deux existe. `update_node_exec()` utilise un rang de statut (`idle < running < done/warning < failed < waiting`) pour qu'un statut `waiting` puisse remplacer une sous-etape deja `done` (un nœud multi-etapes comme Annotation passant de `project: done` a `annotate: waiting`), tandis que `running`/`done` sont explicitement autorises a retrograder un nœud `waiting` (reprise apres un point d'arret, ou un nœud demarrant sa sous-etape suivante) ; le statut au niveau du graphe est bascule a `"waiting"` exclusivement par l'`event_generator` SSE, jamais par cette fonction, pour qu'une relecture SSE historique ne puisse jamais declencher le bandeau toute seule.
 
-### `backend/core/graph_runner.py` (cerveau)
-Convertit le graphe visuel ReactFlow en `PipelineDef` executable + gere l'auto-launch.
-- `_is_free_node(node, edges) -> bool` : voir section FREE/LOCKED
-- `_steps_for_node(node, deps, ctx, parent_nodes) -> list[dict]` : traduit chaque type de node en
-  liste d'etapes pipeline, voir section "Node types et leurs etapes pipeline"
-- `graph_to_pipeline(graph) -> (PipelineDef, step_node_map)` : tri topologique (Kahn) -> pour
-  chaque node LOCKED -> `_steps_for_node` -> construit la map `step_id -> node_id` utilisee par
-  le frontend pour colorer les nodes pendant l'execution
-- `_needed_app_keys(graph) -> set[str]` : liste les apps necessaires, skip les FREE nodes
-- `_auto_launch_and_wait(app_key, timeout) -> bool` : lance en background via
-  `asyncio.create_task()`, attend jusqu'a `timeout` secondes que `/health` reponde. Pour explorer :
-  calcule toujours `annotation_imports` depuis la structure workspace (meme si Annotation n'est
-  pas encore demarree)
+### `app_launcher.py`
 
-Important : `annotation_imports_path` dans le contexte pipeline est calcule directement
-`WORKSPACE / f"annotation_{CURRENT_USER}" / "imports"`, jamais via HTTP.
+Lance le backend (`uvicorn`, sans `--reload`, car le reloader StatReload de Windows a ete constate parfois orpheliner le port ou bloquer tout l'arbre de lancement) et le frontend (`npm run dev`) de chaque sous-application comme des processus independants, chacun dans son propre groupe de processus pour qu'arreter une sous-application ne touche jamais l'arbre de processus propre d'Orchestrator. L'allocation de ports passe par le meme fichier de verrou partage et le meme registre d'instances (`_lib.launcher_engine`) utilise par toutes les autres applications de la suite, pour que deux utilisateurs ou deux applications lancees au meme moment n'entrent jamais en course pour le meme port. `stop_app()` envoie d'abord un signal propre, attend brievement, puis force le kill, et fait enfin un effort de tuer tout ce qui tient encore les ports de l'application en scannant `netstat`/`lsof`, car un kill base sur le pid seul manque un enfant qui s'est detache de son groupe de processus.
 
-### `backend/core/pipeline_runner.py` (executeur)
-Execution async du DAG de steps + gestion human gate + SSE events.
-- `RunState` : classe in-memory (non persistee) - `status`, `events: list[dict]`,
-  `step_states: dict`, `waiting_step`. Stockee dans `_active_runs: dict[str, RunState]`
-- `_execute(pipeline, state)` : boucle async, trouve les steps dont toutes les dependances sont
-  "success" -> `asyncio.gather()` -> execute en parallele. Sort si `state.status == "waiting"`
-- `_run_step(step, state)` : appelle `_wait_for_app(step.app, max_wait=60s)` avant tout ; si
-  `type == "human_gate"` -> set `state.status = "waiting"`, emet event waiting, return ; si
-  `type == "task"` -> `proxy_client.request()` vers l'app cible
-- `stream_events(run_id)` : generateur async qui rejoue `state.events` depuis l'index 0
-- `resume_run(pipeline_id, run_id)` : marque le step waiting comme "success", emet l'event
-  success, rappelle `_execute()`
+## Run Insight et lineage (Git / DVC / MLflow)
 
-Important : `_active_runs` est in-memory. Si le serveur redemarre, voir "Server restart fix"
-dans la section SSE ci-dessus.
+Voir [Concepts](concepts.fr.md#run-insight--ce-quun-run-a-laissé-derrière-lui) et [Concepts](concepts.fr.md#lineage--relier-les-runs-à-travers-tout-le-workspace) pour ce qu'un Insight et le graphe de Lineage signifient. Cette section ne couvre que leur implementation.
 
-### `backend/core/graph_store.py`
-Persistence des sandgraphs dans `graphs/experiments.json`.
-- CRUD : `create_graph`, `get_graph`, `update_graph`, `delete_graph`, `list_graphs`
-- `start_run(graph_id, run_id, pipeline_id, step_node_map)` - initialise l'etat d'execution
-- `update_node_exec(graph_id, node_id, status, result)` - mis a jour par `graphs.py` a chaque event SSE
-- Logique de statut graph-level : idle/running/waiting/done/failed calcule depuis les statuts nodes
+`collect(graph_id, run_id)` de `core/insights.py` recupere le statut d'entrainement et l'historique par epoch depuis Training_App, les etudes Optuna dont l'attribut utilisateur `run_id` correspond exactement, les runs MLflow tagues `orch_run_id == run_id`, et les commits DVC dont le trailer correspond, tous via des appels `httpx` directs plutot que `proxy_client` (qui tronque les reponses a 4000 caracteres et cassait auparavant la collecte des longues listes de runs et des historiques par epoch). `_build_lineage()` assemble l'objet lineage et la liste de reproductibilite a sept verifications depuis l'etat reel et courant (jamais un defaut "vert" en cache). `generate()` ecrit trois fichiers par run (`insights.json` le paquet complet, `insights.md` un journal lisible par un humain, `metrics.json` un sous-ensemble stable, trie, sans horodatage, prevu pour etre versionne par DVC sans churner a chaque regeneration) plus des plots matplotlib (courbes d'entrainement, un graphique de "gains" de mAP comparant chaque entrainement au premier, un historique Optuna, une timeline Gantt) et des images d'analyse du moteur d'entrainement recuperees (matrice de confusion, courbes PR/F1, distribution des labels), puis appelle `run_manifest.finalize()`.
 
-Important : `update_node_exec` ne retrograde jamais un node de "done" vers "waiting" (fix du loop
-bug mai 2026, voir section SSE).
+`core/run_manifest.py` garde `WORKSPACE/runs/{run_id}/manifest.json`, l'index logique d'un run : les fichiers restent dans le workspace propre de chaque sous-application, mais chaque sortie est explicitement rattachee au `run_id` qui l'a produite (`start()` au lancement, `finalize()` a la fin), ecrit atomiquement (fichier temporaire puis `os.replace`) pour qu'un lecteur ne voie jamais un manifeste a moitie ecrit. Une sortie du run d'un fork ne devient jamais implicitement une sortie du parent ; une entree heritee d'une base de fork est enregistree explicitement comme `{"kind": "fork_base", ...}`.
 
-### `backend/core/app_launcher.py`
-Spawn et monitoring des sous-apps comme sous-processus independants.
-- `AppSession` dataclass : `app_id`, `pid`, `backend_url`, `frontend_url`, `workspace`, `status`
-- `launch_app(app_id, base_workspace, user, annotation_imports=None)` : construit les env vars
-  (`EXPLORER_WORKSPACE`, `ANNOTATION_WORKSPACE`, etc.), spawn le process via `subprocess.Popen`
-- `get_session(app_id)` -> renvoie la session active ou None
-- `stop_app(app_id)` : kill le process + cleanup
+`get_lineage(include_failed=False)` de `api/lineage.py` construit un seul graphe `{nodes, edges}` a travers tous les graphes du workspace. Types de nœud : `source_dataset` (dedupliqué par chemin et nom), `dataset` (le subset qu'un run precis a reellement extrait, dedupliqué par source, subset, requete et version DVC, jamais par le commit du parent, pour qu'un fork non committe garde sa propre identite), `run`, `model` (dedupliqué par chemin), `stage` (un run MLflow, rattache au run de pipeline qui l'a produit) et `artifact`. Par defaut seuls les runs avec un statut terminal et reussi sont montres (la vue "publiee") ; `include_failed=true` inclut aussi les runs echoues/interrompus (la vue "audit"), avec tout ce qui est masque par defaut liste dans `excluded_runs` plutot que silencieusement supprime. `fork_run()` et `track_mlops()` d'`api/graphs.py` completent ce systeme : forker duplique le graphe et enregistre `forked_from` (commit du parent, dataset, version DVC, mAP50, un instantane complet des parametres pour la vue de divergence) sans declencher aucun pull DVC ; `track_mlops()` injecte de facon idempotente le ou les nœuds `mlflow`/`dvc` manquants comme une paire couplee.
 
-Important : la transmission de `annotation_imports` a Dataset_Explorer_App via env var
-`ANNOTATION_APP_IMPORTS` est toujours calculee depuis la structure workspace, jamais via HTTP
-vers Annotation.
+## Plans d'expériences
 
-### `backend/core/proxy_client.py`
-Client HTTP async vers les sous-apps.
-- `ping(app_key) -> float | None` - latence en ms, ou None si down
-- `ping_all() -> dict` - ping concurrent de toutes les apps
-- `request(app_key, method, endpoint, json_body)` - proxy generique
+`core/plan_store.py` persiste les plans en JSON simple dans `WORKSPACE/plans/plans.json` ; `core/plan_runner.py` en execute un comme une tache de fond `asyncio.create_task`, mais n'appelle deliberement aucune fonction Python interne directement. A la place, il rejoue exactement la sequence HTTP qu'une personne effectuerait a la main, contre les propres endpoints `http://127.0.0.1:{BACKEND_PORT}` de l'application : dupliquer le graphe de base, appliquer les surcharges nommees sur des ids de nœuds standard (`v1`, `a1`, `t1`) via `_apply_overrides()` (sautant silencieusement un id de nœud que le graphe de base n'a pas), sauvegarder, lancer, interroger toutes les 3 secondes jusqu'a 40 minutes et reprendre automatiquement tout point d'arret rencontre par le run (un plan ne doit jamais rester bloque a attendre un clic), puis generer l'Insight du run et relire son `dvc_version` / `git_commit` / `map50`. Cette reutilisation signifie que chaque garde-fou existant (validation, auto-lancement, statut pilote par SSE) s'applique a une etape de plan exactement comme il le ferait a un run que vous avez lance a la main. Le commit DVC est deliberement laisse de cote : un plan ne produit que des runs, et versionner est une decision manuelle prise apres coup depuis le propre nœud DVC de chaque run.
 
-Appele pour chaque step du pipeline.
-
-### `backend/core/pipeline_store.py`
-CRUD pour les `PipelineDef` persistees en JSON dans `pipelines/`. Schemas Pydantic :
-`PipelineStep` (id, label, app, endpoint, method, params, depends_on, type, hint), `PipelineDef`
-(id, name, steps).
-
-### `backend/core/experiment_store.py`, `activity_store.py`
-- **experiment_store** : schema Pydantic complet pour les experiences (run_id, steps, artifacts,
-  metrics). Moins utilise que graph_store dans le flux principal.
-- **activity_store** : log append-only `activity.json` (max 200 entrees).
-
----
-
-## Frontend - detail fichier par fichier
+## Frontend, fichier par fichier
 
 ```
 frontend/src/
-  main.tsx
-  App.tsx
-  index.css
-  api/
-    client.ts              tous les appels API types
-  types/
-    api.ts                 types TS miroirs des schemas Pydantic
-  utils/
-    time.ts
-  hooks/
-    useActivity.ts
-    useHealth.ts
-    usePipelines.ts
-  nodes/                     composants ReactFlow
-    index.ts
-    shared.ts
-    ports.ts                 schema des ports types (NODE_PORTS) + validation connexions
-    routing.ts                moteur de routage orthogonal (pur, sans React/xyflow)
-    AppNode.tsx            node generique explorer/annotation/dvc/mlflow/optuna
-    DatasetNode.tsx
-    ModelNode.tsx            node d'entree : poids d'un moteur fournis a la main
-    NodePorts.tsx            rendu visuel des ports (entrees/sorties) d'un node
-    OrthogonalEdge.tsx        arete unique, tracee via routing.ts
+  api/client.ts             chaque appel API type ; BACKEND_BASE vaut toujours '' (meme origine, via
+                             le proxy Vite) pour que le SSE ne devienne jamais un fetch cross-origin
+  types/api.ts               miroirs TypeScript des schemas Pydantic du backend
+  nodes/
+    ports.ts                 schema de ports type (NODE_PORTS) et validation des connexions, voir ci-dessus
+    routing.ts                moteur de routage orthogonal pur, aucune dependance React/xyflow
+    AppNode.tsx               carte generique pour explorer/annotation/dvc/mlflow/optuna/training/inference
+    DatasetNode.tsx, ModelNode.tsx   nœuds d'entree (aucune entree, aucune logique FREE/LOCKED)
+    NodePorts.tsx, OrthogonalEdge.tsx   bande de ports visuelle et le type d'arete unique
   components/
-    NodeConfigPanel.tsx    panneau droit de config d'un node selectionne
-    UserBadge.tsx
+    NodeConfigPanel.tsx       formulaires de configuration par type de nœud a droite, panneau d'aide
+    UserBadge.tsx              widget utilisateur/workspace du pied de page
+    docs/                      markdown.ts, MarkdownDoc.tsx : rend les pages docs/*.md, utilise par GuidePage
   pages/
-    SandgraphPage.tsx      editeur principal
-    ExperimentsPage.tsx
-    ActivityPage.tsx
-    AppsPage.tsx
-    LibraryPage.tsx
-    PipelinePage.tsx
-    DashboardPage.tsx
-    AboutPage.tsx
-    MLOpsPage.tsx            page parent des sous-onglets MLOps (routing imbrique)
-    InsightsPage.tsx          detail d'un Run Insight
-    PlansPage.tsx             editeur + suivi d'Experiment Plans
-    LineageGraphPage.tsx      graphe cross-experiences + comparaison de runs
-    GuidePage.tsx             doc de reference Git/DVC/MLflow (modele mental)
+    SandgraphPage.tsx          l'editeur principal : canvas, barre d'outils, barre du haut, client SSE, annuler/retablir,
+                                validateGraph(), propagation automatique des aretes, plateau de sous-etapes live
+    ExperimentsPage.tsx        liste des graphes + SANDGRAPH_TEMPLATES
+    AppsPage.tsx                tableau de bord de lancement/arret des sous-applications
+    ActivityPage.tsx            journal brut d'execution
+    MLOpsPage.tsx               barre de sous-onglets (Outlet) pour les routes imbriquees /mlops/*
+    InsightsPage.tsx, PlansPage.tsx, LineageGraphPage.tsx, GuidePage.tsx   les sous-pages MLOps
+    LibraryPage.tsx, PipelinePage.tsx, DashboardPage.tsx   ancien systeme de pipeline, accessible seulement par URL
+    AboutPage.tsx                presentation statique de la plateforme (partiellement perimee, preferer cette documentation)
 ```
 
-### `src/main.tsx` + `src/App.tsx`
-- **main.tsx** : monte React, `QueryClientProvider` (React Query), `Toaster` (toast)
-- **App.tsx** : layout global - sidebar nav (6 onglets, dont `MLOps`), `<Routes>` vers chaque page,
-  `UserBadge` en footer. La route `/` pointe vers `SandgraphPage`. L'onglet `MLOps` (`MLOpsPage`)
-  monte des routes imbriquees (`/mlops/insights`, `/mlops/plans`, `/mlops/activity`,
-  `/mlops/lineage`, `/mlops/guide`) sous un meme sous-menu ; les anciennes routes courtes
-  (`/insights`, `/activity`, `/lineage`, `/guide`) redirigent vers leur equivalent `/mlops/*`.
+### `SandgraphPage.tsx`
 
-### `src/api/client.ts`
-Couche d'acces API : toutes les fonctions fetch centralisees ici.
-- Instance `axios` avec `baseURL: ''` (proxy Vite en dev, relatif en prod)
-- `BACKEND_BASE` - URL absolue pour le SSE (bypass le proxy Vite qui bufferiserait le stream)
-- `graphsAPI` - le plus important : `list`, `create`, `get`, `update`, `delete`, `duplicate`,
-  `reset`, `run`, `resume`, `getAppUrls`, `getWorkspaceOutputs`
-- `launcherAPI` - launch/stop apps
-- `pipelinesAPI`, `activityAPI`, `settingsAPI`, `experimentsAPI` - secondaires
-- `streamRun()` - connexion SSE directe via `fetch()` (pas axios) avec lecture du `ReadableStream`
+`TOOLBOX_NODES` definit les types de nœuds deplacables et leurs `data` par defaut. Annuler/retablir utilise des piles d'historique adossees a des refs (`historyRef`/`futureRef`) plus des refs miroir (`nodesRef`/`edgesRef`) pour eviter les closures perimees dans des callbacks de longue duree. `validateGraph()` applique les regles de ports de `ports.ts` plus une pre-verification moteur/taille de lignee de modele (miroir du `_model_lineage_spec` du backend, pour qu'un graphe casse soit attrape avant l'aller-retour vers le serveur) et est appelee a la fois par `saveMut` et `runMut`. `_propagateAllEdges()` s'execute a la sauvegarde : il copie les noms le long des aretes typees (nom de dataset dans un Dataset Explorer, nom de subset dans un nom de projet Annotation, etc.), n'ecrasant un champ aval que quand sa source amont a reellement change depuis la derniere propagation (suivi avec un champ marqueur cache), pour qu'un nom edite a la main ne soit jamais silencieusement ecrase tant que sa source reste identique.
 
-Important : `getWorkspaceOutputs()` scanne le workspace cote backend et retourne
-`{subsets, exports}` sans necessiter que les apps tournent.
+Le client SSE ouvre un `fetch()` brut vers `/api/graphs/{id}/run/{run_id}/stream`, lit le corps comme un flux, et distribue chaque ligne `data: ` a `_handleSSEEvent()`, qui met a jour le statut du nœud via `stepNodeMap`, ajoute au panneau de log, et rafraichit `available_subsets`/`available_exports` apres une etape d'export reussie. `refreshWorkspaceOutputs()` injecte aussi `has_input` (rederive fraichement depuis `edges` a chaque appel, jamais persiste) dans chaque nœud explorer/annotation.
 
-### `src/types/api.ts`
-Contrat de types entre frontend et backend.
-- `SandGraph` - graph_id, name, nodes, edges, status, execution (map node_id -> NodeExecState), run_history
-- `RunEvent` - step_id, status, type (step_update | done | waiting | error), hint, error
-- `GraphRunResponse` - run_id, step_node_map
-- `AppLaunchStatus` - app_id, status, backend_url, frontend_url, pid
+### `AppNode.tsx`
 
-### `src/nodes/shared.ts`
-Constantes partagees entre tous les composants de nodes.
-```typescript
-type NodeExecStatus = 'idle' | 'running' | 'waiting' | 'done' | 'failed'
-STATUS_DOT  // classes Tailwind par statut (couleur du dot)
-STATUS_RING // classes ring par statut (bordure coloree du node)
-```
-
-### `src/nodes/index.ts`
-Registre ReactFlow des node types :
-```typescript
-export const nodeTypes = {
-  dataset_source: DatasetNode,
-  model:          ModelNode,
-  explorer:           AppNode,
-  annotation:     AppNode,
-  dvc:            AppNode,
-  mlflow:         AppNode,
-  optuna:         AppNode,
-  training:       AppNode,
-  inference:      AppNode,
-}
-```
-
-### `src/nodes/DatasetNode.tsx`
-Node source dataset, simple, pas de logique FREE/LOCKED. Affiche `dataset_name`, `dataset_path`,
-`n_clusters`, statut d'execution. Section expandable avec les parametres. Handle source
-uniquement (pas de target, il n'a pas d'input).
-
-### `src/nodes/ModelNode.tsx`
-Node d'entree, meme famille que `DatasetNode` (aucun input, pas de logique FREE/LOCKED) : des
-poids fournis a la main (`engine`, `model_size`, `model_path`). Sert a combler l'entree `model`
-d'un `training` (poids de depart pour du fine-tuning) ou d'un `inference` (modele a tester) sans
-faire passer le graphe par un `training` amont. Affiche le moteur (libelle du catalogue), le nom de
-fichier, la taille, et sa seule sortie via `<NodePorts nodeType="model" inputHandles={[]} .../>`.
-
-### `src/nodes/ports.ts`, `NodePorts.tsx`, `OrthogonalEdge.tsx`, `routing.ts`
-Voir la section [Ports types des nodes](#ports-types-des-nodes-portsts) plus haut pour le detail du
-schema `NODE_PORTS`, de la validation de connexion, du rendu visuel des ports et du routage des
-aretes - pas repete ici.
-
-### `src/nodes/AppNode.tsx` (nodes)
-Composant generique pour les types d'app-nodes qui suivent le meme moule visuel (explorer,
-annotation, dvc, mlflow, optuna, training, inference). Toute la logique visuelle FREE/LOCKED est ici.
-- `AppNodeData` interface : tous les champs possibles - `node_type`, `label`, `exec_status`,
-  `has_input` (calcule, jamais persiste), `frontend_url`, `waiting_hint`, champs specifiques
-  explorer/annotation/dvc
-- `APP_META` : map `AppNodeType -> {icon, color, bg, title}`, determine la couleur et l'icone de
-  chaque type
-- `dispatchSelectOutput(nodeId, nodeType, name)` : emet
-  `window.CustomEvent('orch:select-output', {nodeId, nodeType, name})` quand l'utilisateur
-  clique un output existant en mode FREE ; `SandgraphPage` ecoute cet event
-- `AppNode({ id, data, selected })` : composant principal, calcule
-  `isFreeMode = (type === 'explorer' || 'annotation') && data.has_input === false`. Badge FREE (vert,
-  Unlock) ou LOCKED (ambre, Lock) dans le header. Banner "Action requise" si `status === 'waiting'`
-- `VisuNodeSummary` : mode FREE -> liste les subsets cliquables (hover violet, clic ->
-  `dispatchSelectOutput`) ; mode LOCKED -> affiche query + liste informative non-cliquable. Le
-  subset correspondant a `data.subset_name` est toujours surligne en violet
-- `AnnotationNodeSummary` : mode FREE -> liste les exports cliquables (hover rose) ; mode LOCKED
-  -> affiche mode (auto/manuel), classes, liste exports historiques. L'export configure
-  (`{project_name}-yolo`) est surligne en rose
-- `NodeConfig` (panneau expanse) : affiche les parametres detailles selon le type ; en mode FREE
-  masque les champs inutiles (query, top_k, split%, label_classes)
-
-Important : `has_input` est passe dans `data` par `SandgraphPage`, pas de prop separee. Jamais
-persiste (strippe au save/run).
-
-### `src/components/NodeConfigPanel.tsx`
-Panneau lateral droit : edition des parametres du node selectionne.
-- `NodeConfigPanel({ node, appUrls, onUpdate, onClose, onDelete })`
-- Switch sur `node.data.node_type` -> affiche le sous-formulaire correspondant
-- `DatasetConfig` : dataset_name, dataset_path, n_clusters
-- `VisuConfig` : dataset_name, subset_name, query, top_k
-- `AnnotationConfig` : subset_name, project_name, annotation_mode, full_auto, ai_model, ai_text,
-  ai_threshold, label_classes (add/remove/color), split_train/val
-- `DVCConfig` : commit_message
-- `ManualConfig` : message info pour MLflow/Optuna (etape manuelle)
-- Chaque formulaire appelle `onUpdate(nodeId, patch)` -> `SandgraphPage` met a jour le state + `setDirty`
-
-Important : les modifications ne sont pas auto-sauvegardees, l'utilisateur doit cliquer
-"Sauvegarder" ou Ctrl+S.
-
-### `src/components/UserBadge.tsx`
-Footer avec infos utilisateur, workspace actif, et acces aux parametres. Affiche : nom
-utilisateur, chemin workspace, icone de statut apps, acces rapide settings.
-
-### `src/pages/SandgraphPage.tsx` (page principale)
-Editeur visuel de graphes : canvas ReactFlow + toolbar + client SSE + gestion d'etat.
-- `TOOLBOX_NODES` : definit les 6 types draggables avec leurs `defaults` (valeurs initiales a la
-  creation). A mettre a jour ici si on change les parametres par defaut
-- State principal : `nodes`, `edges` (etat ReactFlow), `activeId` (graph ouvert, persiste
-  localStorage), `stepNodeMap` (`{step_id: node_id}` recu au lancement, colore les nodes pendant l'execution)
-- Undo/Redo : `historyRef` + `futureRef` (snapshots `{nodes, edges}`), `nodesRef`/`edgesRef`
-  (mirrors anti stale-closures), `pushHistory()` appele avant chaque mutation
-- `refreshWorkspaceOutputs()` : appelle `getWorkspaceOutputs()` -> injecte `available_subsets`
-  dans les nodes explorer et `available_exports` dans les nodes annotation, injecte aussi `has_input`
-  via `edgesRef.current`. Appele au chargement, toutes les 30s, et apres chaque etape
-  `__export`/`__exportyolo` reussie
-- `useEffect([edges])` : recalcule `has_input` a chaque changement de topologie, bascule un node
-  FREE -> LOCKED des qu'on le connecte
-- `useEffect(window 'orch:select-output')` : ecoute les clics sur outputs existants depuis
-  `AppNode`, met a jour `subset_name`/`project_name` + `setDirty`
-- `onConnect` : ajoute l'arete + auto-propagation des parametres (voir section connexions)
-- `isValidConnection` : filtre via `inputAccepts`/`wouldViolateExclusivity` (`nodes/ports.ts`)
-- `saveMut` : strip les champs runtime avant save (`exec_status`, `frontend_url`,
-  `waiting_hint`, `has_input`)
-- `runMut` : save + POST `/run` -> recoit `{run_id, step_node_map}` -> ouvre SSE via `_openSSE()`
-- `_openSSE(graphId, rid, snm)` : connexion SSE `fetch()` (pas axios), lit le `ReadableStream`
-  ligne par ligne, sort sur `type === "done"` ou `type === "waiting"`, appelle
-  `_handleSSEEvent` pour chaque event
-- `_handleSSEEvent` : met a jour le statut du node correspondant (via `stepNodeMap`), declenche
-  `refreshWorkspaceOutputs()` apres `__export`/`__exportyolo` reussis, ajoute une entree au log
-- `resumeMut` : POST `/resume` -> recoit nouveau `run_id` -> reconnecte SSE
-- `enrich(node)` : au premier chargement d'un graphe, injecte `exec_status`, `frontend_url`,
-  `waiting_hint`, `has_input` depuis les aretes
-
-Important : ReactFlow necessite d'etre wrappe dans `ReactFlowProvider` -> `SandgraphPage` exporte
-un wrapper qui render `<SandgraphInner />` a l'interieur du provider.
-
-### `src/pages/ExperimentsPage.tsx`
-Galerie des experiences + templates predefinis.
-- `SANDGRAPH_TEMPLATES` : 8 templates - 4 classiques (CV Training Loop, Annotation rapide,
-  Exploration dataset, Re-train + HPO) + 4 scenarios de test FREE/LOCKED (SC1 a SC4, voir
-  [test-scenarios.md](test-scenarios.md)). Les templates SC1/SC2 ont des nodes explorer/annotation
-  sans arete entrante -> seront en mode FREE au chargement
-- `GraphCard` : statut, progression (nodes done / total), derniere modification, actions
-  (ouvrir / lancer / reset / dupliquer / supprimer)
-- `TemplateCard` : card en pointilles pour chaque template, bouton "Utiliser ce template"
-
-Important : au clic "Utiliser ce template", `createFromTemplateMut` cree le graph via API puis
-navigue vers `/` (SandgraphPage) avec `active_graph_id` set en localStorage.
-
-### `src/pages/AppsPage.tsx`
-Dashboard de gestion des sous-apps : statut live (running/stopped/error), latence, URL frontend,
-boutons Launch/Stop. Polling health toutes les 5s. Utile pour debug et pour lancer manuellement
-les apps avant d'utiliser le mode FREE.
-
-### `src/pages/ActivityPage.tsx`
-Historique des executions pipeline. Liste les runs recents avec statut, duree, steps executes,
-timestamp. Append-only, pas d'actions.
-
-### `src/pages/LibraryPage.tsx` + `PipelinePage.tsx`
-Systeme de pipelines "legacy", anterieur au systeme sandgraph. Permet de creer des pipelines
-manuellement etape par etape (sans editeur visuel). Toujours fonctionnel mais secondaire, le
-flux principal passe par les sandgraphs.
-
-### `src/pages/DashboardPage.tsx`
-Vue d'ensemble : etat du workspace, apps actives, derniere activite, raccourcis. Page d'accueil
-si aucun graph actif.
-
-### `src/pages/MLOpsPage.tsx`, `InsightsPage.tsx`, `PlansPage.tsx`, `LineageGraphPage.tsx`, `GuidePage.tsx`
-Groupe de pages "MLOps" (monitoring + tracabilite), voir la section
-[Run Insight et lineage](#run-insight-et-lineage-git--dvc--mlflow) et
-[Plans d'experiences](#plans-dexperiences) plus haut pour le detail de chacune. `MLOpsPage.tsx` ne
-fait que la barre de sous-onglets + `<Outlet/>` (routing imbrique) ; `GuidePage.tsx` est la doc de
-reference statique du modele mental Git/DVC/MLflow (que les apps dvc-app/mlflow-app ne repetent pas,
-elles y renvoient et restent centrees sur leur usage).
-
-### `src/hooks/`
-Trois hooks React Query secondaires :
-- `useActivity(limit)` -> polling `GET /api/activity`
-- `useHealth()` -> polling `GET /api/health` (latence apps), cache 10s
-- `usePipelines()` -> liste pipelines legacy
-
-### `src/utils/time.ts`
-`formatDistanceToNow(isoDate)` -> "il y a 3 minutes", `formatDuration(ms)` -> "2m 34s".
+Le seul composant de carte generique pour chaque nœud de type application. `isFreeMode` est calcule comme `(type === 'explorer' || 'annotation') && data.has_input === false` ; le badge FREE/LOCKED, la liste cliquable des sorties existantes en mode FREE, et les champs caches dans le panneau developpe dependent tous de ce seul booleen. `has_input` arrive dans `data` depuis `SandgraphPage`, n'est lui-meme jamais persiste (retire avant chaque sauvegarde/lancement), et est la seule source de verite pour la distinction FREE/LOCKED dans tout le frontend.
 
 ### `vite.config.ts`
-Dev server port 3000. Proxy `/api/*` -> `http://localhost:{VITE_BACKEND_PORT}` (default 8060).
-Important : le SSE bypasse ce proxy (connexion directe `BACKEND_BASE`) pour eviter le buffering Vite.
 
----
+Serveur de dev sur le port defini par `VITE_FRONTEND_PORT` ; proxifie `/api/*` vers `http://localhost:${VITE_BACKEND_PORT}` avec un delai de 300 secondes. Le flux SSE d'execution contourne quand meme la mise en tampon de ce proxy en utilisant une URL relative de meme origine (`BACKEND_BASE = ''`) plutot qu'absolue, ce qui est ce qui compte reellement pour qu'il fonctionne sur une adresse LAN, pas le proxy lui-meme.
 
-## `launcher.py` (racine)
+## `launcher.py` (racine de l'application)
 
-Script de lancement principal, unique point d'entree pour tout demarrer correctement.
-- Parse args : `--workspace`, `--user`, `--app orchestrator`, `--conda-env`
-- Cree la structure workspace (`explorer_{user}/`, `annotation_{user}/`, etc.) si elle n'existe pas
-- Alloue les ports dynamiquement (lock file pour eviter les collisions)
-- Set les env vars pour le backend : `ORCHESTRATOR_WORKSPACE`, `ORCHESTRATOR_USER`
-- Lance `uvicorn` (backend 8060) + `npm run dev` (frontend 3000)
-- Signal handler SIGINT/SIGTERM -> kill propre des deux processus
+Analyse `--user` (obligatoire) et `--workspace` (obligatoire), plus `--conda-env`, `--backend-port`, `--frontend-port`, `--backend-only`, `--reload`, `--access-log`. Cree la structure du workspace, alloue les ports sous le verrou partage de toute la suite (`_acquire_lock()` / `Computer_Vision_App/.run/.port_lock`), enregistre l'instance, ecrit les variables d'environnement `ORCHESTRATOR_WORKSPACE` / `ORCHESTRATOR_USER` / ports, puis lance `uvicorn` et (sauf `--backend-only`) `npm run dev` comme processus enfants. Un gestionnaire `SIGINT`/`SIGTERM` desenregistre l'instance et tue proprement les deux arbres de processus a la sortie.
 
-Important : ne jamais lancer `uvicorn` manuellement sans ces env vars, le backend ecrirait dans
-les mauvais repertoires.
+## Scénarios de test de développement
 
----
+Cinq scenarios exercent le mode FREE/LOCKED et la chaine complete du pipeline de bout en bout ; SC1 a SC4 sont aussi proposes comme templates de la page **Expériences**, et leurs instructions pas a pas vivent dans [Procédures](workflows.fr.md#scénarios-de-test--modes-free-et-locked-de-bout-en-bout). SC5 n'est pilote que via `run_all_scenarios.py`, qui lance une instance Orchestrator isolee par utilisateur de test (chacune avec ses propres instances de sous-applications) et lance SC3 en premier (il produit le subset et l'export d'annotation que SC1/SC2 reutilisent), puis SC4, SC1 et SC2 en parallele.
 
-## `data/` (repertoire de donnees)
+| Scénario | Objectif | Flux |
+|---|---|---|
+| SC1 | Mode FREE sans dataset | explorer FREE (subset existant) -> Annotation LOCKED -> DVC |
+| SC2 | Mode FREE sur Annotation | Annotation FREE (export existant) -> MLflow -> DVC |
+| SC3 | Pipeline semi-automatique complet | Dataset -> explorer LOCKED -> Annotation LOCKED (full_auto, SAM3) -> MLflow -> DVC, avec points d'arret humains a chaque etape critique |
+| SC4 | Pipeline entierement manuel | Meme chaine que SC3 avec `full_auto=false` ; l'Orchestrator ne fait qu'observer et connecter |
+| SC5 | Entrainement en eventail, HPO et DVC | Dataset -> explorer -> Annotation manuelle -> 3 nœuds Training paralleles avec des hyperparametres distincts -> verification MLflow -> Optuna HPO -> un 4e Training utilisant les best params du HPO -> verification MLflow finale -> DVC |
 
-```
-data/
-  graphs/experiments.json    tous les sandgraphs (nodes, edges, exec state)
-  pipelines/*.json           pipelines legacy + graph__*.json generes au run
-  activity.json              log des executions (max 200)
-  experiments.json           experiences avec metriques
-  launcher_state.json        etat des sessions sous-apps
-```
+`t_best` dans SC5 derive son `dataset_path` par un parcours en largeur sur ses ancetres : son parent direct est le nœud Optuna, mais le dataset lui-meme n'existe que sur le nœud Annotation plus haut dans la chaine, ce qui est exactement le comportement de remontee d'ancetres que `_dataset_path_from_ancestors()` implemente dans `graph_runner.py`.
 
-Tout est JSON humainement lisible. En cas de bug, lire `graphs/experiments.json` pour inspecter
-l'etat d'un graph et `activity.json` pour l'historique des runs.
+## Invariants à ne pas casser
+
+1. **`has_input` est toujours derive des aretes, jamais persiste.** Le recalculer depuis une valeur stockee au lieu de la liste d'aretes live laisserait un nœud FREE deriver silencieusement de sa connectivite reelle.
+2. **Les nœuds FREE ne generent jamais d'etape de pipeline**, sauf `inference`, qui recoit quand meme un point d'arret humain pour ouvrir l'application manuellement. `_needed_app_keys()` et `graph_to_pipeline()` doivent rester d'accord sur cette liste d'exclusion.
+3. **Les sorties du mode FREE viennent toujours du scan du systeme de fichiers du workspace**, jamais de demander a une sous-application par HTTP ce qu'elle a produit.
+4. **`event_generator()` ne sort de la boucle SSE que sur `type == "done"`**, jamais sur `"waiting"` ; sortir sur un evenement historique "waiting" pendant une relecture reintroduit le bug de boucle infinie de point d'arret.
+5. **`update_node_exec()` ne retrograde jamais un nœud de `"done"` vers `"waiting"`** de lui-meme ; seul l'`event_generator` SSE, voyant le flux reellement se terminer a un point d'arret en cours, peut mettre le statut au niveau du graphe a `"waiting"`.
+6. **`annotation_imports_path` est toujours calcule depuis la structure du workspace** (`WORKSPACE / f"annotation_{CURRENT_USER}" / "imports"`), jamais via un appel HTTP a Annotation_App, car Annotation peut ne pas encore tourner quand Dataset Explorer a besoin de la valeur.
+7. **`APP_URLS` / `APP_FRONTEND_URLS` sont des dicts mutables lus par reference partout.** Copier l'un ou l'autre dict casse le patch live que `graph_runner`/`app_launcher` effectuent quand une sous-application est lancee ou que son URL est repatchee apres un reload.
+8. **Un chemin UNC est normalise exactement une fois**, a la construction du graphe dans `graph_runner._normalized_data()`, sur les quatre champs de `_PATH_FIELDS`. Normaliser a nouveau en aval, ou sauter un nouveau champ porteur de chemin ajoute a un nœud, reintroduit des erreurs "chemin introuvable" sur le backend Linux.
+9. **`_active_runs` est uniquement en memoire.** Une reprise contre un id de run que le backend ne reconnait pas doit declencher `reset_graph_execution()` et un HTTP 410, jamais un echec silencieux ou un blocage.
+10. **Une lignee de modele (`model`/`optuna`/`training`/`inference`) doit partager un moteur et, des qu'un nœud la definit, une taille**, verifie a la fois dans le frontend (`validateGraph`) et le backend (`_model_lineage_spec`) avant qu'aucune etape couteuse ne s'execute.
+11. **Les nœuds DVC et MLflow n'ont aucun port du tout** (`NODE_PORTS.dvc`/`.mlflow` sont tous deux vides) ; ils ne doivent jamais etre reintroduits comme une etape consommant un type d'artefact amont precis.
+12. **Ne jamais lancer `uvicorn backend.main:app` sans `ORCHESTRATOR_WORKSPACE` et `ORCHESTRATOR_USER` definis** par `launcher.py` ; le backend se resoudrait vers le mauvais workspace, ou refuserait carrement de demarrer si aucun vrai nom d'utilisateur ne peut etre trouve.

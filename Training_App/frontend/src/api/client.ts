@@ -9,7 +9,7 @@ const http = axios.create({ baseURL: '', timeout: 30_000 })
 
 // Backend direct (SSE bypass proxy)
 const BACKEND_PORT = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_BACKEND_PORT ?? '8064'
-export const SSE_BASE = `http://localhost:${BACKEND_PORT}`
+export const SSE_BASE = `http://127.0.0.1:${BACKEND_PORT}`
 
 // ── Training runs ─────────────────────────────────────────────────────────────
 
@@ -98,6 +98,20 @@ export const appModeAPI = {
     http.get('/api/app-mode').then(r => r.data),
 }
 
+// ── Parametres utilisateur ──────────────────────────────────────────────────
+
+export interface AppSettings {
+  ui_language: string
+}
+
+export const settingsAPI = {
+  get: (): Promise<AppSettings> =>
+    http.get('/api/settings').then(r => r.data),
+
+  update: (data: Partial<AppSettings>): Promise<AppSettings> =>
+    http.put('/api/settings', data).then(r => r.data),
+}
+
 // ── SSE stream ────────────────────────────────────────────────────────────────
 
 export function streamTrainingEvents(
@@ -110,7 +124,8 @@ export function streamTrainingEvents(
 
   async function connect() {
     try {
-      const response = await fetch(url)
+      // Autre port que la page : sans ca le navigateur n'envoie pas le cookie de session.
+      const response = await fetch(url, { credentials: 'include' })
       if (!response.body || closed) return
       const reader = response.body.getReader()
       const decoder = new TextDecoder()

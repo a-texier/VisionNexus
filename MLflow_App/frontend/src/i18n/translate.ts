@@ -66,6 +66,37 @@ export function subscribeLang(listener: (lang: Lang) => void): () => void {
   return () => listeners.delete(listener)
 }
 
+// Pilotage desktop : ?lang= est present quand VisionNexus a lance l'app et
+// impose la langue. Dans ce cas, le workspace backend ne doit ni fournir ni
+// recevoir de preference -- VisionNexus reste l'unique source de verite.
+const desktopPiloted = readQueryLang() !== null
+
+export function isDesktopPiloted(): boolean {
+  return desktopPiloted
+}
+
+// Repli hors lanceur : au boot, si l'app n'est pas pilotee par VisionNexus,
+// on interroge le workspace backend (settings.json) pour la derniere langue
+// choisie en mode autonome. Echoue silencieusement (pas de backend joignable
+// au demarrage) -> repli localStorage/anglais deja gere par currentLang.
+export async function initWorkspaceLanguage(fetchSettingsLang: () => Promise<Lang | null | undefined>): Promise<void> {
+  if (desktopPiloted) return
+  try {
+    const fromWorkspace = await fetchSettingsLang()
+    if (isLang(fromWorkspace ?? null)) setLang(fromWorkspace as Lang)
+  } catch {
+    // Pas de backend joignable au boot : repli localStorage/anglais.
+  }
+}
+
+// Change la langue et, hors pilotage desktop, persiste le choix dans le
+// workspace backend (repli). Sous VisionNexus, on change juste l'affichage
+// local sans rien ecrire cote workspace.
+export function setLangAndMaybePersist(lang: Lang, persistToWorkspace: (lang: Lang) => void): void {
+  setLang(lang)
+  if (!desktopPiloted) persistToWorkspace(lang)
+}
+
 // Dictionnaire de correspondance exacte FR -> EN, complete au fil de la
 // couverture de l'app. Une chaine absente du dictionnaire reste affichee
 // en francais meme en mode EN (degradation silencieuse, jamais de texte
@@ -188,34 +219,28 @@ const EXACT_EN: Record<string, string> = {
   'Dossier': 'Folder',
   'Fichier': 'File',
 
-  // DocPage.tsx
-  'Documentation — MLflow dans cette suite': 'Documentation: MLflow in this suite',
-  'MLflow répond à :': 'MLflow answers:',
-  'quelle expérience a été exécutée, avec quels paramètres, métriques et artifacts ?':
-    'which experiment was run, with which parameters, metrics and artifacts?',
-  'Le cadre conceptuel (Git vs DVC vs MLflow) est dans le':
-    'The conceptual framework (Git vs DVC vs MLflow) is in the',
-  "de l'Orchestrator. Ici : l'usage réel.": 'of the Orchestrator. Here: the actual usage.',
-  'Expériences / Runs': 'Experiments / Runs',
-  ': un fichier SQLite dans le workspace': ': a SQLite file in the workspace',
-  '. Training, Inference/Éval y écrivent directement ; cette app le lit. Aucun serveur, aucun port.':
-    '. Training and Inference/Eval write to it directly; this app reads it. No server, no port.',
-  "Compare N runs côte à côte (params + métriques) pour voir l'effet d'un HPO ou d'un changement de dataset.":
-    'Compares N runs side by side (params + metrics) to see the effect of an HPO run or a dataset change.',
-  "est enregistré comme version de modèle liée au run qui l'a produit.":
-    "is registered as a model version linked to the run that produced it.",
-  'Nommage et tags de lineage': 'Naming and lineage tags',
-  "Lancé par l'Orchestrator, un run est nommé": 'Launched by the Orchestrator, a run is named',
-  '(fini les noms aléatoires) et porte des': '(no more random names) and carries',
-  'tags de lineage': 'lineage tags',
-  '(le run orchestrateur exact),': '(the exact orchestrator run),',
-  ', puis après le commit DVC': ', then after the DVC commit',
-  'et': 'and',
-  'Ils apparaissent dans la section': 'They appear in the',
-  "du détail d'un run — c'est ce qui relie le run à son code (Git) et à ses données (DVC).":
-    "of a run's detail page; this is what links the run to its code (Git) and its data (DVC).",
-  'Exemple réel': 'Real example',
-  '= expérience entièrement traçable et reproductible.': '= a fully traceable and reproducible experiment.',
+  // DocPage.tsx (pages markdown de docs/)
+  'Documentation': 'Documentation',
+  'Utilisateur': 'User',
+  'Installation et réglages': 'Setup and settings',
+  'Développeur': 'Developer',
+  'Liste des pages indisponible': 'Page list unavailable',
+  'Aucune page de documentation.': 'No documentation page.',
+  'Chargement de la documentation…': 'Loading documentation...',
+  'Documentation non disponible': 'Documentation unavailable',
+  "Cette page n'est pas encore écrite dans le dossier docs/ de l'application.": "This page is not written yet in the app's docs/ folder.",
+  "Le backend ne répond pas. Vérifiez qu'il est démarré puis rechargez la page.": 'The backend is not responding. Check that it is running, then reload the page.',
+  "Cette page n'est pas encore traduite : version dans l'autre langue.": 'This page is not translated yet: showing the other language.',
+
+  // components/UserBadge.tsx
+  'Ouvrir workspace': 'Open workspace',
+  'Historique des workspaces': 'Workspace history',
+  'Utilisateurs connectes': 'Connected users',
+  'Workspaces recents': 'Recent workspaces',
+  'Aucun utilisateur trouve.': 'No user found.',
+  '(vous)': '(you)',
+  'Ouvrir ce workspace': 'Open this workspace',
+  'Aucun workspace utilise recemment.': 'No recently used workspace.',
 }
 
 const PHRASE_EN: ReadonlyArray<readonly [string, string]> = [

@@ -20,6 +20,7 @@ from backend.api import insights as insights_router
 from backend.api import lineage as lineage_router
 from backend.api import plans as plans_router
 from backend.api import engines as engines_router
+from backend.api import docs as docs_router
 from backend.config import CORS_ORIGINS, APP_URLS, PIPELINES_DIR, WORKSPACE, CURRENT_USER
 from backend.utils.debug_logger import dbg
 
@@ -95,6 +96,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # Routes spécifiques avant génériques
 app.include_router(health_router.router)
 app.include_router(pipelines_router.router)
@@ -107,6 +131,7 @@ app.include_router(insights_router.router)
 app.include_router(lineage_router.router)
 app.include_router(plans_router.router)
 app.include_router(engines_router.router)
+app.include_router(docs_router.router)
 
 
 @app.get("/health")

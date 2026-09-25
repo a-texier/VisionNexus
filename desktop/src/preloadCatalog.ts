@@ -6,11 +6,20 @@
 // ============================================================
 
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppDef } from './catalog'
+import type { AppDef, ServiceDef } from './catalog'
+import type { ServiceStatus } from './services'
 import type { LauncherSettings, TutorialState } from './settings'
 
 contextBridge.exposeInMainWorld('cvLauncher', {
   listApps: (): Promise<AppDef[]> => ipcRenderer.invoke('cv:list-apps'),
+  // Ressources de calcul (services backend seul) : interrupteur ON/OFF, jamais d'onglet.
+  listServices: (): Promise<ServiceDef[]> => ipcRenderer.invoke('cv:list-services'),
+  getServiceStatus: (id: string): Promise<ServiceStatus> => ipcRenderer.invoke('cv:get-service-status', id),
+  startService: (id: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('cv:start-service', id),
+  stopService: (id: string): Promise<void> => ipcRenderer.invoke('cv:stop-service', id),
+  onServiceStatus: (cb: (status: ServiceStatus) => void): void => {
+    ipcRenderer.on('cv:service-status', (_e, status: ServiceStatus) => cb(status))
+  },
   getSettings: (): Promise<LauncherSettings> => ipcRenderer.invoke('cv:get-settings'),
   saveSettings: (s: LauncherSettings): Promise<void> => ipcRenderer.invoke('cv:save-settings', s),
   launch: (appId: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('cv:launch', appId),
@@ -18,7 +27,7 @@ contextBridge.exposeInMainWorld('cvLauncher', {
   getTutorial: (key: string): Promise<TutorialState> => ipcRenderer.invoke('cv:get-tutorial', key),
   setTutorial: (key: string, patch: Partial<TutorialState>): Promise<TutorialState> =>
     ipcRenderer.invoke('cv:set-tutorial', key, patch),
-  openDocs: (): Promise<void> => ipcRenderer.invoke('cv:open-docs'),
+  openDocs: (tab?: 'ask'): Promise<void> => ipcRenderer.invoke('cv:open-docs', tab),
   openLogsFolder: (): Promise<void> => ipcRenderer.invoke('cv:open-logs-folder'),
   quit: (): Promise<void> => ipcRenderer.invoke('cv:quit'),
   toggleDevTools: (): Promise<void> => ipcRenderer.invoke('cv:toggle-devtools'),
@@ -73,9 +82,11 @@ contextBridge.exposeInMainWorld('cvLauncher', {
   copyTabUrl: (appId: string): Promise<boolean> => ipcRenderer.invoke('cv:copy-tab-url', appId),
   openTabInBrowser: (appId: string): Promise<boolean> => ipcRenderer.invoke('cv:open-tab-in-browser', appId),
   scanPorts: (): Promise<PortScanResult> => ipcRenderer.invoke('cv:scan-ports'),
-  killPort: (target: 'local' | 'remote', port: number): Promise<boolean> =>
+  killPort: (target: 'local' | 'remote', port: number): Promise<{ ok: boolean; failed: number[]; error?: string }> =>
     ipcRenderer.invoke('cv:kill-port', target, port),
-  killAll: (): Promise<{ stopped: number; ports: number }> => ipcRenderer.invoke('cv:kill-all'),
+  killAll: (): Promise<{ stopped: number; ports: number; failed: number; error?: string }> =>
+    ipcRenderer.invoke('cv:kill-all'),
+  cleanupVm: (): Promise<{ ok: boolean; killed: number; error?: string }> => ipcRenderer.invoke('cv:cleanup-vm'),
 })
 
 interface TabInfo {

@@ -2,12 +2,15 @@
 // App.tsx — Training_App
 // ============================================================
 
+import { useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { Zap, BarChart2 } from 'lucide-react'
 import TrainingPage from './pages/TrainingPage'
 import RunsPage     from './pages/RunsPage'
 import { LanguageToggle } from './components/common/LanguageToggle'
 import { useT } from './i18n/useLang'
+import { initWorkspaceLanguage } from './i18n/translate'
+import { settingsAPI } from './api/client'
 
 const NAV = [
   { to: '/training', label: 'Training',   icon: <Zap size={15} /> },
@@ -16,6 +19,11 @@ const NAV = [
 
 export default function App() {
   const t = useT()
+
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => s.ui_language as 'en' | 'fr'))
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
       {/* Top nav */}

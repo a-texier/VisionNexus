@@ -1,10 +1,8 @@
 # ============================================================
 # yolox_model.py -- construction du modele YOLOX (Exp + poids) pour chaque
-# taille du catalogue. Meme logique que celle utilisee cote Inference_App
-# (pipeline/detector/detector_mot.py::YOLODetectorMOT), maintenue
-# independamment ici : Training_App est proprietaire de l'architecture,
-# Inference_App garde sa propre copie vendorisee pour rester deployable
-# seul (voir vendor/yolox/VENDOR_NOTES.md).
+# taille du catalogue. Training_App est proprietaire de l'architecture ;
+# Inference_App importe ce module (inference_core/detectors.py) pour charger
+# les memes checkpoints (voir vendor/yolox/VENDOR_NOTES.md).
 # ============================================================
 
 from __future__ import annotations

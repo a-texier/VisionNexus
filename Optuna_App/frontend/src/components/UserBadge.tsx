@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react'
 import { Users, FolderOpen, History } from 'lucide-react'
+import { LanguageToggle } from './common/LanguageToggle'
+import { useT } from '../i18n/useLang'
 
 interface WorkspaceUser {
   user: string
@@ -20,6 +22,7 @@ function initials(name: string) {
 type PanelMode = 'users' | 'history' | null
 
 export function UserBadge() {
+  const t = useT()
   const [panel, setPanel]       = useState<PanelMode>(null)
   const [users, setUsers]       = useState<WorkspaceUser[]>([])
   const [history, setHistory]   = useState<WorkspaceHistory[]>([])
@@ -93,7 +96,7 @@ export function UserBadge() {
       {/* Open Folder button */}
       <button
         onClick={openFolder}
-        title="Ouvrir workspace"
+        title={t('Ouvrir workspace')}
         disabled={openingFolder}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
@@ -104,7 +107,7 @@ export function UserBadge() {
       <button
         ref={historyRef}
         onClick={openHistory}
-        title="Historique des workspaces"
+        title={t('Historique des workspaces')}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
         <History size={13} className={panel === 'history' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'} />
@@ -114,11 +117,14 @@ export function UserBadge() {
       <button
         ref={usersRef}
         onClick={openUsers}
-        title="Utilisateurs connectes"
+        title={t('Utilisateurs connectes')}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
         <Users size={13} className={panel === 'users' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'} />
       </button>
+
+      {/* Language toggle */}
+      <LanguageToggle />
 
       {/* Panel — fixed, opens upward */}
       {panel && (
@@ -134,7 +140,7 @@ export function UserBadge() {
                 {panel === 'users'   && <Users   size={12} className="text-gray-400" />}
                 {panel === 'history' && <History size={12} className="text-gray-400" />}
                 <span className="text-xs font-semibold text-gray-200">
-                  {panel === 'users' ? 'Utilisateurs connectes' : 'Workspaces recents'}
+                  {panel === 'users' ? t('Utilisateurs connectes') : t('Workspaces recents')}
                 </span>
               </div>
               <button onClick={() => setPanel(null)} className="text-gray-500 hover:text-white text-xs leading-none">
@@ -143,11 +149,11 @@ export function UserBadge() {
             </div>
 
             {loading ? (
-              <p className="text-xs text-gray-500 py-1">Chargement…</p>
+              <p className="text-xs text-gray-500 py-1">{t('Chargement…')}</p>
 
             ) : panel === 'users' ? (
               users.length === 0 ? (
-                <p className="text-xs text-gray-500 py-1">Aucun utilisateur trouve.</p>
+                <p className="text-xs text-gray-500 py-1">{t('Aucun utilisateur trouve.')}</p>
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto">
                   {users.map(u => (
@@ -166,11 +172,11 @@ export function UserBadge() {
                           </div>
                           <span className="text-xs text-gray-200 font-medium truncate">
                             {u.user}
-                            {u.user === IA_USER && <span className="ml-1 text-indigo-400 text-[10px]">(vous)</span>}
+                            {u.user === IA_USER && <span className="ml-1 text-indigo-400 text-[10px]">{t('(vous)')}</span>}
                           </span>
                         </div>
                         <button
-                          title="Ouvrir ce workspace"
+                          title={t('Ouvrir ce workspace')}
                           onClick={async (e) => {
                             e.stopPropagation()
                             await fetch(`/api/workspace/open?path=${encodeURIComponent(u.workspace)}`, { method: 'POST' })
@@ -190,7 +196,7 @@ export function UserBadge() {
 
             ) : (
               history.length === 0 ? (
-                <p className="text-xs text-gray-500 py-1">Aucun workspace utilise recemment.</p>
+                <p className="text-xs text-gray-500 py-1">{t('Aucun workspace utilise recemment.')}</p>
               ) : (
                 <div className="space-y-1 overflow-y-auto" style={{ maxHeight: '50vh' }}>
                   {history.map((entry, i) => (

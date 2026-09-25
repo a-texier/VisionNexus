@@ -13,7 +13,7 @@ cd "$APP_DIR"
 BACKEND_PORT=$BACKEND_PORT \
 MLFLOW_APP_FRONTEND_PORT=$FRONTEND_PORT \
 python -m uvicorn backend.main:app \
-  --host 0.0.0.0 \
+  --host "${CV_BIND_HOST:-127.0.0.1}" \
   --port "$BACKEND_PORT" \
   --reload &
 

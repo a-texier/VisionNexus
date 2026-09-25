@@ -17,6 +17,7 @@ from backend.api import runs as runs_router
 from backend.api import models as models_router
 from backend.api import compare as compare_router
 from backend.api import settings as settings_router
+from backend.api import docs as docs_router
 from backend.config import CORS_ORIGINS
 from backend.core.mlflow_client import ensure_mlflow_running, stop_mlflow_server
 
@@ -60,12 +61,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # ---- Routers (spécifiques avant génériques) ----
 app.include_router(experiments_router.router)
 app.include_router(runs_router.router)
 app.include_router(models_router.router)
 app.include_router(compare_router.router)
 app.include_router(settings_router.router)
+app.include_router(docs_router.router)
 
 
 # ------------------------------------------------------------------ #

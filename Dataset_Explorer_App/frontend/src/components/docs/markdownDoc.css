@@ -1,0 +1,103 @@
+/* Rendu des pages de docs/ dans le theme sombre de l'app (palette gray). */
+
+.markdown-doc {
+  color: #d1d5db;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.markdown-doc > :first-child { margin-top: 0; }
+
+.markdown-doc h1,
+.markdown-doc h2,
+.markdown-doc h3,
+.markdown-doc h4 {
+  color: #f9fafb;
+  font-weight: 700;
+  line-height: 1.3;
+  /* Laisse la barre de navigation collante au-dessus d'une ancre ciblee. */
+  scroll-margin-top: 72px;
+}
+.markdown-doc h1 { font-size: 1.75rem; margin: 0 0 1rem; }
+.markdown-doc h2 {
+  font-size: 1.3rem;
+  margin: 2.25rem 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #1f2937;
+}
+.markdown-doc h3 { font-size: 1.08rem; margin: 1.75rem 0 0.5rem; color: #e5e7eb; }
+.markdown-doc h4 { font-size: 0.95rem; margin: 1.25rem 0 0.4rem; color: #e5e7eb; }
+
+.markdown-doc p { margin: 0.65rem 0; }
+.markdown-doc strong { color: #f3f4f6; font-weight: 600; }
+.markdown-doc hr { border: 0; border-top: 1px solid #1f2937; margin: 2rem 0; }
+
+.markdown-doc a { color: #818cf8; text-decoration: underline; text-underline-offset: 2px; }
+.markdown-doc a:hover { color: #a5b4fc; }
+.markdown-doc .md-path { color: #9ca3af; }
+
+.markdown-doc ul,
+.markdown-doc ol { margin: 0.6rem 0; padding-left: 1.5rem; }
+.markdown-doc ul { list-style: disc; }
+.markdown-doc ol { list-style: decimal; }
+.markdown-doc li { margin: 0.25rem 0; }
+.markdown-doc li > ul,
+.markdown-doc li > ol { margin: 0.2rem 0; }
+.markdown-doc li input[type="checkbox"] { margin-right: 0.4rem; }
+
+.markdown-doc code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.85em;
+  background: #1f2937;
+  color: #fbbf24;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.markdown-doc pre {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0.9rem 0;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+.markdown-doc pre code { background: none; color: #e5e7eb; padding: 0; font-size: 12.5px; }
+
+.markdown-doc blockquote {
+  margin: 0.9rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 3px solid #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 0 6px 6px 0;
+  color: #d1d5db;
+}
+.markdown-doc blockquote > :first-child { margin-top: 0; }
+.markdown-doc blockquote > :last-child { margin-bottom: 0; }
+
+.markdown-doc table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 13px;
+}
+.markdown-doc th,
+.markdown-doc td {
+  border: 1px solid #1f2937;
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown-doc th { background: #111827; color: #f3f4f6; font-weight: 600; }
+.markdown-doc tr:nth-child(even) td { background: rgba(31, 41, 55, 0.35); }
+
+.markdown-doc img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  margin: 0.75rem 0;
+}

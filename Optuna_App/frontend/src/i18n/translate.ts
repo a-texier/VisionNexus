@@ -66,6 +66,31 @@ export function subscribeLang(listener: (lang: Lang) => void): () => void {
   return () => listeners.delete(listener)
 }
 
+// Pilotage desktop : si ?lang= etait present au chargement, VisionNexus impose
+// la langue et cette app ne doit ni lire ni ecrire la preference workspace.
+const desktopPiloted = readQueryLang() !== null
+
+export function isDesktopPiloted(): boolean {
+  return desktopPiloted
+}
+
+/** Repli workspace (hors lanceur) : applique la langue sauvegardee cote backend au boot. */
+export async function initWorkspaceLanguage(fetchSettingsLang: () => Promise<Lang | null | undefined>): Promise<void> {
+  if (desktopPiloted) return
+  try {
+    const fromWorkspace = await fetchSettingsLang()
+    if (isLang(fromWorkspace ?? null)) setLang(fromWorkspace as Lang)
+  } catch {
+    // Pas de backend joignable au boot : repli localStorage/anglais.
+  }
+}
+
+/** Change la langue et, hors pilotage desktop, persiste le choix cote workspace. */
+export function setLangAndMaybePersist(lang: Lang, persistToWorkspace: (lang: Lang) => void): void {
+  setLang(lang)
+  if (!desktopPiloted) persistToWorkspace(lang)
+}
+
 // Dictionnaire de correspondance exacte FR -> EN, complete au fil de la
 // couverture de l'app. Une chaine absente du dictionnaire reste affichee
 // en francais meme en mode EN (degradation silencieuse, jamais de texte
@@ -94,103 +119,23 @@ const EXACT_EN: Record<string, string> = {
   "Erreur lors de la création (nom déjà utilisé ?)": 'Error while creating (name already in use?)',
   'objectif —': 'objective —',
 
-  // GuidePage.tsx
-  'Optuna HPO — guide de référence': 'Optuna HPO - reference guide',
-  'Fonctionnement réel, états, métriques, reprise, artefacts et relation avec Orchestrator.': 'How it actually works: states, metrics, resume, artifacts, and the relationship with Orchestrator.',
-  'Vocabulaire': 'Vocabulary',
-  'Sampler TPE : startup puis apprentissage adaptatif': 'TPE sampler: startup then adaptive learning',
-  'TPESampler ne comprend pas les bons paramètres dès le premier trial. Par défaut, les dix premiers résultats exploitables forment la phase': 'TPESampler does not know the right parameters from the very first trial. By default, the first ten usable results form the',
-  '. Avant ce seuil, l’étude explore.': '. Before that threshold, the study is exploring.',
-  'Après suffisamment de COMPLETE, TPE modélise les régions prometteuses. FAIL, interruptions et anciens PRUNED sans valeur n’alimentent pas cet apprentissage. La page affiche la phase et le nombre réel de décisions adaptatives.': 'Once there are enough COMPLETE trials, TPE models the promising regions. FAIL, interruptions and old valueless PRUNED trials do not feed this learning. The page shows the phase and the real number of adaptive decisions.',
-  'Construire une étude interprétable': 'Building an interpretable study',
+  // GuidePage.tsx (page Documentation)
+  'Documentation': 'Documentation',
+  'Utilisateur': 'User',
+  'Installation et réglages': 'Setup and settings',
+  'Développeur': 'Developer',
+  'Liste des pages indisponible': 'Page list unavailable',
+  'Aucune page de documentation.': 'No documentation page.',
+  'Chargement de la documentation…': 'Loading documentation...',
+  'Documentation non disponible': 'Documentation unavailable',
+  "Cette page n'est pas encore écrite dans le dossier docs/ de l'application.": "This page is not written yet in the app's docs/ folder.",
+  "Le backend ne répond pas. Vérifiez qu'il est démarré puis rechargez la page.": 'The backend is not responding. Check that it is running, then reload the page.',
+  "Cette page n'est pas encore traduite : version dans l'autre langue.": 'This page is not translated yet: showing the other language.',
+
+  // Partages (HPOLearnPage, StudyDetailPage)
   'Espace de recherche': 'Search space',
-  'Float définit un intervalle continu ; float logarithmique convient aux ordres de grandeur comme basic_lr_per_img ; int choisit un entier ; categorical choisit une valeur fermée. Des bornes trop larges gaspillent le budget et peuvent produire des configurations invalides.': 'Float defines a continuous interval; logarithmic float suits orders of magnitude such as basic_lr_per_img; int picks an integer; categorical picks a closed value. Bounds that are too wide waste the budget and can produce invalid configurations.',
-  'Maximize convient à mAP, précision et rappel. Minimize convient à une loss ou une latence. Changer la direction change le best trial sans changer les mesures.': 'Maximize suits mAP, precision and recall. Minimize suits a loss or a latency. Changing the direction changes the best trial without changing the measurements.',
-  'Le nombre de trials, les epochs par trial, imgsz, batch et la taille de modèle déterminent le coût. Cinq trials avec un startup TPE de dix restent une exploration initiale.': 'The number of trials, the epochs per trial, imgsz, batch and model size determine the cost. Five trials with a TPE startup of ten remain an initial exploration.',
-  'Reproductibilité': 'Reproducibility',
-  'Conserver seed, versions Python/Optuna/YOLOX/PyTorch/CUDA, modèle initial, dataset exact et split. Sans ces éléments, une relance comparable n’est pas nécessairement reproductible.': 'Keep the seed, the Python/Optuna/YOLOX/PyTorch/CUDA versions, the initial model, the exact dataset and split. Without these, a comparable rerun is not necessarily reproducible.',
-  'Pruning : condition nécessaire et état actuel': 'Pruning: necessary condition and current state',
-  'Le pruning automatique est désactivé dans le moteur YOLO actuel.': 'Automatic pruning is disabled in the current YOLO engine.',
-  'Un vrai pruner exige une métrique par epoch, trial.report(value, step), puis trial.should_prune(). Tant que ce flux n’existe pas, activer MedianPruner serait décoratif. Crash dataset, erreur CUDA et arrêt utilisateur ne sont jamais des prunings.': 'A real pruner needs a per-epoch metric, trial.report(value, step), then trial.should_prune(). Until that flow exists, enabling MedianPruner would be purely cosmetic. A dataset crash, a CUDA error and a user stop are never prunings.',
-  'États d’un trial': 'Trial states',
-  'Métriques YOLO': 'YOLO metrics',
-  'Average Precision à IoU=0,50, plus tolérante.': 'Average Precision at IoU=0.50, more tolerant.',
-  'Moyenne de 0,50 à 0,95, plus exigeante sur la localisation.': 'Average from 0.50 to 0.95, stricter on localization.',
-  'Précision / rappel': 'Precision / recall',
-  'La précision pénalise les faux positifs ; le rappel les objets manqués.': 'Precision penalizes false positives; recall penalizes missed objects.',
-  'Objectif vs secondaire': 'Objective vs secondary',
-  'Si l’objectif est mAP50, mAP50-95 ne départage pas officiellement deux mAP50 égales.': 'If the objective is mAP50, mAP50-95 does not officially break a tie between two equal mAP50 values.',
-  'Trial court vs Training final': 'Short trial vs final Training',
-  'Le meilleur jeu doit être réentraîné avec le split, le seed et le budget final documentés.': 'The best set must be retrained with the split, seed and final budget documented.',
-  'Best value, best params et absence de gagnant': 'Best value, best params, and no winner',
-  'est la valeur objectif du meilleur trial COMPLETE.': 'is the objective value of the best COMPLETE trial.',
-  'ne contient que les paramètres suggérés dans ce trial : ni best_ckpt.pth, ni les paramètres fixes, ni les métriques secondaires.': 'contains only the parameters suggested in that trial: not best_ckpt.pth, not the fixed parameters, not the secondary metrics.',
-  'Zéro COMPLETE signifie qu’Optuna ne peut sélectionner aucun gagnant officiel. Il faut alors distinguer : aucun trial lancé, erreurs techniques, vrais prunings, interruption, ou trainings terminés dont le résultat n’a pas été transporté. Les métriques récupérées depuis results.csv restent informatives et ne modifient pas la DB.': 'Zero COMPLETE means Optuna cannot select any official winner. You then need to distinguish between: no trial launched, technical errors, real prunings, interruption, or finished trainings whose result was not carried over. Metrics recovered from results.csv remain informative and do not modify the DB.',
-  'Contrat de résultat et artefacts': 'Result contract and artifacts',
-  'Chaque trial écrit atomiquement result.json. Stdout n’est plus la source de vérité, ce qui évite les pertes dues à l’encodage Windows.': 'Each trial writes result.json atomically. Stdout is no longer the source of truth, which avoids losses caused by Windows encoding.',
-  'L’interface distingue état Optuna, processus et artefacts. Un ancien FAIL récupérable n’est jamais transformé silencieusement en COMPLETE.': 'The interface distinguishes the Optuna state, the process and the artifacts. An old recoverable FAIL is never silently turned into COMPLETE.',
-  'Runs, forks et reprise': 'Runs, forks, and resume',
-  'Une étude Orchestrator est identifiée par graph_id / run_id / node_id / attempt_id. Un fork reprend la configuration et ses entrées déclarées, jamais les productions du parent.': "An Orchestrator study is identified by graph_id / run_id / node_id / attempt_id. A fork resumes the configuration and its declared inputs, never the parent's outputs.",
-  'Relancer crée un nouvel attempt. Une future reprise devra être explicite et ne jamais fusionner silencieusement deux runs.': 'Relaunching creates a new attempt. A future resume feature must be explicit and must never silently merge two runs.',
-  'Reprise, comparaison et lineage': 'Resume, comparison, and lineage',
-  'Reprendre la même étude ajoute des trials et permet au sampler de réutiliser son historique. Cela n’est valide que si objectif, direction, dataset et distributions restent compatibles. Une nouvelle tentative indépendante doit créer un nouvel attempt.': 'Resuming the same study adds trials and lets the sampler reuse its history. This is only valid if the objective, direction, dataset and distributions remain compatible. A new independent attempt must create a new attempt.',
-  'Comparer des attempts exige d’afficher leur dataset, budget, seed et version logicielle. Un fork Orchestrator doit pointer vers son propre run_id ; le nom humain seul ne constitue pas une identité de lineage.': 'Comparing attempts requires showing their dataset, budget, seed and software version. An Orchestrator fork must point to its own run_id; the human name alone is not a lineage identity.',
-  'La suppression d’une étude efface son index Optuna mais ne doit jamais supprimer implicitement les artefacts d’un autre run.': "Deleting a study erases its Optuna index but must never implicitly delete another run's artifacts.",
-  'Méthode de diagnostic': 'Diagnostic method',
-  'Lire le verdict global et séparer état Optuna, état du processus et présence d’artefacts.': 'Read the overall verdict and separate the Optuna state, the process state and the presence of artifacts.',
-  'Ouvrir la cause racine agrégée : une panne commune à cinq trials ne doit être corrigée qu’une fois.': 'Open the aggregated root cause: a failure shared by five trials should only be fixed once.',
-  'Vérifier data.yaml, dataset réel, modèle, GPU et code retour avant les hyperparamètres.': 'Check data.yaml, the actual dataset, model, GPU and return code before the hyperparameters.',
-  'Contrôler result.json puis stdout.log/stderr.log ; pour l’historique, comparer results.csv et best_ckpt.pth.': 'Check result.json then stdout.log/stderr.log; for history, compare results.csv and best_ckpt.pth.',
-  'Relancer un nouvel attempt seulement après correction et conserver l’ancien comme preuve auditable.': 'Relaunch a new attempt only after fixing the issue, and keep the old one as auditable evidence.',
-  'Quand le pipeline continue-t-il ?': 'When does the pipeline continue?',
-  'Au moins un COMPLETE': 'At least one COMPLETE',
-  'Optuna fournit best_params au Training final.': 'Optuna provides best_params to the final Training.',
-  'Zéro COMPLETE': 'Zero COMPLETE',
-  'Le pipeline s’arrête ou continue explicitement avec les paramètres configurés/défauts et un warning.': 'The pipeline stops, or explicitly continues with the configured/default parameters and a warning.',
-  'Diagnostic des causes courantes': 'Diagnosis of common causes',
-  'Cause :': 'Cause:',
-  'Sélection': 'Selection',
-  'Le même snapshot YOLO est utilisé dans un attempt.': 'The same YOLO snapshot is used within an attempt.',
-  'Propose les paramètres ; TPE commence par une phase startup.': 'Proposes the parameters; TPE starts with a startup phase.',
-  'Produit un résultat et des artefacts indépendants.': 'Produces an independent result and artifacts.',
-  'Seuls les COMPLETE participent au best trial.': 'Only COMPLETE trials count toward the best trial.',
-  'Étude': 'Study',
   'Objectif': 'Objective',
-  'Artefacts': 'Artifacts',
-  'Campagne définie par une métrique, une direction, un sampler, un espace de recherche et un stockage.': 'A campaign defined by a metric, a direction, a sampler, a search space and a storage backend.',
-  'Exécution immuable d’un nœud HPO pour un run Orchestrator précis. Relancer crée un nouvel attempt.': 'Immutable execution of an HPO node for one specific Orchestrator run. Relaunching creates a new attempt.',
-  'Une combinaison d’hyperparamètres et une exécution de la fonction objectif.': 'A combination of hyperparameters and one execution of the objective function.',
-  'Valeur numérique utilisée pour classer les trials, généralement mAP50 ou mAP50-95.': 'The numeric value used to rank trials, typically mAP50 or mAP50-95.',
-  'Paramètres du meilleur trial COMPLETE. Ce ne sont ni des poids, ni un modèle.': 'Parameters of the best COMPLETE trial. Not weights, and not a model.',
-  'result.json, results.csv, logs, configuration et poids produits par le trial.': 'result.json, results.csv, logs, configuration and weights produced by the trial.',
-  'Planifié, pas encore exécuté.': 'Scheduled, not yet run.',
-  'Processus actif dans cette instance de l’application.': 'Active process in this instance of the application.',
-  'Résultat JSON valide et objectif numérique enregistré.': 'Valid JSON result and numeric objective recorded.',
-  'Erreur technique ou contrat de résultat invalide.': 'Technical error or invalid result contract.',
-  'Arrêt algorithmique avec métrique intermédiaire et décision du pruner.': "Algorithmic stop with an intermediate metric and the pruner's decision.",
-  'Processus disparu ou application arrêtée ; ce n’est ni un résultat ni un pruning.': 'Process gone missing or application stopped; neither a result nor a pruning.',
-  'Ancien PRUNED sans valeur intermédiaire : la cause réelle est indéterminée.': 'Old PRUNED without an intermediate value: the real cause is undetermined.',
-  'Dataset introuvable': 'Dataset not found',
-  'data.yaml ou images/labels incorrects': 'data.yaml or images/labels incorrect',
-  'Contrôler le YAML absolu et les dossiers réels.': 'Check the absolute YAML path and the actual folders.',
-  'Mémoire GPU': 'GPU memory',
-  'Réduire batch/imgsz ou libérer la VRAM.': 'Reduce batch/imgsz or free up VRAM.',
-  'Modèle absent': 'Model missing',
-  'Poids .pth ou taille de modèle YOLOX introuvable': '.pth weights or YOLOX model size not found',
-  'Corriger le modèle et le cache.': 'Fix the model and the cache.',
-  'Training bloqué ou trop long': 'Training stuck or taking too long',
-  'Vérifier results.csv avant d’augmenter le délai.': 'Check results.csv before increasing the timeout.',
-  'Résultat invalide': 'Invalid result',
-  'result.json absent ou non numérique': 'result.json missing or not numeric',
-  'Consulter stdout.log, stderr.log et result.json.': 'Check stdout.log, stderr.log and result.json.',
-  'PID disparu après redémarrage': 'PID gone after restart',
-  'Conserver les artefacts partiels puis créer un nouvel attempt.': 'Keep the partial artifacts then create a new attempt.',
-  'objectif + métriques + chemins': 'objective + metrics + paths',
-  'sortie UTF-8 normalisée': 'normalized UTF-8 output',
-  'erreur UTF-8 normalisée': 'normalized UTF-8 error output',
-  'métriques par epoch': 'metrics per epoch',
-  'meilleur poids du trial (si mAP > 0)': 'best weights of the trial (if mAP > 0)',
-  'poids de la dernière epoch (toujours écrit)': 'weights of the last epoch (always written)',
+  'Cause :': 'Cause:',
 
   // HPOLearnPage.tsx
   'distribution logarithmique': 'logarithmic distribution',
@@ -324,6 +269,16 @@ const EXACT_EN: Record<string, string> = {
   'Source métrique :': 'Metric source:',
   'non enregistrée': 'not recorded',
   'Aucun dossier': 'No folder',
+
+  // components/UserBadge.tsx
+  'Ouvrir workspace': 'Open workspace',
+  'Historique des workspaces': 'Workspace history',
+  'Utilisateurs connectes': 'Connected users',
+  'Workspaces recents': 'Recent workspaces',
+  'Aucun utilisateur trouve.': 'No user found.',
+  '(vous)': '(you)',
+  'Ouvrir ce workspace': 'Open this workspace',
+  'Aucun workspace utilise recemment.': 'No recently used workspace.',
 }
 
 const PHRASE_EN: ReadonlyArray<readonly [string, string]> = [

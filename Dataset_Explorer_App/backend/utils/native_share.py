@@ -58,7 +58,11 @@ def from_native_share_path(path_str: str) -> Optional[str]:
     est un PosixPath qui ne comprend jamais la syntaxe UNC. Essaie chaque
     racine de partage connue et retourne la premiere qui existe reellement
     sur le disque, sinon la premiere par defaut (message d'erreur lisible).
-    None si la chaine n'a pas la forme d'un UNC (pass-through POSIX)."""
+    None si la chaine n'a pas la forme d'un UNC (pass-through POSIX) ou si le backend
+    tourne sous Windows : un UNC y est un chemin valide tel quel, le convertir en
+    /srv/... le rendrait introuvable."""
+    if os.name == "nt":
+        return None
     m = re.match(r'^\\\\([^\\]+)\\([^\\]+)(\\.*)?$', path_str)
     if not m:
         return None

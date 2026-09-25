@@ -86,6 +86,7 @@ export interface AppSettings {
   user_name:      string
   dvc_repo_path:  string
   theme:          string
+  ui_language:    string
 }
 
 export interface BranchInfo {

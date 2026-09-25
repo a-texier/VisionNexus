@@ -2,11 +2,13 @@
 // App.tsx — layout principal avec sidebar
 // ============================================================
 
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { Network, Settings, Workflow, FlaskConical, Info, Rocket, LayoutDashboard } from 'lucide-react'
 import { UserBadge } from './components/UserBadge'
-import { LanguageToggle } from './components/common/LanguageToggle'
 import { useT } from './i18n/useLang'
+import { initWorkspaceLanguage, type Lang } from './i18n/translate'
+import { settingsAPI } from './api/client'
 import SandgraphPage   from './pages/SandgraphPage'
 import DashboardPage   from './pages/DashboardPage'
 import PipelinePage    from './pages/PipelinePage'
@@ -42,6 +44,11 @@ function SettingsPlaceholder() {
 
 export default function App() {
   const t = useT()
+
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => s.ui_language as Lang))
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="flex h-screen overflow-hidden bg-gray-950">
@@ -84,7 +91,6 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <UserBadge />
             </div>
-            <LanguageToggle />
           </div>
         </aside>
 

@@ -111,7 +111,7 @@ export interface Sequence {
 export type AnnotationType = 'bbox' | 'polygon'
 
 // Algorithme ayant généré l'annotation (null = manuel)
-export type SourceAlgorithm = 'manual' | 'sam_point' | 'sam_auto' | 'grounding_dino' | 'sam3' | 'samurai' | 'sam2_video' | 'bytetrack' | 'yolo' | 'interpolation' | 'guided_tracking' | 'resnet_tracking' | 'sam2_tracking' | null
+export type SourceAlgorithm = 'manual' | 'sam_point' | 'sam_auto' | 'grounding_dino' | 'sam3' | 'samurai' | 'sam2_video' | 'bytetrack' | 'yolo' | 'interpolation' | 'guided_tracking' | 'resnet_tracking' | 'sam2_tracking' | 'homography' | 'optical_flow' | null
 
 export interface Annotation {
   id: number
@@ -407,7 +407,6 @@ export interface AppNotification {
 export interface UserSettingsInterface {
   background_color: string          // Couleur de fond canvas (hex)
   default_tool: string              // Outil actif au démarrage
-  timeline_height: number           // Hauteur timeline en px
   tracks_panel_height: number       // Hauteur zone tracks (redimensionnable) en px
   annotation_opacity: number        // Opacité annotations [0,1]
   show_labels: boolean              // Afficher étiquettes de classe sur les annotations

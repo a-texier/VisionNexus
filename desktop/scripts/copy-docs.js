@@ -1,7 +1,8 @@
 // ============================================================
 // desktop/scripts/copy-docs.js
-// Copie la doc de chaque app (docs/*.md, ou README.md a defaut) dans
-// desktop/docs-bundle/<AppDir>/ avant le packaging electron-builder
+// Copie la doc de chaque source du manifest (<dir>/docs/*.md ou `docs_path`,
+// README.md + README.fr.md a defaut) dans desktop/docs-bundle/<AppDir>/, plus le
+// manifest lui-meme, avant le packaging electron-builder
 // (extraResources la reprend telle quelle, cf. package.json). Regenere a
 // chaque build -- jamais commite, jamais edite a la main.
 //
@@ -18,25 +19,24 @@ const path = require('path')
 const ROOT = path.join(__dirname, '..', '..')      // Computer_Vision_App/
 const OUT = path.join(__dirname, '..', 'docs-bundle')
 
-const APP_DOC_DIRS = {
-  orchestrator: 'Orchestrator_App',
-  explorer: 'Dataset_Explorer_App',
-  annotation: 'Annotation_App',
-  optuna: 'Optuna_App',
-  training: 'Training_App',
-  inference: 'Inference_App',
-  mlflow: 'MLflow_App',
-  dvc: 'DVC_App',
-}
+// Liste des apps documentees : source unique partagee avec main.ts et
+// tools/docs/. Copiee aussi dans le bundle pour l'exe sans depot a cote.
+const MANIFEST = path.join(ROOT, 'docs', 'docs_manifest.json')
+const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf-8'))
 
 fs.rmSync(OUT, { recursive: true, force: true })
 fs.mkdirSync(OUT, { recursive: true })
 
+fs.copyFileSync(MANIFEST, path.join(OUT, 'docs_manifest.json'))
+
 let total = 0
-for (const appDirName of Object.values(APP_DOC_DIRS)) {
+for (const source of manifest.sources) {
+  const appDirName = source.dir
   const appDir = path.join(ROOT, appDirName)
-  const docsDir = path.join(appDir, 'docs')
-  const dest = path.join(OUT, appDirName)
+  const docsDir = path.join(ROOT, source.docs_path || path.join(appDirName, 'docs'))
+  // Meme regle que sourceBundleDir() (src/docFiles.ts) : la suite a dir "."
+  // et ne peut pas prendre la racine du bundle.
+  const dest = path.join(OUT, appDirName === '.' ? source.id : appDirName)
   const copied = []
 
   if (fs.existsSync(docsDir)) {
@@ -46,12 +46,20 @@ for (const appDirName of Object.values(APP_DOC_DIRS)) {
       fs.copyFileSync(path.join(docsDir, f), path.join(dest, f))
       copied.push(f)
     }
+    // Images referencees par les pages (liens relatifs assets/...).
+    const assetsDir = path.join(docsDir, 'assets')
+    // Sans assets/demo (GIF de plusieurs Mo destine au README, pas aux pages).
+    if (fs.existsSync(assetsDir)) {
+      fs.cpSync(assetsDir, path.join(dest, 'assets'), { recursive: true, filter: (src) => path.basename(src) !== 'demo' })
+    }
   } else {
-    const readme = path.join(appDir, 'README.md')
-    if (fs.existsSync(readme)) {
+    // Les deux langues : main.ts choisit README.fr.md en FR, avec repli.
+    for (const f of ['README.md', 'README.fr.md']) {
+      const readme = path.join(appDir, f)
+      if (!fs.existsSync(readme)) continue
       fs.mkdirSync(dest, { recursive: true })
-      fs.copyFileSync(readme, path.join(dest, 'README.md'))
-      copied.push('README.md')
+      fs.copyFileSync(readme, path.join(dest, f))
+      copied.push(f)
     }
   }
   // Pages ajoutees par les plugins presents (plugins/<plugin>/docs/<AppDir>/),
@@ -70,10 +78,10 @@ for (const appDirName of Object.values(APP_DOC_DIRS)) {
     }
   }
   if (copied.length) {
-    console.log(`  + ${appDirName} (${copied.length} fichier(s))`)
+    console.log(`  + ${source.id} (${copied.length} fichier(s))`)
     total += copied.length
   } else {
-    console.log(`  [!] ${appDirName} : aucune doc trouvee (ni docs/, ni README.md)`)
+    console.log(`  [!] ${source.id} : aucune doc trouvee (ni docs/, ni README.md)`)
   }
 }
 console.log(`docs-bundle/ pret -- ${total} fichier(s) au total`)

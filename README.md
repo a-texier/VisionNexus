@@ -103,7 +103,12 @@ From its catalog, the client:
 - waits for the backend to be ready before opening the app window;
 - closes the associated processes and tunnels when the window is closed;
 - offers, for compatible image streams, native reading via file sharing with
-  an HTTP fallback.
+  an HTTP fallback;
+- carries the session token of each instance, so that only this client (or a
+  browser opened through its one-time link) can use a running app;
+- lists the ports in use, locally and on the VM, and stops what is left over;
+- hosts the Documentation window, with search over the product docs through
+  the Docs Assistant service.
 
 The Electron renderer keeps strict isolation: `contextIsolation: true`,
 `sandbox: true` and `nodeIntegration: false`. System, SSH and file
@@ -127,6 +132,7 @@ instances coexist.
 | <img src="desktop/assets/icon_mlflow.png" width="42" alt="MLflow" /><br />[MLflow](MLflow_App/README.md) | Experiment tracking | Runs, parameters, metrics, artifacts, comparison and model registry | Experiment history shared in the user workspace |
 | <img src="desktop/assets/icon_optuna.png" width="42" alt="Optuna" /><br />[Optuna](Optuna_App/README.md) | Hyperparameter optimization | Studies, trials, distributions, objectives and progress visualization | Best parameters and optimization history |
 | <img src="desktop/assets/icon_orchestrator.png" width="42" alt="Orchestrator" /><br />[Orchestrator](Orchestrator_App/README.md) | MLOps orchestration | DAG editor, connection validation, app auto-launch, human gates, SSE, activity and lineage | Pipelines, run manifests and lineage graph |
+| <img src="desktop/assets/icon_docs.png" width="42" alt="Docs Assistant" /><br />[Docs Assistant](Docs_Assistant_App/README.md) | Search in the product documentation | Offline semantic search (multilingual-e5) and keyword search over the FR/EN docs of every app, filters by app, language and audience, index built on first launch | Relevant passages with a link to the source section |
 
 ### Base ports
 
@@ -140,6 +146,7 @@ instances coexist.
 | `mlflow` | 8062 | 3001 | `mlflow_<user>/` |
 | `optuna` | 8063 | 3003 | `optuna_<user>/` |
 | `orchestrator` | 8060 | 3000 | `orchestrator_<user>/` |
+| `docs` (backend-only service) | 8068 | none | `docs_<user>/` |
 
 ## MLOps suite
 
@@ -218,11 +225,14 @@ flowchart TB
 3. Uvicorn starts the backend; Vite serves the frontend.
 4. The real ports are announced on `stdout`.
 5. Electron opens a second SSH connection dedicated to forwarding these
-   ports.
+   ports. On the target, every server listens on `127.0.0.1` only.
 6. HTTP readiness is checked, then the frontend is loaded in a native
    window.
 7. REST carries commands and metadata; WebSocket or SSE carries previews,
    progress and real-time events.
+8. Every request carries the session token of the instance. The backend
+   rejects the ones without it, including those of other accounts on the
+   same VM.
 
 ### Native images and SMB
 
@@ -240,8 +250,24 @@ frame. Only the useful previews and annotations are sent to the frontend
 over the real-time channel.
 
 Detailed documentation:
-[HTTP/SMB optimization](Annotation_App/docs/optimisation_http_smb.md) and
-[image loading](Annotation_App/docs/explained_loading_image.md).
+[native image path](Annotation_App/docs/architecture.md#native-image-path-through-the-visionnexus-shell) and
+[remote topology and HTTP budget](Annotation_App/docs/architecture.md#remote-topology-and-http-connection-budget).
+
+### Security
+
+Applications are reachable only by the user who launched them:
+
+- backends and frontends listen on `127.0.0.1`, never on the network
+  (`CV_BIND_HOST=0.0.0.0` exposes them on purpose);
+- the workstation reaches them through SSH tunnels, encrypted and
+  authenticated by the user's account;
+- each instance gets a random session token. The backend checks it on every
+  HTTP or WebSocket request (`X-VN-Token` header or `vn_<port>` cookie), which
+  also protects an app from the other accounts of a shared VM;
+- opening an app in an external browser goes through a one-time link that
+  sets the cookie; no secret ever appears in a URL.
+
+Details, configuration and checks: [docs/security.md](docs/security.md).
 
 ## Workspaces and multi-instance
 
@@ -258,6 +284,7 @@ The launcher enforces an independent space for each
   dvc_alice/
   mlflow_alice/
   optuna_alice/
+  docs_alice/
 ```
 
 SQLite databases, caches, projects, exports, runs and settings all stay
@@ -278,7 +305,7 @@ for a single launch with `--backend-port` and `--frontend-port`.
 | Backend | Python 3.11+, FastAPI, Uvicorn, Pydantic, SQLModel, HTTPX | API, validation, tasks, persistence and Orchestrator contracts |
 | Real time | WebSocket, SSE, MJPEG | Tracking previews, progress and metrics |
 | Data | SQLite WAL, workspace files, DVC, MLflow | Projects, runs, lineage, versions and artifacts |
-| Vision / ML | PyTorch, OpenCV, YOLOX, CLIP, FAISS, SAM, MOT/SOT trackers | AI-assisted annotation, embeddings, training and inference |
+| Vision / ML | PyTorch, OpenCV, YOLOX, CLIP, FAISS, SAM, MOT/SOT trackers, multilingual-e5 | AI-assisted annotation, embeddings, training, inference and documentation search |
 | Remote execution | SSH, port forwarding, optional SMB | VM control and efficient image transport |
 
 CUDA, PyTorch and NVIDIA driver versions must be compatible. Weights are
@@ -419,6 +446,9 @@ The recommended layout is:
 HTTP mode remains functional without SMB. The native share is an
 optimization, not a startup requirement.
 
+Nothing is exposed on the VM's network address: the apps are reached only
+through the tunnels, with the session token (see [Security](#security)).
+
 ## Documentation
 
 ### Suite and integration
@@ -426,24 +456,25 @@ optimization, not a startup requirement.
 | Topic | Documentation |
 |---|---|
 | General index | [docs/README.md](docs/README.md) |
-| Architecture, ports and contracts | [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) |
-| Adding an application | [docs/ADDING_AN_APP.md](docs/ADDING_AN_APP.md) |
-| Application template | [docs/APP_TEMPLATE.md](docs/APP_TEMPLATE.md) |
+| Architecture, ports and plugins | [docs/architecture.md](docs/architecture.md) |
+| Adding an application | [docs/code-map.md](docs/code-map.md#add-a-new-app-to-the-suite) |
+| Security, session token and tunnels | [docs/security.md](docs/security.md) |
 | Installing the models | [MODEL_WEIGHTS.md](MODEL_WEIGHTS.md) |
 | Electron client | [desktop/README.md](desktop/README.md) |
 
 ### Per application
 
-| Application | Overview | Architecture and guides |
-|---|---|---|
-| Annotation | [README](Annotation_App/README.md) | [Index](Annotation_App/docs/README.md), [architecture](Annotation_App/docs/architecture.md), [algorithms](Annotation_App/docs/algorithmes.md), [installation](Annotation_App/docs/SETUP_STEP_BY_STEP.md), [remote performance](Annotation_App/docs/optimisation_http_smb.md) |
-| Dataset Explorer | [README](Dataset_Explorer_App/README.md) | [Index](Dataset_Explorer_App/docs/README.md), [architecture](Dataset_Explorer_App/docs/architecture.md), [developer guide](Dataset_Explorer_App/docs/developer-guide.md) |
-| Training | [README](Training_App/README.md) | [Reference](Training_App/docs/README.md) |
-| Inference | [README](Inference_App/README.md) | [Architecture](Inference_App/docs/architecture.md), [integration](Inference_App/docs/integration.md) |
-| Orchestrator | [README](Orchestrator_App/README.md) | [Index](Orchestrator_App/docs/README.md), [architecture](Orchestrator_App/docs/architecture.md), [scenarios](Orchestrator_App/docs/test-scenarios.md) |
-| DVC | [README](DVC_App/README.md) | API, versions and Orchestrator integration |
-| MLflow | [README](MLflow_App/README.md) | Experiments, runs and model registry |
-| Optuna | [README](Optuna_App/README.md) | Studies, trials and Training integration |
+| Application | Documentation |
+|---|---|
+| Annotation | [Index](Annotation_App/docs/README.md), [user guide](Annotation_App/docs/user-guide.md), [architecture](Annotation_App/docs/architecture.md) |
+| Dataset Explorer | [Index](Dataset_Explorer_App/docs/README.md), [user guide](Dataset_Explorer_App/docs/user-guide.md), [architecture](Dataset_Explorer_App/docs/architecture.md) |
+| Orchestrator | [Index](Orchestrator_App/docs/README.md), [user guide](Orchestrator_App/docs/user-guide.md), [architecture](Orchestrator_App/docs/architecture.md) |
+| Training | [Index](Training_App/docs/README.md), [user guide](Training_App/docs/user-guide.md), [architecture](Training_App/docs/architecture.md) |
+| Inference | [Index](Inference_App/docs/README.md), [user guide](Inference_App/docs/user-guide.md), [architecture](Inference_App/docs/architecture.md) |
+| Optuna | [Index](Optuna_App/docs/README.md), [user guide](Optuna_App/docs/user-guide.md), [architecture](Optuna_App/docs/architecture.md) |
+| MLflow | [Index](MLflow_App/docs/README.md), [user guide](MLflow_App/docs/user-guide.md), [architecture](MLflow_App/docs/architecture.md) |
+| DVC | [Index](DVC_App/docs/README.md), [user guide](DVC_App/docs/user-guide.md), [architecture](DVC_App/docs/architecture.md) |
+| Docs Assistant | [Index](Docs_Assistant_App/docs/README.md), [user guide](Docs_Assistant_App/docs/user-guide.md), [architecture](Docs_Assistant_App/docs/architecture.md) |
 
 ## License
 

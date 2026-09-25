@@ -41,6 +41,20 @@ def _user(override: Optional[str]) -> str:
     return CURRENT_USER
 
 
+def _session_token(backend_url: Optional[str]) -> Optional[str]:
+    """Jeton publie par la sous-app dans le fichier prive de l'utilisateur."""
+    if not backend_url:
+        return None
+    try:
+        from urllib.parse import urlsplit
+
+        from _lib import session_auth
+    except ImportError:
+        return None
+    port = urlsplit(backend_url).port
+    return session_auth.token_for_port(port) if port else None
+
+
 @router.get("")
 async def list_apps():
     """Status de toutes les sous-apps (connues + sessions actives).
@@ -109,6 +123,10 @@ async def list_apps():
             "failure_reason": session.get("failure_reason") if session else None,
             "backend_exit_code": session.get("backend_exit_code") if session else None,
             "frontend_exit_code": session.get("frontend_exit_code") if session else None,
+            # Jeton de session de la sous-app, pour que VisionNexus puisse
+            # l'ouvrir dans un onglet. Cette route est elle-meme protegee par
+            # le jeton de l'Orchestrator.
+            "session_token": _session_token(session["backend_url"]) if session else None,
         }
     return result
 

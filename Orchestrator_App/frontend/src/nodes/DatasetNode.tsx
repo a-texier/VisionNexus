@@ -5,6 +5,7 @@ import { Database, FolderOpen, ChevronDown, ChevronUp, Loader2, AlertTriangle } 
 import { NodeExecStatus } from './shared'
 import { NodeActivity, ActivityStep, ResultItem } from './AppNode'
 import NodePorts from './NodePorts'
+import { useT } from '../i18n/useLang'
 
 export interface DatasetNodeData {
   node_type: 'dataset_source'
@@ -26,6 +27,7 @@ export interface DatasetNodeData {
 }
 
 function DatasetNode({ data, selected }: NodeProps) {
+  const t = useT()
   const d = data as DatasetNodeData
   const [expanded, setExpanded] = useState(false)
 
@@ -36,7 +38,7 @@ function DatasetNode({ data, selected }: NodeProps) {
     <div className="relative">
       {typeof d.exec_order === 'number' && (
         <div
-          title={`Ordre d'exécution logique : étape ${d.exec_order}`}
+          title={`${t("Ordre d'exécution logique : étape")} ${d.exec_order}`}
           className="absolute -top-2 -right-2 z-10 min-w-[18px] h-[18px] px-1 rounded-full bg-gray-950/90 border border-gray-600 text-gray-400 text-[10px] font-semibold flex items-center justify-center shadow-sm pointer-events-none"
         >
           {d.exec_order}
@@ -55,7 +57,7 @@ function DatasetNode({ data, selected }: NodeProps) {
 
       {/* Body */}
       <div className="px-3 py-2 space-y-1.5">
-        <p className="text-sm font-medium text-white truncate">{d.dataset_name || 'Non nommé'}</p>
+        <p className="text-sm font-medium text-white truncate">{d.dataset_name || t('Non nommé')}</p>
         <div className="flex items-center gap-1 text-[11px] text-gray-500 truncate">
           <FolderOpen size={10} />
           <span className="truncate">{d.dataset_path || '—'}</span>
@@ -77,8 +79,8 @@ function DatasetNode({ data, selected }: NodeProps) {
           >
             <AlertTriangle size={11} className="text-amber-400 shrink-0 mt-0.5" />
             <span className="text-[10px] text-amber-200 truncate">
-              Doublon de {d.duplicate_matches!.map(m => m.name).join(', ')}
-              {d.allow_duplicate ? ' (créera un dataset séparé)' : ''}
+              {t('Doublon de')} {d.duplicate_matches!.map(m => m.name).join(', ')}
+              {d.allow_duplicate ? ` (${t('créera un dataset séparé')})` : ''}
             </span>
           </div>
         )}

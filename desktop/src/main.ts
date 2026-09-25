@@ -17,23 +17,34 @@
 //      specifiquement, HTTP simple pour les autres.
 // ============================================================
 
-import { app, BrowserWindow, WebContentsView, ipcMain, protocol, shell, Menu, clipboard, dialog, type WebContents } from 'electron'
+import { app, BrowserWindow, WebContentsView, ipcMain, protocol, session, shell, Menu, clipboard, dialog, type WebContents } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as fsp from 'fs/promises'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import * as net from 'net'
-import { APPS, findApp } from './catalog'
+import { APPS, SERVICES, findApp, findService } from './catalog'
 import {
   loadSettings, saveSettings, isValid, getTutorialState, setTutorialState,
   type LauncherSettings, type TutorialState,
 } from './settings'
 import {
-  launchApp, waitForPorts, openTunnel, watchTunnel, waitUntilReady, waitUntilBackendReady,
+  launchApp, waitForPorts, openTunnel, openTunnelPorts, watchTunnel, waitUntilReady, waitUntilBackendReady,
   findBusyLocalPorts, describeSshClient,
 } from './sshLauncher'
+import {
+  nextServiceState, canStart, serviceGuard, serviceError, startFailureMessage, startFailureKey, validateSearchRequest, toServiceBody,
+  mapSearchResponse, summarizeIndexStatus, forwardToService, SEARCH_TIMEOUT_MS, STATUS_TIMEOUT_MS,
+  type ServiceState, type ServiceStatus, type StartFailure, type IndexSummary, type ServiceError, type MessageParams,
+} from './services'
 import { registerImageProtocol, setNativeMountAvailable } from './imageProtocol'
+import {
+  TOKEN_HEADER, authFetch, bootstrapUrl, forgetPorts, rememberToken, tokenForPort, tokenForUrl,
+} from './sessionTokens'
 import { resolveClientWorkspacePath, type WorkspacePathMapping } from './workspacePaths'
+import { loadManifest, readDocDir, readDocFile, sortDocFiles, sourceBundleDir, sourceDocsPath } from './docFiles'
+import type { DocSource } from './docFiles'
+import type { AppDocEntry, AppDocFile } from './preloadDocs'
 
 // Utilise par app.getPath('userData') (settings.ts) -- en dev, Electron ne
 // reprend pas toujours fiablement le "name" de package.json pour ce chemin.
@@ -278,7 +289,7 @@ async function scanLocalPorts(): Promise<PortRow[]> {
  * plus pour reperer un process a soi vs. celui d'un collegue avant de le tuer. */
 // Dernier registre lu sur la VM -- rempli par scanRemotePorts, consomme par
 // cv:scan-ports juste apres (meme tick, pas de peremption a gerer).
-let remoteRegistryPorts: { port: number; label: string }[] = []
+let remoteRegistryPorts: RegistryPort[] = []
 
 async function scanRemotePorts(vm: string): Promise<PortRow[]> {
   const marker = '###PS###'
@@ -300,12 +311,14 @@ async function scanRemotePorts(vm: string): Promise<PortRow[]> {
   )
   const [ssOut, rest] = out.split(marker)
   const [psOut, regOut] = (rest ?? '').split(regMarker)
-  remoteRegistryPorts = registryPorts(parseInstancesRegistry(regOut ?? ''), ', registre VM')
   const userByPid = new Map<number, string>()
   for (const line of (psOut ?? '').split(/\r?\n/)) {
     const m = line.trim().match(/^(\d+)\s+(\S+)$/)
     if (m) userByPid.set(parseInt(m[1], 10), m[2])
   }
+  // ps vide = sortie tronquee : on ne filtre pas plutot que de tout effacer.
+  const remoteAlive = userByPid.size ? (pid: number) => userByPid.has(pid) : undefined
+  remoteRegistryPorts = registryPorts(parseInstancesRegistry(regOut ?? '', remoteAlive), ', registre VM')
   const rows: PortRow[] = []
   for (const line of (ssOut ?? '').split(/\r?\n/)) {
     const addrMatch = line.match(/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[?::\]?|\*):(\d+)\s/)
@@ -334,30 +347,44 @@ async function scanRemotePorts(vm: string): Promise<PortRow[]> {
  * workspace tant que le process proprietaire vit.
  */
 interface RegistryInstance {
-  key?: string; app?: string; user?: string
+  key?: string; app?: string; user?: string; pid?: number
   backend_port?: number; frontend_port?: number; workspace?: string
 }
-function parseInstancesRegistry(raw: string): RegistryInstance[] {
+/** `isAlive` ecarte les entrees dont le lanceur est mort : le fichier n'est
+ * nettoye que par launcher.py, et une entree perimee etiquetait "app active"
+ * n'importe quel process qui reprenait le port. */
+function parseInstancesRegistry(raw: string, isAlive?: (pid: number) => boolean): RegistryInstance[] {
   try {
     const data = JSON.parse(raw) as unknown
-    return Array.isArray(data) ? data as RegistryInstance[] : []
+    const entries = Array.isArray(data) ? data as RegistryInstance[] : []
+    return isAlive ? entries.filter((e) => !e.pid || isAlive(e.pid)) : entries
   } catch { return [] }
 }
-function registryPorts(entries: RegistryInstance[], suffix: string): { port: number; label: string }[] {
-  const out: { port: number; label: string }[] = []
+interface RegistryPort { port: number; label: string; user?: string }
+function registryPorts(entries: RegistryInstance[], suffix: string): RegistryPort[] {
+  const out: RegistryPort[] = []
   for (const e of entries) {
     const who = e.user ? `${e.app ?? '?'} - ${e.user}` : (e.app ?? '?')
-    if (e.frontend_port) out.push({ port: e.frontend_port, label: `${who} (frontend${suffix})` })
-    if (e.backend_port) out.push({ port: e.backend_port, label: `${who} (backend${suffix})` })
+    if (e.frontend_port) out.push({ port: e.frontend_port, label: `${who} (frontend${suffix})`, user: e.user })
+    if (e.backend_port) out.push({ port: e.backend_port, label: `${who} (backend${suffix})`, user: e.user })
   }
   return out
+}
+function localPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    // EPERM = le process existe mais appartient a quelqu'un d'autre.
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
 }
 function localRegistryPorts(): { port: number; label: string }[] {
   const cvRoot = loadSettings().cvRoot.trim()
   if (!cvRoot) return []
   try {
     return registryPorts(
-      parseInstancesRegistry(fs.readFileSync(path.join(cvRoot, '.run', '.instances.json'), 'utf-8')),
+      parseInstancesRegistry(fs.readFileSync(path.join(cvRoot, '.run', '.instances.json'), 'utf-8'), localPidAlive),
       ', registre',
     )
   } catch { return [] }   // fichier absent = aucune instance enregistree
@@ -375,6 +402,9 @@ function knownPorts(): { port: number; label: string }[] {
     out.push({ port: tab.frontendPort, label: `${tab.label} (frontend, detache)` })
     if (tab.backendPort) out.push({ port: tab.backendPort, label: `${tab.label} (backend, detache)` })
   }
+  for (const h of services.values()) {
+    if (h.port) out.push({ port: h.port, label: `${findService(h.id)?.label ?? h.id} (backend, service)` })
+  }
   for (const info of Object.values(lastSubApps)) {
     const fp = portFromUrl(info.frontend_url)
     const bp = portFromUrl(info.backend_url)
@@ -388,15 +418,52 @@ function knownPorts(): { port: number; label: string }[] {
   return out
 }
 
-function killPortLocal(port: number): Promise<void> {
-  return runCapture('netstat', ['-ano', '-p', 'TCP']).then((out) => {
-    const pids = new Set(parseNetstatListening(out).filter((r) => r.port === port).map((r) => r.pid))
-    return Promise.all([...pids].map((pid) => new Promise<void>((resolve) => {
-      const p = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], { windowsHide: true })
-      p.on('close', () => resolve())
-      p.on('error', () => resolve())
-    }))).then(() => undefined)
+/** Resultat d'un kill par port : `failed` = ports encore en ecoute apres coup. */
+interface KillResult { ok: boolean; failed: number[]; error?: string }
+
+/** Comme runCapture, mais garde stderr et le code de sortie : un kill qui
+ * echoue doit pouvoir le dire au lieu de ressembler a un kill qui a marche. */
+function runDetailed(cmd: string, args: string[], timeoutMs: number): Promise<{ out: string; err: string; code: number | null }> {
+  return new Promise((resolve) => {
+    let out = ''
+    let err = ''
+    let p: ChildProcess
+    try {
+      p = spawn(cmd, args, { windowsHide: true })
+    } catch (e) {
+      resolve({ out, err: String(e), code: null })
+      return
+    }
+    const timer = setTimeout(() => { p.kill(); resolve({ out, err: err || 'timeout', code: null }) }, timeoutMs)
+    p.stdout?.on('data', (d: Buffer) => { out += d.toString() })
+    p.stderr?.on('data', (d: Buffer) => { err += d.toString() })
+    p.on('close', (code) => { clearTimeout(timer); resolve({ out, err, code }) })
+    p.on('error', (e) => { clearTimeout(timer); resolve({ out, err: String(e), code: null }) })
   })
+}
+
+async function killPortsLocal(ports: number[]): Promise<KillResult> {
+  if (!ports.length) return { ok: true, failed: [] }
+  const wanted = new Set(ports)
+  const before = parseNetstatListening(await runCapture('netstat', ['-ano', '-p', 'TCP']))
+  const pids = new Set(before.filter((r) => wanted.has(r.port) && r.pid > 0).map((r) => r.pid))
+  const errors: string[] = []
+  for (const pid of pids) {
+    const r = await runDetailed('taskkill', ['/F', '/T', '/PID', String(pid)], 8000)
+    // 128 = process deja mort entre netstat et taskkill : pas une erreur.
+    if (r.code !== 0 && r.code !== 128) errors.push(`pid ${pid} : ${r.err.trim() || `code ${r.code}`}`)
+  }
+  const after = parseNetstatListening(await runCapture('netstat', ['-ano', '-p', 'TCP']))
+  const failed = [...new Set(after.filter((r) => wanted.has(r.port)).map((r) => r.port))]
+  return {
+    ok: failed.length === 0,
+    failed,
+    error: failed.length ? (errors.join(' ; ') || 'port toujours en ecoute') : undefined,
+  }
+}
+
+function killPortLocal(port: number): Promise<KillResult> {
+  return killPortsLocal([port])
 }
 
 /**
@@ -416,17 +483,28 @@ function killPortLocal(port: number): Promise<void> {
  * contre un process qui n'aurait pas ete isole.
  *
  * SIGTERM d'abord (uvicorn et vite le gerent proprement), SIGKILL ensuite pour
- * ceux qui l'ignorent. `; true` final : ssh doit toujours rendre la main meme
- * si lsof/fuser manquent sur la VM -- un echec ici ne doit jamais bloquer la
- * fermeture de VisionNexus.
+ * ceux qui l'ignorent.
+ *
+ * Le pid vient de `ss -tlnp` (celui-la meme qui alimente le panneau) : lsof et
+ * fuser manquent sur bien des VM, et l'ancienne version, qui ne comptait que
+ * sur eux, ne tuait alors rien sans le dire (rapport 2026-09-24). Tous les
+ * ports passent dans UNE session ssh (MaxStartups du serveur), et on termine
+ * par une verification : un port encore en ecoute remonte en echec.
  */
-function killPortRemote(vm: string, port: number): Promise<void> {
+async function killPortsRemote(vm: string, ports: number[]): Promise<KillResult> {
+  if (!ports.length) return { ok: true, failed: [] }
+  const list = ports.join(' ')
   const cmd = [
     `mypgid=$(ps -o pgid= -p $$ 2>/dev/null | tr -d " ")`,
-    `pids=$(lsof -ti:${port} 2>/dev/null)`,
-    `[ -z "$pids" ] && pids=$(fuser ${port}/tcp 2>/dev/null | tr -d " ")`,
+    `all=""`,
+    `for port in ${list}; do`,
+    `  pids=$(ss -H -tlnp "sport = :$port" 2>/dev/null | grep -o "pid=[0-9]*" | cut -d= -f2 | sort -u)`,
+    `  [ -z "$pids" ] && pids=$(lsof -ti:$port 2>/dev/null)`,
+    `  [ -z "$pids" ] && pids=$(fuser $port/tcp 2>/dev/null | tr -d " ")`,
+    `  all="$all $pids"`,
+    `done`,
     `groups=""`,
-    `for pid in $pids; do`,
+    `for pid in $all; do`,
     `  pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d " ")`,
     `  if [ -n "$pgid" ] && [ "$pgid" != "1" ] && [ "$pgid" != "$mypgid" ]; then`,
     `    groups="$groups $pgid"`,
@@ -435,14 +513,63 @@ function killPortRemote(vm: string, port: number): Promise<void> {
     `  fi`,
     `done`,
     `for g in $groups; do kill -TERM -"$g" 2>/dev/null; done`,
-    `sleep 1`,
+    `[ -n "$all" ] && sleep 1`,
     `for g in $groups; do kill -KILL -"$g" 2>/dev/null; done`,
-    `for pid in $pids; do kill -KILL "$pid" 2>/dev/null; done`,
-    `true`,
-  ].join('; ')
-  // 8s ne suffisait plus : le `sleep 1` entre SIGTERM et SIGKILL s'ajoute au
-  // temps d'etablissement de la connexion ssh.
-  return runCapture('ssh', [vm, cmd], 12000).then(() => undefined)
+    `for pid in $all; do kill -KILL "$pid" 2>/dev/null; done`,
+    `sleep 0.3`,
+    `for port in ${list}; do`,
+    `  [ -n "$(ss -H -tln "sport = :$port" 2>/dev/null)" ] && echo "STILL $port"`,
+    `done`,
+    `echo "###DONE###"`,
+  ].join('\n')
+  // BatchMode/ConnectTimeout comme le scan : sans eux, une invite ssh
+  // bloquait le kill jusqu'au timeout, bouton "Tuer" qui tourne dans le vide.
+  const r = await runDetailed('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', vm, cmd], 20000)
+  if (!r.out.includes('###DONE###')) {
+    return { ok: false, failed: ports, error: `ssh ${vm} : ${r.err.trim() || 'pas de reponse'}` }
+  }
+  const failed = [...r.out.matchAll(/^STILL (\d+)/gm)].map((m) => parseInt(m[1], 10))
+  return {
+    ok: failed.length === 0,
+    failed,
+    error: failed.length
+      ? 'port toujours en ecoute (process d\'un autre utilisateur, ou relance par son parent)'
+      : undefined,
+  }
+}
+
+function killPortRemote(vm: string, port: number): Promise<KillResult> {
+  return killPortsRemote(vm, [port])
+}
+
+/**
+ * Filet "Nettoyer la VM" : tue les node/python de NOTRE user qui tournent
+ * dans la racine Computer_Vision_App ET dont la ligne de commande est celle
+ * d'un serveur de la suite (vite, uvicorn, launcher.py, esbuild, workers
+ * multiprocessing). On filtre sur le dossier de travail parce qu'uvicorn est
+ * lance en `python -m uvicorn` : sa ligne de commande ne contient pas le
+ * chemin du repo. La double condition epargne VS Code Remote (tsserver,
+ * extension host), meme ouvert sur le repo, et Jupyter.
+ */
+async function cleanupRemoteSuite(vm: string, cvRoot: string): Promise<{ ok: boolean; killed: number; error?: string }> {
+  const root = cvRoot.trim().replace(/\/+$/, '')
+  if (!root) return { ok: false, killed: 0, error: 'Racine Computer_Vision_App non configuree' }
+  const q = `'${root.replace(/'/g, `'\\''`)}'`
+  const cmd = [
+    `list=""`,
+    `for pid in $(pgrep -u "$(id -u)" '^(node|python[0-9.]*|esbuild)$'); do`,
+    `  cwd=$(readlink /proc/$pid/cwd 2>/dev/null)`,
+    `  case "$cwd" in ${q}|${q}/*) ;; *) continue ;; esac`,
+    `  tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null | grep -qE 'vite|uvicorn|launcher\\.py|esbuild|multiprocessing' && list="$list $pid"`,
+    `done`,
+    `n=$(echo $list | wc -w)`,
+    `if [ "$n" -gt 0 ]; then kill -TERM $list 2>/dev/null; sleep 2; kill -KILL $list 2>/dev/null; fi`,
+    `echo "KILLED $n"`,
+  ].join('\n')
+  const r = await runDetailed('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', vm, cmd], 20000)
+  const m = r.out.match(/KILLED (\d+)/)
+  if (!m) return { ok: false, killed: 0, error: `ssh ${vm} : ${r.err.trim() || 'pas de reponse'}` }
+  return { ok: true, killed: parseInt(m[1], 10) }
 }
 
 // ---- Partage reseau natif (generique, sans nom d'hote impose) ----
@@ -450,7 +577,7 @@ function killPortRemote(vm: string, port: number): Promise<void> {
 // utilisee cote backend Annotation App (utils/native_share.py: shared_roots).
 // NE SERT PLUS A DECIDER joignable/injoignable (cf. checkNativeMount) --
 // un partage reel est souvent nomme d'apres un sous-dossier (ex: un serveur
-// expose /home/name_stockage sous \\<share-host>\name_stockage, jamais sous un
+// expose /home/<partage> sous \\<share-host>\<partage>, jamais sous un
 // partage litteralement appele "home"), donc ces noms generiques ne
 // matchent quasiment jamais. Garde uniquement pour peupler l'affichage
 // "shares" en best-effort quand l'enumeration de \\host\ est autorisee.
@@ -518,8 +645,8 @@ async function checkNativeMount(host: string): Promise<{ ok: boolean; shares: st
 
   // Joignabilite REELLE = le port SMB (445) repond. Ne depend d'aucun nom de
   // partage devine -- indispensable des que les partages ne portent pas les
-  // noms generiques de KNOWN_SHARE_ROOTS (cas courant : /home/name_stockage
-  // cote VM est expose sous \\<share-host>\name_stockage, jamais sous un partage
+  // noms generiques de KNOWN_SHARE_ROOTS (cas courant : /home/<partage>
+  // cote VM est expose sous \\<share-host>\<partage>, jamais sous un partage
   // appele "home"). L'enumeration \\host\ (ci-dessous) reste tentee en plus,
   // en best-effort, seulement pour peupler l'affichage -- mais son echec ou
   // sa reussite a vide (partages non listables, tres courant en SMB/NAS) ne
@@ -651,6 +778,8 @@ interface OrchestratorSubAppInfo {
   frontend_url: string | null
   backend_log: string | null
   frontend_log: string | null
+  /** Jeton de session de la sous-app (relu par Orchestrator dans le fichier prive de l'utilisateur). */
+  session_token?: string | null
 }
 // Dernier probleme de tunnel SSH par onglet (cle = appId / tabId). Rempli par
 // watchTunnel ; consulte juste avant d'ouvrir la vue : mieux vaut refuser
@@ -723,11 +852,18 @@ async function pollOrchestratorSubApps(): Promise<void> {
     // Timeout < intervalle du setInterval (1s, cf. site d'appel) : sur VM/SSH
     // une reponse peut mettre plus d'1s, le flag ci-dessus evite alors
     // d'empiler des requetes concurrentes plutot que de les enchainer.
-    const res = await fetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps`, { signal: AbortSignal.timeout(3000) })
+    const res = await authFetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps`, { signal: AbortSignal.timeout(3000) })
     if (!res.ok) return
     const data = await res.json() as Record<string, OrchestratorSubAppInfo>
     lastSubApps = data
-    safeSend('cv:orchestrator-subapps', Object.values(data))
+    for (const info of Object.values(data)) {
+      const backendPort = portFromUrl(info.backend_url)
+      if (!info.session_token || !backendPort || tokenForPort(backendPort) === info.session_token) continue
+      rememberToken(info.session_token, backendPort, portFromUrl(info.frontend_url))
+      void setSessionCookie(backendPort, info.session_token)
+    }
+    // Le jeton ne part pas au renderer : il n'en a pas besoin, l'injection se fait ici.
+    safeSend('cv:orchestrator-subapps', Object.values(data).map(({ session_token: _t, ...rest }) => rest))
   } catch {
     // Orchestrator pas encore pret / VM temporairement injoignable -- retente au prochain tick, silencieux.
   } finally {
@@ -763,7 +899,7 @@ async function stopAllOrchestratorSubApps(): Promise<void> {
     // (killProcessTreeSync juste apres), abandonnant toute sous-app pas
     // encore atteinte -- orpheline pour toujours (node.exe constate le
     // 2026-08-23). Le filet de securite par port ci-dessous couvre le reste.
-    await fetch(`http://127.0.0.1:${info.backendPort}/api/apps/stop-all`, {
+    await authFetch(`http://127.0.0.1:${info.backendPort}/api/apps/stop-all`, {
       method: 'POST',
       signal: AbortSignal.timeout(15000),
     })
@@ -774,7 +910,7 @@ async function stopAllOrchestratorSubApps(): Promise<void> {
   // rien ne garantit que CHAQUE sous-app a vraiment ete jointe (VM lente,
   // process qui ignore SIGTERM...). Tuer un port deja libre est un no-op
   // silencieux -- ce n'est jamais plus couteux qu'inutile de le refaire ici.
-  await Promise.all(ports.map((p) => (info.isLocal ? killPortLocal(p) : killPortRemote(info.vm, p))))
+  await (info.isLocal ? killPortsLocal(ports) : killPortsRemote(info.vm, ports))
 }
 
 function stopOrchestratorPolling(): void {
@@ -905,7 +1041,7 @@ async function openOrchestratorSubApp(subAppId: string): Promise<{ ok: boolean; 
  */
 async function logServedPage(tabId: string, logStream: fs.WriteStream, port: number): Promise<void> {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(3000) })
+    const res = await authFetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(3000) })
     const ctype = res.headers.get('content-type') ?? '(aucun content-type)'
     const head = (await res.text()).slice(0, 120).replace(/\s+/g, ' ')
     appendLog(tabId, logStream, `[diag] 127.0.0.1:${port} -> HTTP ${res.status}, ${ctype} | ${head}`)
@@ -917,18 +1053,18 @@ async function logServedPage(tabId: string, logStream: fs.WriteStream, port: num
 /** Ouvre la sous-app dans le navigateur systeme (alternative a l'onglet natif). */
 async function openOrchestratorSubAppInBrowser(subAppId: string): Promise<{ ok: boolean; error?: string }> {
   const info = lastSubApps[subAppId]
-  if (info?.status !== 'running' || !info.frontend_url) {
+  const frontendPort = portFromUrl(info?.frontend_url ?? null)
+  if (info?.status !== 'running' || !frontendPort) {
     return { ok: false, error: `${subAppId} n'est pas prete (statut : ${info?.status ?? 'inconnu'}).` }
   }
-  await shell.openExternal(info.frontend_url)
-  return { ok: true }
+  return openInExternalBrowser(`http://127.0.0.1:${frontendPort}/`)
 }
 
 /** Demande a Orchestrator de lancer UNE sous-app pas encore active (bouton "Lancer" du bandeau). */
 async function launchOrchestratorSubApp(subAppId: string): Promise<{ ok: boolean; error?: string }> {
   if (!orchestratorInfo) return { ok: false, error: 'Orchestrator n\'est plus lance.' }
   try {
-    const res = await fetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps/launch`, {
+    const res = await authFetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: subAppId }),
@@ -947,7 +1083,7 @@ async function launchAllOrchestratorSubApps(): Promise<{ ok: boolean; error?: st
   if (!orchestratorInfo) return { ok: false, error: 'Orchestrator n\'est plus lance.' }
   try {
     // app_id requis par le schema LaunchBody mais ignore par /launch-all -- valeur factice.
-    const res = await fetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps/launch-all`, {
+    const res = await authFetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps/launch-all`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: 'all' }),
@@ -1162,7 +1298,7 @@ function hideDockedViews(): void {
 async function refreshOrchestratorSubApps(): Promise<Record<string, OrchestratorSubAppInfo>> {
   if (!orchestratorInfo) return lastSubApps
   try {
-    const res = await fetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps`, {
+    const res = await authFetch(`http://127.0.0.1:${orchestratorInfo.backendPort}/api/apps`, {
       signal: AbortSignal.timeout(3000),
     })
     if (res.ok) {
@@ -1282,15 +1418,107 @@ async function openLocalUrlInVisionNexus(url: string): Promise<boolean> {
   return true
 }
 
+/**
+ * Un lien vers l'IP LAN de la VM (http://10.x:5174) ou vers son nom d'hote
+ * contourne le tunnel ssh : il ne marche que si l'app ecoute sur le reseau, et
+ * dans ce cas il l'ouvrait a tout le monde (rapport 2026-09-24). On le ramene
+ * sur 127.0.0.1, ou arrivent nos tunnels. Renvoie null si l'URL n'est pas concernee.
+ */
+function lanUrlToLoopback(url: string): string | null {
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  const host = parsed.hostname.toLowerCase()
+  const vmHost = loadSettings().selectedVm.trim().toLowerCase().replace(/^.*@/, '')
+  const isVmName = !!vmHost && (host === vmHost || host.startsWith(`${vmHost}.`))
+  // Une IP privee n'est traitee que si son port est celui d'une de nos apps :
+  // les autres liens intranet (wiki, gitlab...) doivent rester ouvrables.
+  const port = portFromUrl(url)
+  const privateIp = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
+    && port !== null && knownPorts().some((k) => k.port === port)
+  if (!privateIp && !isVmName) return null
+  parsed.hostname = '127.0.0.1'
+  return parsed.toString()
+}
+
 function denyPopupsOpenExternal(webContents: WebContents, appId?: string): void {
   webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) {
-      void openLocalUrlInVisionNexus(url).then((handled) => {
-        if (!handled) void shell.openExternal(url)
-      }).catch(() => { void shell.openExternal(url) })
+      const loopback = lanUrlToLoopback(url)
+      void openLocalUrlInVisionNexus(loopback ?? url).then((handled) => {
+        if (handled) return
+        // Jamais de navigateur externe vers l'IP de la VM : ce serait le
+        // chemin non chiffre et non authentifie que le tunnel remplace.
+        if (loopback) console.warn(`[popup] lien LAN refuse (aucun onglet sur ce port) : ${url}`)
+        else void openInExternalBrowser(url)
+      }).catch(() => { if (!loopback) void openInExternalBrowser(url) })
     }
     return { action: 'deny' }
   })
+}
+
+// ---- Jeton de session (cf. sessionTokens.ts, _lib/session_auth.py) ----
+
+/**
+ * Ajoute le jeton a toute requete des onglets vers une de nos instances :
+ * API via le proxy Vite, appels directs au port backend (SSE), images,
+ * WebSocket. Un seul point pour tous les onglets (session par defaut), et
+ * aucun frontend a modifier. Jamais pose vers un hote non local.
+ */
+function installRendererAuth(): void {
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const token = tokenForUrl(details.url)
+    if (token) details.requestHeaders[TOKEN_HEADER] = token
+    callback({ requestHeaders: details.requestHeaders })
+  })
+}
+
+/**
+ * Double de l'en-tete : cookie `vn_<port backend>` dans la session des
+ * onglets. Il couvre ce que l'en-tete ne peut pas porter : l'appel d'une app
+ * vers une AUTRE instance par son propre proxy (DVC/MLflow -> Orchestrator),
+ * ou l'en-tete injecte est celui de l'app appelante.
+ */
+async function setSessionCookie(backendPort: number | null, token: string | null | undefined): Promise<void> {
+  if (!backendPort || !token) return
+  try {
+    await session.defaultSession.cookies.set({
+      url: 'http://127.0.0.1/',
+      name: `vn_${backendPort}`,
+      value: token,
+      httpOnly: true,
+      sameSite: 'strict',
+    })
+  } catch (err) {
+    console.warn(`[auth] cookie de session non pose pour le port ${backendPort} : ${(err as Error).message}`)
+  }
+}
+
+async function clearSessionCookie(backendPort: number | null | undefined): Promise<void> {
+  if (!backendPort) return
+  try {
+    await session.defaultSession.cookies.remove('http://127.0.0.1/', `vn_${backendPort}`)
+  } catch { /* deja absent */ }
+}
+
+/** App arretee : son jeton est mort avec elle, et ses ports pourront servir a une autre instance. */
+function forgetTabAuth(tab: { frontendPort: number; backendPort?: number }): void {
+  forgetPorts([tab.frontendPort, tab.backendPort])
+  void clearSessionCookie(tab.backendPort)
+}
+
+/**
+ * Ouvre une de nos pages dans le navigateur systeme. Ce navigateur n'a pas
+ * le jeton : on passe par un lien d'amorcage a usage unique qui lui pose le
+ * cookie puis redirige vers la page. Une URL qui ne vise pas une de nos
+ * instances part telle quelle.
+ */
+async function openInExternalBrowser(url: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await shell.openExternal((await bootstrapUrl(url)) ?? url)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: `Ouverture dans le navigateur impossible : ${(err as Error).message}` }
+  }
 }
 
 function createAppTab(
@@ -1381,6 +1609,7 @@ async function closeTabInner(appId: string, tab: DockedTab): Promise<void> {
     ? 'Onglet masque -- application Orchestrator conservee en arriere-plan.'
     : 'Fermeture demandee -- process arretes.')
   for (const p of tab.procs) killProcessTree(p)
+  if (!orchestratorSubApp) forgetTabAuth(tab)
   tab.logStream.end()
   try { catalogWindow?.contentView.removeChildView(tab.view) } catch { /* deja retiree */ }
   forgetTabInPanes(appId)   // retire des volets (met a jour activeTabId au besoin)
@@ -1507,6 +1736,7 @@ function detachTab(appId: string, screenX: number, screenY: number): void {
     if (stopTail) { stopTail(); subAppLogTails.delete(appId) }
     appendLog(appId, tab.logStream, 'Fenetre fermee -- process arretes.')
     for (const p of tab.procs) killProcessTree(p)
+    if (!appId.startsWith(ORCH_TAB_PREFIX)) forgetTabAuth(tab)
     tab.logStream.end()
     detachedTabs.delete(appId)
     try { tab.view.webContents.close() } catch { /* deja fermee */ }
@@ -1534,11 +1764,21 @@ function dockTab(appId: string): void {
   activateTab(appId)
 }
 
-function openDocsWindow(): void {
+function openDocsWindow(tab?: 'ask'): void {
+  // Un lien vers l'assistant reutilise la fenetre deja ouverte plutot que d'en empiler une autre.
+  if (tab === 'ask') {
+    const open = [...docsWindows].find((w) => !w.isDestroyed())
+    if (open) {
+      if (open.isMinimized()) open.restore()
+      open.focus()
+      open.webContents.send('cv:docs-show-tab', 'ask')
+      return
+    }
+  }
   const win = new BrowserWindow({
     width: 1100,
     height: 800,
-    title: 'Documentation — VisionNexus',
+    title: 'Documentation - VisionNexus',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -1547,10 +1787,15 @@ function openDocsWindow(): void {
     },
   })
   denyPopupsOpenExternal(win.webContents)
-  void win.loadFile(path.join(resourceBase, 'ui', 'docs.html'))
+  // Suivies pour leur pousser l'etat du service (cf. broadcastService).
+  docsWindows.add(win)
+  win.on('closed', () => docsWindows.delete(win))
+  // Ouvre dans la langue courante de VisionNexus (reglage Parametres) --
+  // la fenetre garde ensuite son propre bouton FR/EN local, comme les apps.
+  void win.loadFile(path.join(resourceBase, 'ui', 'docs.html'), { query: tab ? { lang: loadSettings().uiLanguage, tab } : { lang: loadSettings().uiLanguage } })
 }
 
-// ---- Doc par app (onglet "Apps" de la Documentation) ----
+// ---- Doc par app (onglet "Docs par app" de la Documentation) ----
 // Le disque live (depot a cote du lanceur, via cvRoot) reste prioritaire --
 // toujours plus a jour que ce qui a ete fige au build. Repli GARANTI sur
 // docs-bundle/ (resourcesPath/appdocs/ une fois empaquete -- cf.
@@ -1558,15 +1803,14 @@ function openDocsWindow(): void {
 // live n'est pas trouve : machine qui n'a que l'exe portable, sans le
 // depot complet a cote. Avant ce repli, l'onglet restait vide dans ce cas
 // (seul message d'erreur, jamais de contenu).
-const APP_DOC_DIRS: Record<string, string> = {
-  orchestrator: 'Orchestrator_App',
-  explorer: 'Dataset_Explorer_App',
-  annotation: 'Annotation_App',
-  optuna: 'Optuna_App',
-  training: 'Training_App',
-  inference: 'Inference_App',
-  mlflow: 'MLflow_App',
-  dvc: 'DVC_App',
+// La liste des sources (id, dossier, dossier des pages) vient de
+// docs/docs_manifest.json (source unique, partagee avec scripts/copy-docs.js
+// et tools/docs/) : celui du depot live d'abord, sinon la copie figee au build
+// dans appdocs/.
+function loadDocSources(repoRoot: string | null): Map<string, DocSource> {
+  const manifest = (repoRoot && loadManifest(path.join(repoRoot, 'docs', 'docs_manifest.json')))
+    || loadManifest(path.join(resourceBase, 'appdocs', 'docs_manifest.json'))
+  return new Map((manifest?.sources ?? []).map((s) => [s.id, s]))
 }
 
 function findRepoRoot(): string | null {
@@ -1594,86 +1838,401 @@ function findRepoRoot(): string | null {
 // Pages qu'un plugin ajoute a la doc d'une app : plugins/<plugin>/docs/<AppDir>/*.md.
 // Presentes seulement la ou le plugin l'est (branche Git, bundle) : la doc du
 // coeur ne decrit que ce que le coeur fournit.
-function readPluginDocs(repoRoot: string, appDirName: string): { title: string; content: string }[] {
+function readPluginDocs(repoRoot: string, appDirName: string, lang: 'fr' | 'en'): AppDocFile[] {
   const pluginsDir = path.join(repoRoot, 'plugins')
   if (!fs.existsSync(pluginsDir)) return []
-  const files: { title: string; content: string }[] = []
+  const files: AppDocFile[] = []
   for (const plugin of fs.readdirSync(pluginsDir).sort()) {
-    const docsDir = path.join(pluginsDir, plugin, 'docs', appDirName)
-    if (!fs.existsSync(docsDir)) continue
-    for (const f of fs.readdirSync(docsDir).filter((n) => n.toLowerCase().endsWith('.md')).sort()) {
-      try {
-        files.push({ title: f.replace(/\.md$/i, ''), content: fs.readFileSync(path.join(docsDir, f), 'utf-8') })
-      } catch {
-        // fichier illisible -- ignore
-      }
-    }
+    files.push(...readDocDir(path.join(pluginsDir, plugin, 'docs', appDirName), lang))
   }
   return files
 }
 
-function readAppDocs(appId: string, appDirName: string, repoRoot: string): { title: string; content: string }[] {
-  const appDir = path.join(repoRoot, appDirName)
-  const docsDir = path.join(appDir, 'docs')
-  const files: { title: string; content: string }[] = []
+function readAppDocs(source: DocSource, repoRoot: string, lang: 'fr' | 'en'): AppDocFile[] {
+  const docsDir = path.join(repoRoot, sourceDocsPath(source))
+  const files: AppDocFile[] = []
   if (fs.existsSync(docsDir)) {
-    const mdFiles = fs.readdirSync(docsDir).filter((f) => f.toLowerCase().endsWith('.md')).sort()
-    // README en premier si present -- point d'entree naturel de chaque app.
-    mdFiles.sort((a, b) => (a.toLowerCase() === 'readme.md' ? -1 : b.toLowerCase() === 'readme.md' ? 1 : 0))
-    for (const f of mdFiles) {
-      try {
-        files.push({ title: f.replace(/\.md$/i, ''), content: fs.readFileSync(path.join(docsDir, f), 'utf-8') })
-      } catch {
-        // fichier illisible -- ignore, pas bloquant pour le reste
-      }
-    }
+    files.push(...readDocDir(docsDir, lang))
   } else {
-    const readme = path.join(appDir, 'README.md')
-    if (fs.existsSync(readme)) {
-      try {
-        files.push({ title: 'README', content: fs.readFileSync(readme, 'utf-8') })
-      } catch {
-        // ignore
-      }
-    }
+    const candidates = lang === 'fr' ? ['README.fr.md', 'README.md'] : ['README.md', 'README.fr.md']
+    const readme = candidates.map((c) => path.join(repoRoot, source.dir, c)).find((p) => fs.existsSync(p))
+    const doc = readme ? readDocFile(readme) : null
+    if (doc) files.push(doc)
   }
-  return files.concat(readPluginDocs(repoRoot, appDirName))
+  return sortDocFiles(files.concat(readPluginDocs(repoRoot, source.dir, lang)))
 }
 
-function readBundledDocs(appDirName: string): { title: string; content: string }[] {
-  const docsDir = path.join(resourceBase, 'appdocs', appDirName)
-  if (!fs.existsSync(docsDir)) return []
-  const files: { title: string; content: string }[] = []
-  const mdFiles = fs.readdirSync(docsDir).filter((f) => f.toLowerCase().endsWith('.md')).sort()
-  mdFiles.sort((a, b) => (a.toLowerCase() === 'readme.md' ? -1 : b.toLowerCase() === 'readme.md' ? 1 : 0))
-  for (const f of mdFiles) {
-    try {
-      files.push({ title: f.replace(/\.md$/i, ''), content: fs.readFileSync(path.join(docsDir, f), 'utf-8') })
-    } catch {
-      // fichier illisible -- ignore
-    }
-  }
-  return files
+function readBundledDocs(source: DocSource, lang: 'fr' | 'en'): AppDocFile[] {
+  return sortDocFiles(readDocDir(path.join(resourceBase, 'appdocs', sourceBundleDir(source)), lang))
 }
 
-ipcMain.handle('cv:list-app-docs', () => {
+// Ordre de la liste : la suite (VisionNexus) d'abord, puis les apps du
+// diagramme, puis les ressources de calcul qui ont une doc (Docs Assistant).
+function docEntryDefs(): { id: string; label: string; icon: string }[] {
+  return [
+    { id: 'suite', label: 'VisionNexus', icon: 'logo.png' },
+    ...APPS.map((a) => ({ id: a.id, label: a.label, icon: a.icon })),
+    ...SERVICES.map((s) => ({ id: s.id, label: s.label, icon: s.icon })),
+  ]
+}
+
+ipcMain.handle('cv:list-app-docs', (_evt, lang?: 'fr' | 'en'): AppDocEntry[] => {
+  const docLang: 'fr' | 'en' = lang === 'fr' ? 'fr' : 'en'
   const repoRoot = findRepoRoot()
-  return APPS.map((a) => {
-    const dirName = APP_DOC_DIRS[a.id]
-    const live = repoRoot && dirName ? readAppDocs(a.id, dirName, repoRoot) : []
+  const sources = loadDocSources(repoRoot)
+  return docEntryDefs().map((def) => {
+    const source = sources.get(def.id)
+    const live = repoRoot && source ? readAppDocs(source, repoRoot, docLang) : []
     return {
-      appId: a.id,
-      label: a.label,
-      icon: a.icon,
-      files: live.length ? live : (dirName ? readBundledDocs(dirName) : []),
+      appId: def.id,
+      dir: source ? source.dir : '',
+      label: def.label,
+      icon: def.icon,
+      files: live.length ? live : (source ? readBundledDocs(source, docLang) : []),
     }
   })
 })
 
+// ---- Ressources de calcul (services backend seul, cf. services.ts) ----
+// Un service n'ouvre jamais d'onglet : meme chaine de lancement qu'une app
+// (launchApp -> waitForPorts -> tunnel sur VM -> sonde /health) mais sans
+// frontend, donc UN seul port a forwarder. L'etat est unique et partage entre
+// la carte du catalogue et l'onglet "Demander a la doc" : les deux ne font
+// que demander start/stop ici et ecouter cv:service-status.
+//
+// Changement de VM pendant qu'un service tourne : il reste sur la cible ou il
+// a ete lance (h.target) jusqu'a son extinction, sans redemarrage surprise. Les
+// deux UI comparent `target` et `selected` pour le signaler.
+interface ServiceHandle {
+  id: string
+  state: ServiceState
+  message: string
+  messageKey: string | null      // cle i18n du message (ui/i18n.js), null = afficher `message`
+  messageParams: MessageParams | null
+  detail: string                 // fin de la sortie du launcher, jamais traduite
+  target: string          // '' = local, sinon nom de la VM
+  port: number | null     // port backend annonce ; identique en local et cote tunnel
+  procs: ChildProcess[]   // launcher.py (+ tunnel ssh sur VM)
+  logStream: fs.WriteStream
+  logTail: string[]       // dernieres lignes, pour expliquer un echec
+  abort: AbortController  // coupe la sonde /health quand on arrete pendant le demarrage
+  index: IndexSummary | null
+  pollTimer: ReturnType<typeof setTimeout> | null
+}
+const services = new Map<string, ServiceHandle>()
+const docsWindows = new Set<BrowserWindow>()
+
+const SERVICE_START_TIMEOUT_MS = 90000
+const INDEX_POLL_SYNCING_MS = 1500
+const INDEX_POLL_IDLE_MS = 15000
+const SERVICE_EXIT_WAIT_MS = 5000
+
+const SERVICE_RUN_STATUS: Record<ServiceState, AppRunStatus> = {
+  off: 'closed', starting: 'launching', ready: 'running', stopping: 'launching', error: 'error',
+}
+
+function serviceStatus(id: string): ServiceStatus {
+  const h = services.get(id)
+  const selected = loadSettings().selectedVm.trim()
+  return {
+    id,
+    state: h?.state ?? 'off',
+    message: h?.message ?? '',
+    messageKey: h?.messageKey ?? null,
+    messageParams: h?.messageParams ?? null,
+    detail: h?.detail ?? '',
+    target: h ? h.target : selected,
+    selected,
+    index: h?.state === 'ready' ? h.index : null,
+  }
+}
+
+function broadcastService(id: string): void {
+  const status = serviceStatus(id)
+  safeSend('cv:service-status', status)
+  for (const win of docsWindows) {
+    if (!win.isDestroyed()) win.webContents.send('cv:docs-service-status', status)
+  }
+  // Meme canal que les apps : alimente l'onglet de log et son bouton Stop.
+  notifyStatus(id, SERVICE_RUN_STATUS[status.state], status.state === 'error' ? status.message + status.detail : '')
+}
+
+// `fromLauncher` : sortie brute de launcher.py, seule gardee pour expliquer un echec.
+function serviceLog(h: ServiceHandle, line: string, fromLauncher = false): void {
+  appendLog(h.id, h.logStream, line)
+  if (!fromLauncher) return
+  h.logTail.push(stripAnsi(line))
+  if (h.logTail.length > 6) h.logTail.shift()
+}
+
+/** Coupe sonde, process et flux de log de ce lancement (idempotent). */
+function releaseService(h: ServiceHandle): void {
+  if (h.pollTimer) clearTimeout(h.pollTimer)
+  h.pollTimer = null
+  h.abort.abort()
+  for (const p of h.procs) killProcessTree(p)
+  if (!h.logStream.writableEnded) h.logStream.end()
+}
+
+function failService(h: ServiceHandle, failure: StartFailure): void {
+  if (services.get(h.id) !== h) return
+  const next = nextServiceState(h.state, 'fail')
+  if (next === h.state) return   // arret demande ou deja en erreur : rien a corriger
+  const last = h.logTail.filter(Boolean).slice(-2).join(' | ')
+  const tail = (failure.kind === 'no-ports' || failure.kind === 'exited') && last
+    ? ` Derniere sortie : ${last}`
+    : ''
+  const info = startFailureKey(failure)
+  h.state = next
+  h.message = startFailureMessage(failure)
+  h.messageKey = info.key
+  h.messageParams = info.params ?? null
+  h.detail = tail
+  serviceLog(h, `[erreur] ${h.message}${h.detail}`)
+  releaseService(h)
+  broadcastService(h.id)
+}
+
+// Plantage Python pendant le demarrage. Avec --reload, seul le worker uvicorn
+// meurt : le process parent (reloader) reste en vie a attendre un changement
+// de fichier, launcher.py ne sort donc jamais et on attendait les 90 s pleines
+// avant d'afficher un "ne repond pas" sans cause (rapport 2026-09-25). On
+// repere la trace dans la sortie, on laisse 2 s pour qu'elle arrive en entier,
+// puis on echoue tout de suite avec la ligne d'exception.
+const CRASH_GRACE_MS = 2000
+const crashWatch = new WeakMap<ServiceHandle, { lines: string[]; timer: ReturnType<typeof setTimeout> | null }>()
+
+function watchStartupCrash(h: ServiceHandle, line: string): void {
+  if (h.state !== 'starting') return
+  let w = crashWatch.get(h)
+  if (!w) {
+    if (!/Traceback \(most recent call last\)/.test(line)) return
+    w = { lines: [], timer: null }
+    crashWatch.set(h, w)
+    const watch = w
+    watch.timer = setTimeout(() => {
+      if (h.state !== 'starting') return
+      failService(h, { kind: 'exception', detail: `Le backend a plante au demarrage : ${crashSummary(watch.lines)}` })
+    }, CRASH_GRACE_MS)
+  }
+  w.lines.push(stripAnsi(line).trim())
+  if (w.lines.length > 60) w.lines.shift()
+}
+
+/** Derniere ligne d'exception d'une trace Python ("ModuleNotFoundError: ..."). */
+function crashSummary(lines: string[]): string {
+  const exc = [...lines].reverse().find((l) => /^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b/.test(l))
+  return exc ?? lines.filter(Boolean).slice(-1)[0] ?? 'trace Python (voir le journal)'
+}
+
+/** Resultat d'un demarrage interrompu : arret utilisateur ou echec deja consigne. */
+function startOutcome(h: ServiceHandle): { ok: boolean; error?: string } {
+  return h.state === 'ready' ? { ok: true } : { ok: false, error: (h.message + h.detail) || 'Arrete par l\'utilisateur' }
+}
+
+async function startService(id: string): Promise<{ ok: boolean; error?: string }> {
+  const def = findService(id)
+  if (!def) return { ok: false, error: 'Ressource inconnue' }
+  const existing = services.get(id)
+  if (existing && !canStart(existing.state)) {
+    // Deja en marche (ou en train de demarrer) : un 2e clic ne relance rien.
+    return existing.state === 'stopping'
+      ? { ok: false, error: 'Arret en cours, reessaie dans un instant.' }
+      : { ok: true }
+  }
+  const settings = loadSettings()
+  const { stream, filePath } = openLogFile(id)
+  const h: ServiceHandle = {
+    id, state: nextServiceState('off', 'start'), message: '', messageKey: null, messageParams: null, detail: '',
+    target: settings.selectedVm.trim(), port: null,
+    procs: [], logStream: stream, logTail: [], abort: new AbortController(), index: null, pollTimer: null,
+  }
+  services.set(id, h)
+  broadcastService(id)
+
+  if (!isValid(settings)) {
+    failService(h, { kind: 'settings' })
+    return startOutcome(h)
+  }
+  if (placeholderUsername(settings.username)) {
+    failService(h, { kind: 'exception', detail: `Identifiant "${settings.username}" non nominatif -- change-le dans Parametres.` })
+    return startOutcome(h)
+  }
+
+  try {
+    serviceLog(h, `Lancement de ${def.label}${h.target ? ` sur ${h.target}` : ' (local)'}...`)
+    serviceLog(h, `Log complet : ${filePath}`)
+    const { launchProcess } = launchApp(def, settings, { backendOnly: true })
+    h.procs.push(launchProcess)
+    // Sortie non demandee (plantage pendant le demarrage ou en marche) : failService
+    // ignore les sorties provoquees par notre propre arret.
+    launchProcess.on('exit', (code) => failService(h, { kind: 'exited', code }))
+
+    const ports = await waitForPorts(launchProcess, (line) => {
+      serviceLog(h, line, true)
+      watchStartupCrash(h, line)
+    }, 60000, true)
+    if (h.state !== 'starting') return startOutcome(h)
+    if (!ports) {
+      failService(h, { kind: 'no-ports' })
+      return startOutcome(h)
+    }
+    h.port = ports.backendPort
+    serviceLog(h, `Port reel : backend=${ports.backendPort} (pas de frontend)`)
+    rememberToken(ports.token, ports.backendPort)
+
+    if (h.target) {
+      const busy = await findBusyLocalPorts([ports.backendPort])
+      if (h.state !== 'starting') return startOutcome(h)
+      if (busy.length) {
+        failService(h, { kind: 'busy-port', ports: busy })
+        return startOutcome(h)
+      }
+      serviceLog(h, `Client ssh : ${await describeSshClient()}`)
+      const tunnel = openTunnelPorts(h.target, [ports.backendPort])
+      h.procs.push(tunnel)
+      tunnel.on('error', (err) => failService(h, { kind: 'tunnel', detail: `ssh impossible a lancer : ${err.message}` }))
+      watchTunnel(tunnel, (msg, fatal) => {
+        if (h.logStream.writableEnded) return   // service deja arrete : tunnel tue par nous
+        serviceLog(h, msg)
+        if (fatal) failService(h, { kind: 'tunnel', detail: msg })
+      })
+      serviceLog(h, `Tunnel ouvert (local ${ports.backendPort} -> ${h.target}).`)
+    }
+
+    // /health seulement : le modele se charge a la demande et l'index a son
+    // propre etat (cf. pollServiceIndex), ils ne conditionnent pas "pret".
+    const ready = await waitUntilBackendReady(
+      ports.backendPort, SERVICE_START_TIMEOUT_MS, h.abort.signal,
+      () => serviceLog(h, 'Service en cours de demarrage...'),
+    )
+    if (h.state !== 'starting') return startOutcome(h)
+    if (!ready) {
+      failService(h, { kind: 'not-ready' })
+      return startOutcome(h)
+    }
+    h.state = nextServiceState(h.state, 'ready')
+    serviceLog(h, 'Pret.')
+    broadcastService(id)
+    void pollServiceIndex(h)
+    return { ok: true }
+  } catch (e) {
+    failService(h, { kind: 'exception', detail: (e as Error).message })
+    return startOutcome(h)
+  }
+}
+
+/** Attend la fin d'un process, au plus SERVICE_EXIT_WAIT_MS (taskkill est asynchrone). */
+function waitProcessExit(p: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (p.exitCode !== null || p.signalCode !== null) { resolve(); return }
+    const timer = setTimeout(resolve, SERVICE_EXIT_WAIT_MS)
+    p.once('exit', () => { clearTimeout(timer); resolve() })
+  })
+}
+
+async function stopService(id: string): Promise<void> {
+  const h = services.get(id)
+  if (!h || h.state === 'stopping') return
+  const next = nextServiceState(h.state, 'stop')
+  h.state = next
+  h.message = ''
+  if (next === 'off') {
+    // Etait en erreur : plus rien ne tourne, on efface juste l'etat.
+    services.delete(id)
+    broadcastService(id)
+    return
+  }
+  broadcastService(id)
+  serviceLog(h, 'Arret demande -- process arretes.')
+  const procs = [...h.procs]
+  releaseService(h)
+  await Promise.all(procs.map(waitProcessExit))
+  h.state = nextServiceState(h.state, 'stopped')
+  if (services.get(id) === h) services.delete(id)
+  broadcastService(id)
+}
+
+// ---- Etat de l'index : sonde periodique tant que le service est pret ----
+
+function guardHandle(h: ServiceHandle | undefined): ServiceError | null {
+  return serviceGuard({ state: h?.state ?? 'off', message: h?.message ?? '' })
+}
+
+async function refreshServiceIndex(h: ServiceHandle): Promise<{ ok: true; index: IndexSummary } | ServiceError> {
+  const refused = guardHandle(h)
+  if (refused || h.port === null) return refused ?? serviceError('unreachable', 'Service indisponible.')
+  const r = await forwardToService(h.port, '/index/status', { timeoutMs: STATUS_TIMEOUT_MS })
+  if (!r.ok) return r
+  const index = summarizeIndexStatus(r.data)
+  if (!index) return serviceError('http', 'Etat de l\'index illisible.')
+  if (h.state === 'ready' && JSON.stringify(index) !== JSON.stringify(h.index)) {
+    h.index = index
+    broadcastService(h.id)
+  }
+  return { ok: true, index }
+}
+
+async function pollServiceIndex(h: ServiceHandle): Promise<void> {
+  if (h.pollTimer) clearTimeout(h.pollTimer)
+  h.pollTimer = null
+  await refreshServiceIndex(h)
+  if (h.state !== 'ready') return
+  const busy = h.index?.syncing || (h.index?.modelAvailable && !h.index.modelLoaded)
+  h.pollTimer = setTimeout(() => void pollServiceIndex(h), busy ? INDEX_POLL_SYNCING_MS : INDEX_POLL_IDLE_MS)
+}
+
+// ---- Pont de la fenetre Documentation (le renderer n'atteint jamais le port) ----
+
+function readyDocsService(): { h: ServiceHandle; port: number } | ServiceError {
+  const h = services.get('docs')
+  const refused = guardHandle(h)
+  if (refused || !h || h.port === null) return refused ?? serviceError('off', 'Docs Assistant est eteint.')
+  return { h, port: h.port }
+}
+
+async function docsSearch(raw: unknown): Promise<{ ok: true; result: NonNullable<ReturnType<typeof mapSearchResponse>> } | ServiceError> {
+  const request = validateSearchRequest(raw)
+  if (!request.ok) return request
+  const target = readyDocsService()
+  if ('ok' in target) return target
+  const r = await forwardToService(target.port, '/search', { method: 'POST', body: toServiceBody(request.value), timeoutMs: SEARCH_TIMEOUT_MS })
+  if (!r.ok) return r
+  const result = mapSearchResponse(r.data)
+  return result ? { ok: true, result } : serviceError('http', 'Reponse du service illisible.')
+}
+
+async function docsIndexStatus(): Promise<{ ok: true; index: IndexSummary } | ServiceError> {
+  const target = readyDocsService()
+  return 'ok' in target ? target : refreshServiceIndex(target.h)
+}
+
+async function docsSync(): Promise<{ ok: true; started: boolean } | ServiceError> {
+  const target = readyDocsService()
+  if ('ok' in target) return target
+  const r = await forwardToService(target.port, '/index/sync', { method: 'POST', timeoutMs: STATUS_TIMEOUT_MS })
+  if (!r.ok) return r
+  // Affiche l'avancement tout de suite plutot qu'au prochain tick de la sonde.
+  void pollServiceIndex(target.h)
+  return { ok: true, started: (r.data as { started?: unknown } | null)?.started === true }
+}
+
 // ---- IPC : catalogue + reglages + lancement ----
 
 ipcMain.handle('cv:list-apps', () => APPS)
-ipcMain.handle('cv:open-docs', () => openDocsWindow())
+ipcMain.handle('cv:list-services', () => SERVICES)
+ipcMain.handle('cv:get-service-status', (_e, id: unknown) => serviceStatus(String(id)))
+ipcMain.handle('cv:start-service', (_e, id: unknown) => startService(String(id)))
+ipcMain.handle('cv:stop-service', (_e, id: unknown) => stopService(String(id)))
+// Fenetre Documentation : memes actions, limitees au service "docs" -- pas
+// d'id venu du renderer, pas de port expose.
+ipcMain.handle('cv:docs-service-status', () => serviceStatus('docs'))
+ipcMain.handle('cv:docs-service-start', () => startService('docs'))
+ipcMain.handle('cv:docs-service-stop', () => stopService('docs'))
+ipcMain.handle('cv:docs-search', (_e, request: unknown) => docsSearch(request))
+ipcMain.handle('cv:docs-index-status', () => docsIndexStatus())
+ipcMain.handle('cv:docs-sync', () => docsSync())
+ipcMain.handle('cv:open-docs', (_e, tab?: unknown) => openDocsWindow(tab === 'ask' ? 'ask' : undefined))
 ipcMain.handle('cv:get-settings', () => loadSettings())
 ipcMain.handle('cv:save-settings', (_e, s: LauncherSettings) => saveSettings(s))
 ipcMain.handle('cv:check-mount', (_e, host: string) => refreshMountStatus(host))
@@ -1700,6 +2259,7 @@ ipcMain.handle('cv:close-tab', (_e, appId: string) => closeTab(appId))
 // launchingProcs ; userStoppedLaunch permet a cv:launch de rapporter
 // 'closed' plutot que 'error' une fois le process mort constate).
 ipcMain.handle('cv:stop-app', (_e, appId: string) => {
+  if (findService(appId)) { void stopService(appId); return }
   if (dockedTabs.has(appId)) { closeTab(appId); return }
   const detached = detachedTabs.get(appId)
   if (detached) { detached.win.close(); return }
@@ -1720,13 +2280,25 @@ ipcMain.handle('cv:stop-app', (_e, appId: string) => {
 // stop-all Orchestrator, puis kill par port sur tout ce qui reste et qu'on
 // sait etre a nous (knownPorts).
 ipcMain.handle('cv:kill-all', async () => {
-  const vm = loadSettings().selectedVm.trim()
+  const settings = loadSettings()
+  const vm = settings.selectedVm.trim()
+  // Registre VM relu a l'instant : il est la seule trace des sous-apps d'un
+  // Orchestrator deja ferme. Sans lui, "Tout arreter" apres fermeture de
+  // l'onglet Orchestrator partait avec 0 port (rapport 2026-09-24).
+  if (vm) await scanRemotePorts(vm).catch(() => [])
   // Snapshot AVANT de fermer quoi que ce soit : closeTab/stopOrchestratorPolling
   // vident dockedTabs et lastSubApps, on n'aurait plus les ports ensuite.
-  const ports = [...new Set(knownPorts().map((k) => k.port))]
+  const localPorts = [...new Set(knownPorts().map((k) => k.port))]
+  // Registre VM partage : seulement NOS instances, pas celles des collegues.
+  const me = settings.username.trim()
+  const remotePorts = [...new Set([
+    ...localPorts,
+    ...remoteRegistryPorts.filter((r) => r.user === me).map((r) => r.port),
+  ])]
   let stopped = 0
 
   await stopAllOrchestratorSubApps()
+  for (const id of [...services.keys()]) { await stopService(id); stopped++ }
   for (const appId of [...dockedTabs.keys()]) { closeTab(appId); stopped++ }
   for (const tab of [...detachedTabs.values()]) { tab.win.close(); stopped++ }
   for (const [appId, procs] of [...launchingProcs.entries()]) {
@@ -1739,11 +2311,26 @@ ipcMain.handle('cv:kill-all', async () => {
   // Kill par port en dernier : ce qui a repondu au-dessus est deja mort, tuer
   // un port libre est un no-op silencieux. C'est ce passage qui recupere les
   // orphelins qu'aucune structure en memoire ne connait plus.
-  await Promise.all(ports.map((p) => Promise.all([
-    killPortLocal(p),
-    vm ? killPortRemote(vm, p) : Promise.resolve(),
-  ])))
-  return { stopped, ports: ports.length }
+  const [local, remote] = await Promise.all([
+    killPortsLocal(localPorts),
+    vm ? killPortsRemote(vm, remotePorts) : Promise.resolve<KillResult>({ ok: true, failed: [] }),
+  ])
+  const errors = [
+    ...(local.ok ? [] : [`local ${local.failed.join(',')} : ${local.error}`]),
+    ...(remote.ok ? [] : [`${vm} ${remote.failed.join(',')} : ${remote.error}`]),
+  ]
+  return {
+    stopped,
+    ports: new Set([...localPorts, ...remotePorts]).size,
+    failed: local.failed.length + remote.failed.length,
+    error: errors.join('\n') || undefined,
+  }
+})
+ipcMain.handle('cv:cleanup-vm', async () => {
+  const s = loadSettings()
+  const vm = s.selectedVm.trim()
+  if (!vm) return { ok: false, killed: 0, error: 'Aucune VM selectionnee' }
+  return cleanupRemoteSuite(vm, s.cvRoot)
 })
 ipcMain.handle('cv:detach-tab', (_e, appId: string, screenX: number, screenY: number) => detachTab(appId, screenX, screenY))
 ipcMain.handle('cv:dock-tab', (_e, appId: string) => dockTab(appId))
@@ -1826,28 +2413,29 @@ ipcMain.handle('cv:show-subapps-menu', async () => {
   // menu annoncait alors a tort qu'aucune sous-app n'etait connue.
   await refreshOrchestratorSubApps()
   const apps = Object.values(lastSubApps)
+  const fr = loadSettings().uiLanguage === 'fr'
   // `launched` signifie seulement qu'une session a deja ete enregistree. Les
   // sessions stopped/error doivent rester relancables depuis le menu natif.
   const launched = apps.filter((a) => a.status === 'starting' || a.status === 'running').length
   const template: Electron.MenuItemConstructorOptions[] = [
-    { label: `Lancer tout  (${launched}/${apps.length})`,
+    { label: `${fr ? 'Lancer tout' : 'Launch all'}  (${launched}/${apps.length})`,
       enabled: apps.length > 0 && launched < apps.length,
       click: () => void launchAllOrchestratorSubApps() },
     { type: 'separator' },
   ]
   if (apps.length === 0) {
-    template.push({ label: 'Orchestrator ne connait aucune sous-app', enabled: false })
+    template.push({ label: fr ? 'Orchestrator ne connait aucune sous-app' : 'Orchestrator knows no sub-app', enabled: false })
   }
   for (const a of apps) {
     if (a.status === 'running') {
       template.push({ label: `● ${a.label}`, submenu: [
-        { label: 'Ouvrir (onglet)', click: () => void openOrchestratorSubApp(a.app_id) },
-        { label: 'Ouvrir (navigateur)', click: () => void openOrchestratorSubAppInBrowser(a.app_id) },
+        { label: fr ? 'Ouvrir (onglet)' : 'Open (tab)', click: () => void openOrchestratorSubApp(a.app_id) },
+        { label: fr ? 'Ouvrir (navigateur)' : 'Open (browser)', click: () => void openOrchestratorSubAppInBrowser(a.app_id) },
       ] })
     } else if (a.launched && a.status === 'starting') {
-      template.push({ label: `○ ${a.label}  (demarrage...)`, enabled: false })
+      template.push({ label: `○ ${a.label}  (${fr ? 'demarrage...' : 'starting...'})`, enabled: false })
     } else {
-      template.push({ label: `○ ${a.label}  --  Lancer`, click: () => void launchOrchestratorSubApp(a.app_id) })
+      template.push({ label: `○ ${a.label}  --  ${fr ? 'Lancer' : 'Launch'}`, click: () => void launchOrchestratorSubApp(a.app_id) })
     }
   }
   Menu.buildFromTemplate(template).popup({ window: catalogWindow })
@@ -1857,15 +2445,22 @@ ipcMain.handle('cv:open-orchestrator-subapp-browser', (_e, subAppId: string) => 
 ipcMain.handle('cv:launch-orchestrator-subapp', (_e, subAppId: string) => launchOrchestratorSubApp(subAppId))
 ipcMain.handle('cv:launch-all-orchestrator-subapps', () => launchAllOrchestratorSubApps())
 ipcMain.handle('cv:get-tab-url', (_e, appId: string) => getTabUrl(appId))
-ipcMain.handle('cv:copy-tab-url', (_e, appId: string) => {
+// L'URL copiee est un lien d'amorcage (usage unique, ~2 min) : l'URL nue
+// ouvrirait l'app sans jeton dans un autre navigateur, donc vide.
+ipcMain.handle('cv:copy-tab-url', async (_e, appId: string) => {
   const url = getTabUrl(appId)
-  if (url) clipboard.writeText(url)
-  return !!url
+  if (!url) return false
+  try {
+    clipboard.writeText((await bootstrapUrl(url)) ?? url)
+  } catch {
+    clipboard.writeText(url)
+  }
+  return true
 })
-ipcMain.handle('cv:open-tab-in-browser', (_e, appId: string) => {
+ipcMain.handle('cv:open-tab-in-browser', async (_e, appId: string) => {
   const url = getTabUrl(appId)
-  if (url) void shell.openExternal(url)
-  return !!url
+  if (!url) return false
+  return (await openInExternalBrowser(url)).ok
 })
 ipcMain.handle('cv:scan-ports', async () => {
   const vm = loadSettings().selectedVm.trim()
@@ -1877,14 +2472,13 @@ ipcMain.handle('cv:scan-ports', async () => {
   if (!vm) remoteRegistryPorts = []
   return { local, remote: vm ? { vm, rows: remote ?? [] } : null, known }
 })
-ipcMain.handle('cv:kill-port', async (_e, target: 'local' | 'remote', port: number) => {
+ipcMain.handle('cv:kill-port', async (_e, target: 'local' | 'remote', port: number): Promise<KillResult> => {
   if (target === 'remote') {
     const vm = loadSettings().selectedVm.trim()
-    if (vm) await killPortRemote(vm, port)
-  } else {
-    await killPortLocal(port)
+    if (!vm) return { ok: false, failed: [port], error: 'Aucune VM selectionnee' }
+    return killPortRemote(vm, port)
   }
-  return true
+  return killPortLocal(port)
 })
 
 // Toute la separation multi-utilisateur (workspaces <app>_<user>, cles du
@@ -1988,6 +2582,12 @@ ipcMain.handle('cv:launch', async (_e, appId: string) => {
       return { ok: false, error: stopped ? 'Arrete par l\'utilisateur' : 'Ports jamais annonces' }
     }
     send(`Ports reels : backend=${ports.backendPort} frontend=${ports.frontendPort}`)
+    if (ports.token) {
+      rememberToken(ports.token, ports.backendPort, ports.frontendPort)
+      await setSessionCookie(ports.backendPort, ports.token)
+    } else {
+      send('[auth] aucun jeton annonce : backend sans protection (lanceur ancien ou CV_AUTH=0).')
+    }
 
     if (settings.selectedVm) {
       // Verification AVANT de lancer ssh : les ports viennent d'etre alloues sur
@@ -2143,6 +2743,7 @@ app.whenReady().then(() => {
   // handler de l'app de recevoir l'evenement).
   Menu.setApplicationMenu(null)
   pruneOldLogs()
+  installRendererAuth()
 
   registerImageProtocol((event) => {
     const detail = event.mode === 'native'
@@ -2200,6 +2801,11 @@ app.on('before-quit', (event) => {
     for (const tab of dockedTabs.values()) for (const p of tab.procs) killProcessTreeSync(p)
     for (const tab of detachedTabs.values()) for (const p of tab.procs) killProcessTreeSync(p)
     for (const procs of launchingProcs.values()) for (const p of procs) killProcessTreeSync(p)
+    // Aucune ressource de calcul ne survit a la fermeture du lanceur.
+    for (const h of services.values()) {
+      if (h.pollTimer) clearTimeout(h.pollTimer)
+      for (const p of h.procs) killProcessTreeSync(p)
+    }
     quittingCleanupDone = true
     app.quit()
   })()

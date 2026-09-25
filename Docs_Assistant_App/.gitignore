@@ -1,0 +1,4 @@
+# Poids d'embeddings (voir MODEL_WEIGHTS.md) et index construits
+backend/models/*
+!backend/models/.gitkeep
+data/

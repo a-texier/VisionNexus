@@ -11,7 +11,9 @@ import type {
 const http = axios.create({ baseURL: '', timeout: 30_000 })
 
 const _backendPort = import.meta.env.VITE_BACKEND_PORT ?? '8002'
-export const BACKEND_BASE = import.meta.env.DEV ? `http://localhost:${_backendPort}` : ''
+// 127.0.0.1 et pas localhost : le cookie de session est pose pour 127.0.0.1,
+// et un navigateur traite ces deux noms comme deux sites distincts.
+export const BACKEND_BASE = import.meta.env.DEV ? `http://127.0.0.1:${_backendPort}` : ''
 
 // ------------------------------------------------------------------ //
 // Datasets                                                            //
@@ -75,6 +77,8 @@ export function startSync(
 
   fetch(`${BACKEND_BASE}/api/${action}`, {
     method: 'POST',
+    // Autre port que la page : sans ca le navigateur n'envoie pas le cookie de session.
+    credentials: 'include',
     signal: controller.signal,
   })
     .then(async response => {
@@ -118,4 +122,35 @@ export function startSync(
     cancelled = true
     controller.abort()
   }
+}
+
+// ------------------------------------------------------------------ //
+// Documentation (pages markdown de DVC_App/docs/)                    //
+// ------------------------------------------------------------------ //
+export type DocLang = 'en' | 'fr'
+
+export interface DocPageInfo {
+  name: string
+  title: string
+  order: number
+  audience: string
+  doc_type: string
+  langs: DocLang[]
+}
+
+export interface DocPage {
+  name: string
+  lang: DocLang
+  title: string
+  frontmatter: Record<string, unknown>
+  body: string
+}
+
+export const docsAPI = {
+  list: (lang: DocLang): Promise<DocPageInfo[]> =>
+    http.get('/api/docs', { params: { lang } }).then(r => r.data),
+  get: (name: string, lang: DocLang): Promise<DocPage> =>
+    http.get(`/api/docs/${encodeURIComponent(name)}`, { params: { lang } }).then(r => r.data),
+  // Chemin relatif au dossier docs/assets/, tel qu'ecrit dans le markdown.
+  getAssetUrl: (path: string): string => `/api/docs/assets/${path}`,
 }

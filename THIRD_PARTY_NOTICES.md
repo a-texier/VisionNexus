@@ -9,7 +9,8 @@ for Computer_Vision_App replaces those terms.
 
 The repository includes or integrates components such as SAM2, SAMURAI, SAM3,
 YOLOX, ByteTrack, XFeat, LightGlue, MiDaS,
-Depth Anything, DINOv2, DSINE, FAISS, PyTorch and their transitive
+Depth Anything, DINOv2, DSINE, FAISS, multilingual-e5 (Docs Assistant
+embeddings, MIT), PyTorch, Hugging Face Transformers and their transitive
 dependencies. This list is an orientation, not a complete software bill of
 materials.
 

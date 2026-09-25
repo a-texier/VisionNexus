@@ -118,6 +118,7 @@ export interface AppSettings {
   workspace_path: string
   user_name: string
   theme: string
+  ui_language: string
 }
 
 // ---- SandGraph ----

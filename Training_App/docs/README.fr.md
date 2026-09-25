@@ -1,139 +1,63 @@
-*[Read in English](README.md)*
+---
+app: training
+doc_type: readme
+audience: both
+lang: fr
+title: Training App
+order: 0
+tags: [entraînement, yolox, détection d'objets, moteurs, mlflow, orchestrateur]
+sources: [Training_App/backend/main.py, Training_App/frontend/src/App.tsx, Training_App/launcher.py, _lib/launcher_engine.py]
+---
 
-# Documentation - Training App
+# Training App
 
-Index des references : moteurs d'entrainement, modeles, hyperparametres, evenements SSE, plots et
-contrat de l'endpoint orchestrateur. Vue d'ensemble et demarrage rapide : [../README.md](../README.md).
+## Ce que fait Training App
 
-## Moteurs d'entrainement
+Training App entraîne les modèles de détection d'objets de la suite Computer Vision. Vous lui donnez un dataset décrit par un fichier `data.yaml`, vous choisissez une taille de modèle et ses hyperparamètres, et l'application entraîne le modèle en arrière-plan en affichant la progression epoch par epoch.
 
-Chaque run est entraine par un **moteur**, choisi run par run (champ `engine` des requetes). Le
-coeur fournit le moteur `yolox` (moteur maison, Apache-2.0). D'autres moteurs peuvent etre ajoutes
-par des plugins poses dans `plugins/` a la racine du monorepo : voir
-[../../docs/plugins/README.md](../../docs/plugins/README.md).
+Fonctions principales :
 
-`GET /api/capabilities` liste les moteurs connus, leur disponibilite et leur **catalogue** (tailles,
-hyperparametres et leurs valeurs par defaut, formulaire, plages Optuna, plots produits). Les
-interfaces (Training, Optuna, Orchestrator) se construisent uniquement a partir de ce catalogue :
-sans plugin, seul YOLOX est liste et aucun selecteur de moteur n'apparait.
+- **Moteur YOLOX intégré** : six tailles de modèle, de `yolox-nano` à `yolox-x`, entraînées par un entraîneur maison construit sur le code YOLOX embarqué (Apache-2.0). Aucune bibliothèque d'entraînement externe n'est nécessaire.
+- **Moteurs enfichables** : d'autres moteurs d'entraînement peuvent être installés sous forme de plugins. Le moteur se choisit run par run ; quand seul YOLOX est installé, aucun choix de moteur n'est affiché.
+- **Formulaire d'hyperparamètres complet** : epochs, taille de batch, taille d'image, planning du taux d'apprentissage, optimiseur et augmentation de données, avec les valeurs par défaut du moteur.
+- **Suivi en temps réel** : les pertes et les métriques de détection (mAP50, mAP50-95, précision, rappel) sont envoyées à l'interface à la fin de chaque epoch.
+- **Historique et analyse** : chaque run est conservé avec ses paramètres, ses courbes, ses graphiques d'analyse (matrice de confusion, courbes précision-rappel, distribution des labels, batches augmentés, prédictions de validation) et une inférence à la demande des meilleurs et pires cas sur les images de validation.
+- **Suivi MLflow** : chaque run est journalisé automatiquement (paramètres, métriques par epoch, graphiques, poids et version de modèle enregistrée) dans le store MLflow de l'utilisateur, lisible par MLflow App.
 
-Regles communes a tous les moteurs :
+Training App fonctionne seule, ou comme étape d'entraînement d'un pipeline Orchestrator ; le dataset et les paramètres sont alors fournis automatiquement.
 
-- Le moteur d'un run est enregistre avec lui (base, MLflow, reponse de l'orchestrateur) : les poids
-  produits ne se rechargent qu'avec leur moteur.
-- Des poids de depart dont l'extension ne correspond pas au moteur sont refuses avant lancement
-  (`400`), comme une taille absente de son catalogue.
-- Les hyperparametres inconnus du moteur sont ignores et renvoyes dans `ignored_hyperparams`
-  (cas typique : des `best_params` Optuna calcules pour un autre moteur).
-- Pas de repli silencieux : un moteur absent ou indisponible est une erreur explicite.
+## Place de Training App dans le pipeline de la suite
 
-## Moteur YOLOX
+Training App se situe après l'annotation et avant l'inférence dans la suite Computer Vision :
 
-Moteur maison (`backend/services/yolox_engine.py` autour de `VisionNexusYoloxTrainer`), architecture
-choisie par taille :
+1. **Dataset Explorer** sélectionne des images, **Annotation App** les annote et exporte un dataset YOLO (un dossier avec un `data.yaml`).
+2. **Training App** entraîne un détecteur sur ce dataset. **Optuna App** peut rechercher ses hyperparamètres avec les mêmes moteurs et catalogues.
+3. **Inference App** exécute les poids entraînés sur des images et des vidéos et les évalue sur un dataset.
+4. **MLflow App** affiche les runs et les versions de modèle journalisés par Training App ; **DVC App** versionne les datasets.
 
-| Taille | Fichier exp (vendor) |
-|--------|-----------------------|
-| yolox-nano | exps/default/yolox_nano.py |
-| yolox-tiny | exps/default/yolox_tiny.py |
-| yolox-s    | exps/default/yolox_s.py |
-| yolox-m    | exps/default/yolox_m.py |
-| yolox-l    | exps/default/yolox_l.py |
-| yolox-x    | exps/default/yolox_x.py |
+L'**Orchestrator App** enchaîne ces étapes : son nœud Training appelle Training App, attend la fin du run et transmet les poids obtenus et le `data.yaml` résolu aux nœuds suivants.
 
-Poids : `.pth` natifs YOLOX. Sans poids de depart, l'entrainement part de poids aleatoires. Le
-nombre de classes de la tete est celui du `data.yaml`.
+Chaque utilisateur dispose d'un workspace isolé (`training_<user>` sous la racine des workspaces) qui contient la base des runs, les dossiers de runs et les réglages. L'arborescence est décrite dans [Configuration](configuration.fr.md).
 
-### Hyperparametres
+## Démarrage rapide en cinq étapes
 
-Repris tels quels des defauts officiels `yolox/exp/yolox_base.py` (vendor), voir
-`backend/services/yolox_catalog.py::DEFAULT_HYPERPARAMS` pour la liste et les valeurs exactes :
+Ce démarrage rapide suppose que l'application est installée et lancée depuis VisionNexus, ou avec `python launcher.py --app training --workspace <racine> --user <nom>` depuis la racine de la suite (voir [Configuration](configuration.fr.md)).
 
-**Duree / planning** : max_epoch, warmup_epochs, no_aug_epochs (derniers epochs sans
-mosaic/mixup), eval_interval, print_interval
-**Optimiseur** : basic_lr_per_img (lr reel = valeur x batch_size), scheduler, warmup_lr,
-min_lr_ratio, weight_decay, momentum, ema
-**Dataloader** : batch_size, data_num_workers, seed, imgsz
-**Augmentations geometriques** : degrees, translate, scale (tuple), shear, perspective
-**Augmentations couleur/composition** : hsv_prob, flip_prob, mosaic_prob, mixup_prob, enable_mixup
-**Inference/evaluation** : test_conf, nmsthre
-**Materiel** : device, fp16
+1. Exportez un dataset YOLO depuis Annotation App, ou préparez un dossier avec `images/`, `labels/` et un `data.yaml` (voir [Workflows](workflows.fr.md)).
+2. Sur la page **Training**, choisissez une taille dans **Taille** (par exemple `s`) et saisissez le chemin du `data.yaml` dans **Chemin data.yaml**.
+3. Ouvrez le groupe **Entrainement** de **Hyperparametres** et réglez **Epochs** (par exemple 50) et **Batch size** selon la mémoire de votre GPU.
+4. Cliquez sur **Lancer**. Le panneau **Progression** affiche l'epoch en cours, la barre de progression et les dernières métriques.
+5. Quand le run est **Termine**, ouvrez la page **Historique** et cliquez sur le run pour voir ses courbes, ses graphiques d'analyse et le chemin du meilleur modèle.
 
-Correspondance des champs generiques (Orchestrator, Optuna) : `epochs` -> `max_epoch`,
-`batch` -> `batch_size`, `imgsz` -> `imgsz`, `workers` -> `data_num_workers`.
+## Pages de documentation de Training App
 
-### Plots d'analyse
+La documentation de Training App est répartie en neuf pages. Les pages utilisateur viennent d'abord, les pages développeur ensuite.
 
-Produits par `detection_metrics.py` (metriques) et `yolox_plots.py` (previews visuelles) dans
-`<run>/artifacts/` :
-
-| Fichier | Genere par | Mis a jour |
-|---------|-----------|------------|
-| `confusion_matrix.png` | `detection_metrics.save_plots` | a chaque evaluation |
-| `PR_curve.png`, `P_curve.png`, `R_curve.png`, `F1_curve.png` | `detection_metrics.save_plots` | a chaque evaluation |
-| `labels.jpg` | `yolox_plots.save_dataset_preview_plots` | une fois (ne depend que du dataset) |
-| `train_batch0.jpg` | `yolox_plots.save_dataset_preview_plots` | une fois (mosaic/mixup/HSV/flip appliques) |
-| `val_batch0_labels.jpg` | `yolox_plots.save_val_batch_plots` | une fois (verite terrain) |
-| `val_batch0_pred.jpg` | `yolox_plots.save_val_batch_plots` | a chaque evaluation (predictions du modele courant) |
-
-`val_batch0_labels.jpg`/`val_batch0_pred.jpg` donnent un controle visuel rapide sur un echantillon
-de 16 images de validation au maximum.
-
-## Plots : galerie, Insights et MLflow
-
-Chaque moteur declare ses plots dans son catalogue (`artifacts`, par categorie : `summary`,
-`confusion`, `curves`, `labels`, `val_labels`, `val_predictions`, plus `train_batches_glob`).
-`GET /api/training/{run_name}/artifacts` renvoie ceux du **moteur du run** ; les memes fichiers
-alimentent la galerie de l'historique, les Insights de l'Orchestrator et le run MLflow, ou ils sont
-joints sous `plots/` en fin d'entrainement. Si le moteur d'un ancien run n'est plus disponible
-(plugin retire), la reponse porte `engine_error` au lieu d'une liste vide muette.
-
-`GET /api/training/{run_name}/artifact/{chemin}` sert une image situee sous le dossier du run.
-
-## SSE - Flux temps reel
-
-Endpoint : `GET /api/training/{run_name}/events`
-Evenements : `epoch`, `val_metrics`, `done`, `error`, `stopped`, `status`
-
-Chaque evenement `epoch` contient : `epoch`, `total_epochs`, `progress_pct`, `metrics` (pertes du
-moteur + `metrics/mAP50(B)`, `metrics/mAP50-95(B)`, `metrics/precision(B)`, `metrics/recall(B)`,
-memes noms pour tous les moteurs). Evenement `done` : `engine`, `best_model_path`, `map50`,
-`map5095`.
-
-## Format de dataset
-
-`data.yaml` (path, train/val/test, names) + labels YOLO `.txt` (convention communautaire standard)
-ou `.ver` (format historique VisionNexus, `annotation_file:` dans le data.yaml, lu par le moteur
-YOLOX). Un `path:` relatif est resolu contre le dossier du `data.yaml`. Voir
-`backend/services/yolox_dataset.py`.
-
-## Endpoint orchestrateur
-
-```
-POST /api/orchestrator/train
-{
-  "dataset_path": "C:/workspace/annotation_bob/exports/mon-projet-yolo/",
-  "engine": "yolox",            // vide = moteur par defaut de l'instance
-  "model_size": "yolox-s",      // vide = taille par defaut du moteur
-  "model_weights": "",
-  "epochs": 100, "batch": 16, "imgsz": 640,
-  "hyperparams": { "degrees": 5.0 }
-}
--> { "run_name": "...", "engine": "yolox", "model_size": "yolox-s", "best_model_path": "...",
-     "ignored_hyperparams": [], ... }
-
-GET /api/orchestrator/run-status?run_name=...
--> etat du run, dont "engine"
-```
-
-Le backend cherche automatiquement `data.yaml` dans `dataset_path/data.yaml`.
-
-## Autres endpoints
-
-| Endpoint | Role |
-|----------|------|
-| `GET /api/capabilities` | moteurs, disponibilite, catalogues ; `active` = moteur par defaut |
-| `GET /api/training/models?engine=` | catalogue d'un moteur |
-| `POST /api/training/start` | lance un run (`engine`, `model_size`, `model_weights`, `data_yaml`, `hyperparams`) |
-| `GET /api/training/{run}/metrics-history` | historique par epoch lu dans `results.csv` |
-| `GET /api/training/{run}/inference-cases` | meilleurs / pires cas de validation, predits par le moteur du run |
+- [Guide utilisateur](user-guide.fr.md) : chaque page, panneau, champ et bouton de l'interface.
+- [Workflows](workflows.fr.md) : tâches complètes en étapes numérotées, de la préparation d'un dataset au fine-tuning, à l'analyse d'un run, à sa recherche dans MLflow et à l'exécution d'un pipeline.
+- [Concepts](concepts.fr.md) : runs, moteurs, tailles de modèle, hyperparamètres, évaluation, mAP et autres métriques, checkpoints et graphiques, expliqués simplement.
+- [Configuration](configuration.fr.md) : prérequis, commandes de lancement, ports, variables d'environnement, arborescence du workspace, poids, store MLflow et plugins.
+- [Dépannage](troubleshooting.fr.md) : problèmes connus classés par symptôme, avec cause et solution.
+- [Architecture](architecture.fr.md) : composants, contrat des moteurs, cycle de vie d'un run, flux d'événements, entraîneur YOLOX, journalisation MLflow et invariants.
+- [Référence API](api-reference.fr.md) : endpoints HTTP et SSE, y compris le contrat Orchestrator.
+- [Carte du code](code-map.fr.md) : où se trouve chaque fonction dans le code et où la modifier.

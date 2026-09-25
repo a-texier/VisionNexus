@@ -14,7 +14,8 @@ Usage:
   python launcher.py --app annotation --workspace D:/ws --user alice --backend-port 8010 --frontend-port 5200
 
 Available apps:
-  CV MLOps   : orchestrator, dvc, mlflow, optuna
+  CV MLOps   : orchestrator, dvc, mlflow, optuna, inference
+  Service    : docs (Docs_Assistant_App, backend only, no frontend)
 
 Workspace convention:
   Final workspace = <workspace>/<app_id>_<user>
@@ -69,9 +70,9 @@ Workspace convention: <workspace>/<app_id>_<user>  (e.g. D:/ws/annotation_alice)
     p.add_argument("--no-reload",     action="store_true", dest="no_reload",
                    help="Disable uvicorn --reload")
     p.add_argument("--backend-port",  type=int, default=None, dest="backend_port",
-                   help="Override backend port (single --app only)")
+                   help="Force the backend port (single --app only); fails if it is already in use")
     p.add_argument("--frontend-port", type=int, default=None, dest="frontend_port",
-                   help="Override frontend port (single --app only)")
+                   help="Force the frontend port (single --app only); fails if it is already in use")
     p.add_argument("--native-share-host", default=None, dest="native_share_host",
                    help="Nom DNS/IP du partage natif vu par le client. Vide = HTTP uniquement.")
     return p.parse_args()
@@ -98,8 +99,8 @@ def main() -> None:
             conda_path=args.conda_path,
             backend_only=args.backend_only,
             no_reload=args.no_reload,
-            base_backend_port=args.backend_port,
-            base_frontend_port=args.frontend_port,
+            fixed_backend_port=args.backend_port,
+            fixed_frontend_port=args.frontend_port,
             extra_env_overrides=(
                 {"NATIVE_SHARE_HOST": args.native_share_host}
                 if args.native_share_host else None
@@ -123,6 +124,8 @@ def main() -> None:
 
     signal.signal(signal.SIGINT,  _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, _shutdown)
 
     try:
         while True:

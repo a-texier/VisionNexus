@@ -9,6 +9,7 @@ import { useProjectStore } from '../stores/projectStore'
 import { useAnnotationStore } from '../stores/annotationStore'
 import { useUIStore } from '../stores/uiStore'
 import toast from 'react-hot-toast'
+import { t } from '../i18n/translate'
 
 // 2 minutes entre chaque sauvegarde automatique
 const AUTO_SAVE_INTERVAL_MS = 120_000
@@ -87,7 +88,7 @@ export function useAutoSave(projectId: number | null) {
 export async function downloadAnnotationBackup(projectId: number): Promise<void> {
   try {
     const res = await fetch(`/api/projects/${projectId}/backup`)
-    if (!res.ok) throw new Error('Erreur réseau')
+    if (!res.ok) throw new Error(t('Erreur réseau'))
     const backup = await res.json()
     const json = JSON.stringify(backup, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
@@ -99,9 +100,9 @@ export async function downloadAnnotationBackup(projectId: number): Promise<void>
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    toast.success('Backup téléchargé')
+    toast.success(t('Backup téléchargé'))
   } catch {
-    toast.error('Erreur lors du backup')
+    toast.error(t('Erreur lors du backup'))
   }
 }
 

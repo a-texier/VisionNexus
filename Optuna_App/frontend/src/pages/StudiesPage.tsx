@@ -10,7 +10,6 @@ import { Beaker, Plus, Trash2, ChevronRight, RefreshCw, X, TrendingUp, TrendingD
 import { useStudies } from '../hooks/useStudies'
 import { studiesAPI } from '../api/client'
 import type { StudySummary } from '../types/api'
-import { LanguageToggle } from '../components/common/LanguageToggle'
 import { useT } from '../i18n/useLang'
 
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -136,7 +135,6 @@ export default function StudiesPage() {
             className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors">
             <Plus size={16} /> {t('Nouvelle étude')}
           </button>
-          <LanguageToggle />
         </div>
       </div>
 

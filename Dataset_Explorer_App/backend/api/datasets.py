@@ -214,6 +214,19 @@ def _load_dataset_embeddings(db, dataset_id: int, active_only: bool = False):
     return np.vstack(vecs).astype(np.float32), ids
 
 
+def _dataset_cluster_spec(ds: Dataset, n_clusters: int) -> tuple[str, dict]:
+    """Methode et parametres de clustering propres a ce dataset (rebuild, reset) :
+    un dataset HDBSCAN reste HDBSCAN au lieu de repasser en KMeans."""
+    if (ds.cluster_method or "kmeans").lower() == "hdbscan":
+        try:
+            saved = json.loads(ds.cluster_params_json or "{}")
+        except ValueError:
+            saved = {}
+        default = _load_cluster_settings()["hdbscan_min_cluster_size"]
+        return "hdbscan", {"min_cluster_size": int(saved.get("min_cluster_size", default))}
+    return "kmeans", {"n_clusters": n_clusters}
+
+
 def _apply_clustering(db, dataset_id: int, embeddings: np.ndarray, images: list,
                       method: str, params: dict) -> int:
     """Applique KMeans ou HDBSCAN sur `embeddings` (alignés avec `images`),
@@ -1177,28 +1190,17 @@ def merge_datasets(body: MergeRequest, session: Session = Depends(get_session)):
                 db.commit()
                 yield _sse({"type": "progress", "current": 1, "total": 1, "phase": "umap"})
 
-                # KMeans
+                # Clustering (methode des reglages) + rarete, comme le pipeline d'embedding
                 yield _sse({"type": "progress", "current": 0, "total": 1, "phase": "clustering"})
-                n_clusters = min(body.n_clusters, total)
-                labels, centroids = clusterer.kmeans(embeddings, n_clusters)
-                for img, label in zip(new_images, labels):
-                    img.cluster_id = int(label)
-                for cluster_id, centroid_vec in enumerate(centroids):
-                    count = int((labels == cluster_id).sum())
-                    db.add(ClusterCentroid(
-                        dataset_id=merged.id,
-                        cluster_id=cluster_id,
-                        centroid_blob=centroid_vec.tobytes(),
-                        size=count,
-                    ))
+                cs = _load_cluster_settings()
+                params = ({"n_clusters": min(body.n_clusters, total)} if cs["method"] == "kmeans"
+                          else {"min_cluster_size": cs["hdbscan_min_cluster_size"]})
+                _apply_clustering(db, merged.id, embeddings, new_images, cs["method"], params)
+                merged = db.get(Dataset, merged.id)
                 db.commit()
                 yield _sse({"type": "progress", "current": 1, "total": 1, "phase": "clustering"})
 
-                # Rareté
                 yield _sse({"type": "progress", "current": 0, "total": 1, "phase": "scoring"})
-                rarity = clusterer.compute_rarity_scores(embeddings, centroids, labels)
-                for img, score in zip(new_images, rarity):
-                    img.rarity_score = float(score)
 
                 merged.embedded_count = total
                 merged.status = "ready"
@@ -2482,30 +2484,10 @@ def rebuild_without_duplicates(
                     img.umap_y = float(y)
                 db.commit()
 
-                # KMeans
+                # Clustering : la methode du dataset (KMeans ou HDBSCAN) est conservee
                 yield _sse({"type": "progress", "current": 2, "total": 3, "phase": "clustering"})
-                n_clusters = min(orig_n_clusters, len(vecs))
-                labels, centroids = clusterer.kmeans(embeddings, n_clusters)
-                for img, label in zip(valid_active, labels):
-                    img.cluster_id = int(label)
-
-                old_centroids = db.exec(
-                    select(ClusterCentroid).where(ClusterCentroid.dataset_id == dataset_id)
-                ).all()
-                for c in old_centroids:
-                    db.delete(c)
-                for cid, centroid_vec in enumerate(centroids):
-                    db.add(ClusterCentroid(
-                        dataset_id=dataset_id,
-                        cluster_id=cid,
-                        centroid_blob=centroid_vec.tobytes(),
-                        size=int((labels == cid).sum()),
-                    ))
-
-                # Rareté
-                rarity = clusterer.compute_rarity_scores(embeddings, centroids, labels)
-                for img, score in zip(valid_active, rarity):
-                    img.rarity_score = float(score)
+                method, params = _dataset_cluster_spec(db.get(Dataset, dataset_id), min(orig_n_clusters, len(vecs)))
+                _apply_clustering(db, dataset_id, embeddings, valid_active, method, params)
 
                 ds = db.get(Dataset, dataset_id)
                 ds.umap_cached = True
@@ -2592,30 +2574,10 @@ def reset_duplicate_filter(
                     img.umap_y = float(y)
                 db.commit()
 
-                # KMeans
+                # Clustering : la methode du dataset (KMeans ou HDBSCAN) est conservee
                 yield _sse({"type": "progress", "current": 2, "total": 3, "phase": "clustering"})
-                n_clusters = min(orig_n_clusters, len(vecs))
-                labels, centroids = clusterer.kmeans(embeddings, n_clusters)
-                for img, label in zip(valid_images, labels):
-                    img.cluster_id = int(label)
-
-                old_centroids = db.exec(
-                    select(ClusterCentroid).where(ClusterCentroid.dataset_id == dataset_id)
-                ).all()
-                for c in old_centroids:
-                    db.delete(c)
-                for cid, centroid_vec in enumerate(centroids):
-                    db.add(ClusterCentroid(
-                        dataset_id=dataset_id,
-                        cluster_id=cid,
-                        centroid_blob=centroid_vec.tobytes(),
-                        size=int((labels == cid).sum()),
-                    ))
-
-                # Rareté
-                rarity = clusterer.compute_rarity_scores(embeddings, centroids, labels)
-                for img, score in zip(valid_images, rarity):
-                    img.rarity_score = float(score)
+                method, params = _dataset_cluster_spec(db.get(Dataset, dataset_id), min(orig_n_clusters, len(vecs)))
+                _apply_clustering(db, dataset_id, embeddings, valid_images, method, params)
 
                 ds = db.get(Dataset, dataset_id)
                 ds.umap_cached = True
@@ -2837,6 +2799,10 @@ def _delete_dataset_from_session(dataset_id: int, session: Session) -> None:
         exports = session.exec(select(SubsetExport).where(SubsetExport.subset_id == s.id)).all()
         for exp in exports:
             session.delete(exp)
+        # Le dossier du subset (liens ou copies) sous <workspace>/subsets/ ne doit pas survivre a son dataset.
+        if s.symlink_dir:
+            from backend.core.subset_manager import delete_subset_dir
+            delete_subset_dir(s.symlink_dir)
         session.delete(s)
 
     centroids = session.exec(

@@ -94,7 +94,7 @@ const EXACT_EN: Record<string, string> = {
   'vide = entrainement depuis zero': 'empty = train from scratch',
   'Dataset YOLO': 'YOLO Dataset',
   'Chemin data.yaml': 'data.yaml path',
-  'Nom du run (optionnel)': 'Run name (optional)',
+  'Nom du dataset (optionnel)': 'Dataset name (optional)',
   'Mode orchestrateur — chemin fourni automatiquement.': 'Orchestrator mode - path provided automatically.',
   'En cours...': 'Running...',
   'Lancer': 'Start',
@@ -112,6 +112,31 @@ const EXACT_EN: Record<string, string> = {
   'Run demarre : ': 'Run started: ',
   'Erreur demarrage': 'Start error',
   'Run arrete': 'Run stopped',
+
+  // Libelles des catalogues moteur (groupes et champs du formulaire)
+  'Optimiseur': 'Optimizer',
+  'Intervalle eval (ép.)': 'Eval interval (ep.)',
+  'Intervalle log (iter.)': 'Log interval (iter.)',
+  'LR par image': 'LR per image',
+  'LR min (ratio)': 'Min LR (ratio)',
+  'Proba HSV jitter': 'HSV jitter prob.',
+  'Proba flip': 'Flip prob.',
+  'Proba mosaic': 'Mosaic prob.',
+  'Proba mixup': 'Mixup prob.',
+  'Mixup active': 'Mixup enabled',
+  'Sans mosaic (fin, ép.)': 'No mosaic (final, ep.)',
+  'LR initial': 'Initial LR',
+  'LR final (ratio)': 'Final LR (ratio)',
+  'Poids box': 'Box weight',
+  'Poids cls': 'Cls weight',
+  'Poids dfl': 'DFL weight',
+  'HSV teinte': 'HSV hue',
+  'HSV valeur': 'HSV value',
+  'Echelle': 'Scale',
+  'Proba flip vertical': 'Vertical flip prob.',
+  'Proba flip horizontal': 'Horizontal flip prob.',
+  'Proba copy-paste': 'Copy-paste prob.',
+  'Proba erasing': 'Erasing prob.',
 
   // RunsPage.tsx - AnalysisGallery
   'Matrice de confusion': 'Confusion matrix',
@@ -195,4 +220,30 @@ export function t(fr: string): string {
     if (out.includes(source)) out = out.split(source).join(target)
   }
   return out
+}
+
+// ── Pilotage depuis VisionNexus vs autonome ─────────────────────────────────
+// Quand l'app est lancee par le launcher, ?lang= est la source de verite et
+// rien n'est lu ni ecrit dans le workspace. Hors lanceur (navigateur, dev),
+// la langue se lit/ecrit dans le settings.json du workspace via le backend.
+
+const desktopPiloted = readQueryLang() !== null
+
+export function isDesktopPiloted(): boolean {
+  return desktopPiloted
+}
+
+export async function initWorkspaceLanguage(fetchSettingsLang: () => Promise<Lang | null | undefined>): Promise<void> {
+  if (desktopPiloted) return
+  try {
+    const fromWorkspace = await fetchSettingsLang()
+    if (isLang(fromWorkspace ?? null)) setLang(fromWorkspace as Lang)
+  } catch {
+    // Pas de backend joignable au boot : repli localStorage/anglais.
+  }
+}
+
+export function setLangAndMaybePersist(lang: Lang, persistToWorkspace: (lang: Lang) => void): void {
+  setLang(lang)
+  if (!desktopPiloted) persistToWorkspace(lang)
 }

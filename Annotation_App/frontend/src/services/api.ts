@@ -6,6 +6,7 @@
 
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import { t } from '../i18n/translate'
 import type {
   Annotation,
   AnnotationCreate,
@@ -52,11 +53,11 @@ apiClient.interceptors.response.use(
   (error) => {
     const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
     const message = isTimeout
-      ? 'Le backend ne répond pas (calcul en cours ?) — requête abandonnée'
+      ? t('Le backend ne répond pas (calcul en cours ?) — requête abandonnée')
       : error.response?.data?.detail ??
         error.response?.data?.message ??
         error.message ??
-        'Erreur réseau'
+        t('Erreur réseau')
 
     const now = Date.now()
     const previous = lastToastAt.get(message) ?? 0
@@ -802,7 +803,8 @@ export const trackingAPI = {
   debugHomography: (
     projectId: number,
     frameAId: number,
-    frameBId: number
+    frameBId: number,
+    minInlierRatio?: number
   ) =>
     apiClient
       .get<{
@@ -819,7 +821,7 @@ export const trackingAPI = {
         frame_b_index: number
         error?: string
       }>(`/api/projects/${projectId}/homography/debug`, {
-        params: { frame_a_id: frameAId, frame_b_id: frameBId },
+        params: { frame_a_id: frameAId, frame_b_id: frameBId, min_inlier_ratio: minInlierRatio },
       })
       .then((r) => r.data),
 
@@ -962,6 +964,40 @@ export const samplesAPI = {
 
   get: (id: string) =>
     apiClient.get<SampleSequence>(`/api/samples/sequences/${id}`).then((r) => r.data),
+}
+
+// ---- Documentation markdown (Annotation_App/docs/, page /presentation) ----
+
+export type DocLang = 'en' | 'fr'
+
+export interface DocPageInfo {
+  name: string
+  title: string
+  order: number
+  audience: 'user' | 'dev' | 'both'
+  doc_type: string
+  langs: DocLang[]
+}
+
+export interface DocPage {
+  name: string
+  lang: DocLang
+  title: string
+  frontmatter: Record<string, string | number | string[]>
+  body: string
+}
+
+export const docsAPI = {
+  list: (lang: DocLang) =>
+    apiClient.get<DocPageInfo[]>('/api/docs', { params: { lang } }).then((r) => r.data),
+
+  get: (name: string, lang: DocLang) =>
+    apiClient
+      .get<DocPage>(`/api/docs/${encodeURIComponent(name)}`, { params: { lang } })
+      .then((r) => r.data),
+
+  // Chemin relatif au dossier docs/assets/, tel qu'ecrit dans le markdown.
+  getAssetUrl: (path: string) => `${BASE_URL}/api/docs/assets/${path}`,
 }
 
 export const settingsAPI = {

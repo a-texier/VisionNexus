@@ -1,8 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
+<!-- lang= et tout le texte de cette page sont mis a jour en direct par i18n.js
+     (cvApplyI18n) : la fenetre s'ouvre dans la langue de VisionNexus (query
+     ?lang=) et garde ensuite son propre bouton FR/EN local, comme les apps. -->
 <head>
 <meta charset="UTF-8">
-<title>VisionNexus — Documentation</title>
+<title>VisionNexus - Documentation</title>
 <style>
 :root{
   color-scheme: dark;
@@ -26,7 +29,6 @@ pre{
   overflow-x:auto; font-family:var(--mono); font-size:12.5px; color:#a9c1e0; line-height:1.6;
 }
 pre code{background:none; border:none; padding:0; color:inherit;}
-.wrap{max-width:880px; margin:0 auto; padding:0 24px;}
 header.hero{padding:40px 24px 24px; text-align:center;}
 .kicker{
   display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
@@ -46,52 +48,49 @@ h1.title{
   font-weight:700; font-size:12.5px; padding:9px 20px; border-radius:9px; cursor:pointer;
 }
 .docTabs button.active{color:#fff; border-color:var(--blue); background:rgba(88,166,255,.12);}
-
-nav.toc{
-  position:sticky; top:0; z-index:50; backdrop-filter:blur(14px); background:rgba(10,14,20,.85);
-  border-bottom:1px solid var(--border); padding:10px 0;
+#docsLangToggle{position:fixed; top:14px; right:18px; z-index:60; display:flex; gap:4px;}
+#docsLangToggle button{
+  appearance:none; border:1px solid var(--border); background:var(--panel2); color:var(--muted);
+  font-weight:700; font-size:11px; padding:6px 12px; border-radius:7px; cursor:pointer;
 }
-nav.toc .inner{max-width:880px; margin:0 auto; padding:0 24px; display:flex; gap:4px; overflow-x:auto;}
-nav.toc a{white-space:nowrap; color:var(--muted); text-decoration:none; font-size:12.5px; font-weight:600; padding:6px 11px; border-radius:7px;}
-nav.toc a:hover{color:var(--text); background:var(--panel2);}
-section{padding:40px 0; border-bottom:1px solid var(--border); scroll-margin-top:60px;}
-section:last-of-type{border-bottom:none;}
-.eyebrow{color:var(--blue); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin:0 0 8px;}
+#docsLangToggle button.active{color:#fff; border-color:var(--blue); background:rgba(88,166,255,.14);}
+
+/* ---- Barre de navigation : historique + resultats de recherche ---- */
+#navBar{
+  position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:8px 110px 8px 18px; background:rgba(11,16,26,.94); border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--muted);
+}
+#navBar button{
+  appearance:none; border:1px solid var(--border); background:var(--panel2); color:var(--text);
+  border-radius:7px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;
+}
+#navBar button:hover:not(:disabled){border-color:var(--blue);}
+#navBar button:disabled{opacity:.35; cursor:default;}
+#navBar button[hidden], #navBar span[hidden]{display:none;}
+#navBar .navSep{width:1px; height:18px; background:var(--border);}
+#navResult{display:flex; align-items:center; gap:8px; min-width:0;}
+#navResCount{color:var(--text); font-weight:700; white-space:nowrap;}
+#navResTitle{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:34ch;}
+.askRecent{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-4px 0 12px; font-size:11.5px; color:var(--muted2);}
+.askRecent .chip{padding:3px 10px; font-size:11.5px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.askRecent .clearRecent{background:none; border:none; color:var(--muted2); text-decoration:underline; cursor:pointer; font:inherit; padding:0 4px;}
+
 h2{font-size:clamp(21px,3vw,27px); margin:0 0 12px; letter-spacing:-0.01em; font-weight:800;}
 h3{font-size:16.5px; margin:22px 0 8px; color:#eef2f9;}
 p{color:#b9c4d6; margin:0 0 14px;}
 ul,ol{color:#b9c4d6; padding-left:20px;}
 li{margin-bottom:6px;}
 strong{color:#fff;}
-.card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:16px 0;}
-.card.note{border-left:3px solid var(--blue);}
-.card.warn{border-left:3px solid var(--amber);}
-.card.fix{border-left:3px solid var(--green);}
-.card h4{margin:0 0 6px; font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
-.grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
-@media (max-width:680px){.grid2{grid-template-columns:1fr;}}
 table{width:100%; border-collapse:collapse; margin:16px 0; font-size:13px;}
 th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border);}
 th{color:var(--muted); font-weight:700; font-size:11px; text-transform:uppercase;}
 td{color:#c3cee0;}
-.tag{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; background:rgba(88,166,255,.12); color:var(--blue); border:1px solid rgba(88,166,255,.3);}
-.tag.green{background:rgba(63,185,80,.12); color:var(--green); border-color:rgba(63,185,80,.3);}
-.tag.red{background:rgba(248,81,73,.12); color:var(--red); border-color:rgba(248,81,73,.3);}
-.tag.amber{background:rgba(227,179,65,.12); color:var(--amber); border-color:rgba(227,179,65,.3);}
-.stage{background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px 18px; margin:18px 0;}
-.steps{counter-reset:step; list-style:none; padding:0;}
-.steps li{counter-increment:step; position:relative; padding-left:38px; margin-bottom:16px; color:#b9c4d6;}
-.steps li::before{
-  content:counter(step); position:absolute; left:0; top:0; width:26px; height:26px; border-radius:50%;
-  background:var(--panel2); border:1.5px solid var(--blue); color:var(--blue); font-weight:800; font-size:12px;
-  display:flex; align-items:center; justify-content:center;
-}
 footer{padding:40px 24px 70px; text-align:center; color:var(--muted2); font-size:12.5px;}
 
 /* ---- Onglet Apps ---- */
 #appsPanel{display:none;}
 #appsPanel.active{display:block;}
-#stackPanel.hidden{display:none;}
 .appsLayout{display:flex; max-width:1080px; margin:0 auto; padding:24px; gap:0; align-items:flex-start;}
 #appList{width:210px; flex-shrink:0; display:flex; flex-direction:column; gap:4px; position:sticky; top:70px;}
 #appList button{
@@ -118,376 +117,497 @@ footer{padding:40px 24px 70px; text-align:center; color:var(--muted2); font-size
   color:#c3cee0; border-radius:0 6px 6px 0;
 }
 #appDocBody hr{border:none; border-top:1px solid var(--border); margin:26px 0;}
+#appDocBody h4{font-size:13.5px; margin:16px 0 6px; color:#eef2f9;}
+#appDocBody [id^="h-"]{scroll-margin-top:16px;}
+#appDocBody li > ul, #appDocBody li > ol{margin:6px 0 0;}
+#appDocBody li > p{margin:0 0 6px;}
+#appDocBody table{display:block; width:max-content; max-width:100%; overflow-x:auto;}
+#appDocBody td code, #appDocBody th code{white-space:nowrap;}
+#appDocBody img{max-width:100%;}
+#appDocBody .imgAlt{color:var(--muted2);}
 .emptyState{color:var(--muted2); font-size:13.5px; padding:30px 0;}
+#appDocBody .hFlash{animation:hFlash 1.6s ease-out;}
+@keyframes hFlash{0%{background:rgba(45,212,191,.28);}100%{background:transparent;}}
+
+/* ---- Onglet "Demander a la doc" ---- */
+[hidden]{display:none !important;}
+#askPanel{display:none;}
+#askPanel.active{display:block;}
+.askWrap{max-width:880px; margin:0 auto; padding:24px 24px 40px;}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;}
+.svcBar{
+  display:flex; align-items:center; gap:12px; min-height:56px; padding:10px 14px;
+  background:var(--panel); border:1px solid var(--border); border-radius:12px;
+}
+.svcBar > img{width:30px; height:30px; object-fit:contain; flex-shrink:0;}
+.svcInfo{flex:1; min-width:0;}
+.svcName{font-weight:700; font-size:13.5px; color:#fff; line-height:1.3;}
+.svcMeta{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); min-width:0; flex-wrap:wrap;}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--muted2); flex-shrink:0;}
+.dot.starting, .dot.stopping{background:var(--blue); animation:pulse 1s ease-in-out infinite;}
+.dot.ready{background:var(--green); box-shadow:0 0 6px rgba(63,185,80,.6);}
+.dot.error{background:var(--red);}
+.targetChip{
+  font-size:10.5px; font-weight:700; color:var(--teal); background:rgba(45,212,191,.1);
+  border:1px solid rgba(45,212,191,.3); padding:1px 8px; border-radius:20px;
+}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.linkBtn{background:none; border:none; padding:0 2px; color:var(--accent, #58a6ff); font:inherit; font-size:11.5px; cursor:pointer; text-decoration:underline;}
+.linkBtn:disabled{opacity:.5; cursor:default; text-decoration:none;}
+.switch{
+  position:relative; flex-shrink:0; width:44px; height:24px; padding:0; border-radius:12px; cursor:pointer;
+  border:1px solid var(--border); background:var(--panel2); transition:background .15s, border-color .15s;
+}
+.switch::after{
+  content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+  background:var(--muted); transition:left .15s, background .15s;
+}
+.switch[aria-checked="true"]{background:rgba(63,185,80,.22); border-color:rgba(63,185,80,.55);}
+.switch[aria-checked="true"]::after{left:22px; background:var(--green);}
+.switch:disabled{opacity:.5; cursor:default;}
+.switch:focus-visible, .chip:focus-visible, .seg button:focus-visible, .hitOpen:focus-visible,
+.twinLink:focus-visible, .primary:focus-visible, #askInput:focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
+.svcHint{
+  margin-top:8px; padding:8px 12px; font-size:12px; color:var(--amber);
+  background:rgba(227,179,65,.08); border:1px solid rgba(227,179,65,.3); border-radius:8px;
+}
+.askState{
+  margin-top:18px; padding:40px 22px; text-align:center; background:var(--panel);
+  border:1px dashed var(--border); border-radius:14px;
+}
+.askState.err{border-color:rgba(248,81,73,.45);}
+.askState h3{margin:0 0 8px; font-size:16.5px; color:#fff;}
+.askState p{margin:0 auto 10px; max-width:520px; font-size:13.5px; color:var(--muted);}
+.askState p.target{color:var(--teal); font-weight:600; font-size:12.5px;}
+.askState p.errMsg{color:#f0a19c; overflow-wrap:anywhere;}
+.spin{
+  width:24px; height:24px; margin:0 auto 14px; border-radius:50%;
+  border:3px solid var(--panel2); border-top-color:var(--blue); animation:spin .8s linear infinite;
+}
+.primary{
+  appearance:none; border:none; cursor:pointer; margin-top:6px; padding:9px 22px; border-radius:9px;
+  background:var(--blue); color:#031627; font-weight:700; font-size:13px;
+}
+.primary:hover{filter:brightness(1.1);}
+.primary:disabled{opacity:.5; cursor:default;}
+.askForm{display:flex; gap:8px; margin:18px 0 14px;}
+#askInput{
+  flex:1; min-width:0; padding:11px 14px; font-size:14.5px; color:var(--text);
+  background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+}
+#askInput::placeholder{color:var(--muted2);}
+.askForm .primary{margin-top:0; flex-shrink:0;}
+.askFilters{display:flex; flex-wrap:wrap; gap:12px 26px; align-items:flex-start;}
+.filterGroup{display:flex; flex-direction:column; gap:6px; min-width:0;}
+.filterGroup.apps{flex:1 1 100%;}
+.filterLabel{font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted2);}
+.chips{display:flex; flex-wrap:wrap; gap:6px; min-height:30px;}
+.chip{
+  appearance:none; display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:20px;
+  border:1px solid var(--border); background:var(--panel); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer;
+}
+.chip img{width:14px; height:14px; object-fit:contain;}
+.chip:hover{color:var(--text); background:var(--panel2);}
+.chip[aria-pressed="true"]{color:#fff; border-color:var(--blue); background:rgba(88,166,255,.14);}
+.seg{display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--panel);}
+.seg button{
+  appearance:none; border:none; background:none; color:var(--muted); font-size:12px; font-weight:600;
+  padding:6px 13px; cursor:pointer; border-right:1px solid var(--border);
+}
+.seg button:last-child{border-right:none;}
+.seg button:hover{color:var(--text); background:var(--panel2);}
+.seg button[aria-pressed="true"]{color:#fff; background:rgba(88,166,255,.16);}
+.askNote{
+  margin:12px 0 0; padding:8px 12px; font-size:12.5px; color:var(--amber);
+  background:rgba(227,179,65,.08); border:1px solid rgba(227,179,65,.3); border-radius:8px;
+}
+.askNote.low{color:#f0c674; background:rgba(227,179,65,.06);}
+.askState .errDetail{margin:10px auto 0; max-width:560px; text-align:left; font-size:11.5px; color:var(--muted);}
+.askState .errDetail summary{cursor:pointer; color:var(--muted); text-align:center;}
+.askState .errDetail pre{margin:8px 0 0; padding:8px 10px; white-space:pre-wrap; overflow-wrap:anywhere;}
+.askMeta{margin:14px 0 2px; min-height:20px; font-size:12px; color:var(--muted);}
+.askInitial{margin:26px 0; text-align:center; color:var(--muted2); font-size:13.5px;}
+.askErr{
+  margin:12px 0; padding:10px 14px; font-size:13px; color:#f0a19c;
+  background:rgba(248,81,73,.08); border:1px solid rgba(248,81,73,.35); border-radius:8px; overflow-wrap:anywhere;
+}
+.askEmpty{margin:22px 0; padding:26px 22px; text-align:center; border:1px dashed var(--border); border-radius:12px;}
+.askEmpty h3{margin:0 0 8px; font-size:15.5px; color:#fff; overflow-wrap:anywhere;}
+.askEmpty p{margin:0 auto; max-width:540px; font-size:13px; color:var(--muted);}
+.hit{background:var(--panel); border:1px solid var(--border); border-radius:12px; margin:10px 0; transition:border-color .12s;}
+.hit:hover{border-color:rgba(88,166,255,.45);}
+.hitOpen{
+  appearance:none; display:block; width:100%; padding:13px 16px 10px; border:none; background:none; color:inherit;
+  font:inherit; text-align:left; cursor:pointer; border-radius:12px;
+}
+.hitHead{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+.hitHead img{width:18px; height:18px; object-fit:contain;}
+.hitApp{font-size:12px; font-weight:700; color:var(--blue);}
+.langBadge{
+  font-size:9.5px; font-weight:800; letter-spacing:.05em; color:var(--muted); padding:1px 6px;
+  border:1px solid var(--border); border-radius:6px;
+}
+.hitScore{margin-left:auto; width:64px; height:5px; border-radius:3px; background:var(--panel2); overflow:hidden; flex-shrink:0;}
+.hitScore i{display:block; height:100%; background:var(--teal); border-radius:3px;}
+.hitTitle{font-size:15px; font-weight:700; color:#fff; line-height:1.35; overflow-wrap:anywhere;}
+.hitCrumb{display:flex; flex-wrap:wrap; align-items:center; margin-top:3px; font-size:12px; color:var(--muted);}
+.hitCrumb span + span::before{
+  content:''; display:inline-block; width:5px; height:5px; margin:0 9px 1px 5px;
+  border-top:1.5px solid var(--muted2); border-right:1.5px solid var(--muted2); transform:rotate(45deg);
+}
+.hitSnippet{margin:8px 0 0; font-size:13.5px; line-height:1.55; color:#b9c4d6; overflow-wrap:anywhere;}
+.hitSnippet mark{background:rgba(227,179,65,.22); color:#ffe9a8; border-radius:3px; padding:0 2px;}
+.hitTwin{padding:0 16px 11px;}
+.twinLink{
+  appearance:none; border:none; background:none; padding:0; cursor:pointer; color:var(--teal);
+  font-size:12px; font-weight:600; text-decoration:underline; text-underline-offset:3px;
+}
+.twinLink:hover{color:#7ff0df;}
+/* ---- Recherche dans la page (Ctrl+F) ---- */
+#findBar{
+  position:fixed; top:52px; right:18px; z-index:60; display:flex; align-items:center; gap:6px;
+  padding:6px 8px; background:var(--panel); border:1px solid var(--border); border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.45);
+}
+#findInput{
+  width:220px; padding:6px 10px; font-size:13px; color:var(--text); font-family:inherit;
+  background:var(--panel2); border:1px solid var(--border); border-radius:7px; outline:none;
+}
+#findInput:focus{border-color:var(--blue);}
+#findInput.none{border-color:rgba(248,81,73,.6);}
+#findInput::placeholder{color:var(--muted2);}
+#findCount{min-width:44px; text-align:center; font-size:12px; font-weight:700; color:var(--muted); white-space:nowrap;}
+#findBar button{
+  appearance:none; border:1px solid var(--border); background:var(--panel2); color:var(--text);
+  border-radius:7px; width:28px; height:28px; padding:0; font-size:13px; cursor:pointer; font-family:inherit;
+}
+#findBar button:hover:not(:disabled){border-color:var(--blue);}
+#findBar button:disabled{opacity:.35; cursor:default;}
+mark.findHit{background:rgba(227,179,65,.3); color:inherit; border-radius:2px;}
+mark.findHit.cur{background:var(--amber); color:#1a1300;}
+@media (max-width:680px){
+  #findBar{left:14px; right:14px;}
+  #findInput{flex:1; width:auto; min-width:0;}
+  .askWrap{padding:16px 14px 32px;}
+  .askForm{flex-wrap:wrap;}
+  .askForm #askInput{flex:1 1 100%;}
+  .askForm .primary{flex:1;}
+  .filterGroup{flex:1 1 100%;}
+}
+@media (prefers-reduced-motion:reduce){
+  .spin, .dot.starting, .dot.stopping, #appDocBody .hFlash{animation:none;}
+}
 </style>
 </head>
 <body>
 
+<div id="docsLangToggle">
+  <button type="button" id="docsLangEn">EN</button>
+  <button type="button" id="docsLangFr">FR</button>
+</div>
 <header class="hero">
-  <div class="kicker">VisionNexus · documentation</div>
-  <h1 class="title">Comment ça marche, et pourquoi</h1>
-  <p class="subtitle">Electron, partage réseau natif, gestion des ports, différences avec VisionNexus — et la doc de chaque app du catalogue, au même endroit.</p>
+  <div class="kicker" data-i18n="docsKicker">VisionNexus - documentation</div>
+  <h1 class="title" data-i18n="docsTitle">Documentation</h1>
+  <p class="subtitle" data-i18n="docsSubtitle">La documentation de VisionNexus et de chaque app de la suite, avec une recherche pour poser une question.</p>
   <div class="docTabs">
-    <button id="tabStack" class="active">Stack &amp; architecture</button>
-    <button id="tabApps">Docs par app</button>
+    <button id="tabApps" class="active" data-i18n="docsTabApps">Docs par app</button>
+    <button id="tabAsk" data-i18n="docsTabAsk">Demander a la doc</button>
   </div>
 </header>
 
-<div id="stackPanel">
-<nav class="toc">
-  <div class="inner">
-    <a href="#flux">Le flux</a>
-    <a href="#diff">Vs VisionNexus</a>
-    <a href="#ports">Les ports</a>
-    <a href="#electron">Electron</a>
-    <a href="#packaging">Empaquetage (exe)</a>
-    <a href="#reseau">Chemin natif</a>
-    <a href="#besoin">De quoi j'ai besoin</a>
-    <a href="#etendre">Étendre à une autre app</a>
-  </div>
+<nav id="navBar">
+  <button type="button" id="navBack" disabled></button>
+  <button type="button" id="navFwd" disabled></button>
+  <span class="navSep" id="navSep" hidden></span>
+  <button type="button" id="navToResults" hidden></button>
+  <span id="navResult" hidden>
+    <button type="button" id="navPrevRes"></button>
+    <span id="navResCount"></span>
+    <button type="button" id="navNextRes"></button>
+    <span id="navResTitle"></span>
+  </span>
 </nav>
 
-<div class="wrap">
-
-<section id="flux">
-  <div class="eyebrow">01</div>
-  <h2>Le flux, étape par étape</h2>
-  <ol class="steps">
-    <li><strong>Fenêtre catalogue</strong> — grille d'apps + Paramètres, toujours visibles côte à côte. Réglages stockés dans <code>%APPDATA%\VisionNexusElectron\settings.json</code> — indépendant de VisionNexus.</li>
-    <li><strong>Clic sur une app</strong> — lance <code>cmd.exe /c cd /d ... && python launcher.py --app &lt;id&gt; ...</code> en local, ou <code>ssh -t &lt;vm&gt; "... python launcher.py --app &lt;id&gt; ..."</code> sur une VM. Exactement la commande que VisionNexus construit. Aucun raccourci, aucune réimplémentation de la logique de lancement elle-même.</li>
-    <li><strong>Lecture des ports réels</strong> — <code>launcher.py</code> annonce toujours ses ports sur sa sortie (<code>[config] backend = http://localhost:XXXX</code>). Ce lanceur les lit en direct, jamais de port supposé à l'avance.</li>
-    <li><strong>Tunnel</strong> (VM uniquement) — une deuxième connexion SSH pure (<code>-N -L</code>) s'ouvre une fois les vrais ports connus.</li>
-    <li><strong>Attente</strong> — sonde <code>http://127.0.0.1:&lt;port&gt;</code> jusqu'à réponse.</li>
-    <li><strong>Onglet docké</strong> — l'app s'ouvre comme un onglet dans la fenêtre catalogue (logo + nom visibles dans la barre, à côté de l'onglet "VisionNexus"), badge "Natif"/"HTTP (repli)" en haut à droite pour les apps compatibles (cf. <a href="#reseau">Chemin natif</a>). Glisser l'onglet hors de la barre le détache dans sa propre fenêtre Windows (avec sa propre icône dans la barre des tâches) — le repos­itionner n'est pas nécessaire, juste le lâcher en dehors suffit.</li>
-  </ol>
-  <div class="card note">
-    <h4>Fermeture &amp; logs</h4>
-    <p style="margin:0;">Fermer un onglet (croix) ou la fenêtre détachée tue les process associés (lancement + tunnel) — l'app distante s'arrête, même mécanique que fermer le terminal de VisionNexus. Chaque lancement écrit un log complet (stdout+stderr bruts, jamais tronqué) dans <code>%APPDATA%\VisionNexusElectron\logs\</code> — bouton "Logs" dans le catalogue pour ouvrir le dossier directement.</p>
-  </div>
-</section>
-
-<section id="diff">
-  <div class="eyebrow">02</div>
-  <h2>Différence avec VisionNexus</h2>
-  <table>
-    <thead><tr><th></th><th>VisionNexus.exe</th><th>VisionNexusElectron.exe</th></tr></thead>
-    <tbody>
-      <tr><td>Langage</td><td>C# / WPF</td><td>TypeScript / Electron</td></tr>
-      <tr><td>Déclenche launcher.py</td><td>Oui</td><td>Oui — <strong>même commande</strong></td></tr>
-      <tr><td>Sortie de launcher.py</td><td>Terminal visible</td><td>Log dans sa propre fenêtre + fichier persistant</td></tr>
-      <tr><td>Ouverture de l'app</td><td>Manuelle (navigateur)</td><td>Automatique, onglet docké (détachable en fenêtre séparée par glisser-déposer, icône propre dans la barre des tâches une fois détaché)</td></tr>
-      <tr><td>Tunnel SSH</td><td>À ouvrir à part</td><td>Automatique</td></tr>
-      <tr><td>Pixels (Annotation, Dataset Explorer)</td><td>HTTP</td><td>Chemin natif si configuré+joignable, repli HTTP sinon — visible (badge)</td></tr>
-      <tr><td>Réglages</td><td><code>%APPDATA%\VisionNexus\</code></td><td><code>%APPDATA%\VisionNexusElectron\</code> (séparé)</td></tr>
-      <tr><td>Prérequis machine</td><td>.NET 9 Desktop Runtime</td><td>Aucun (runtime embarqué)</td></tr>
-    </tbody>
-  </table>
-  <p>Aucun des deux ne remplace l'autre — deux chemins indépendants vers le même résultat (une app qui tourne, accessible en local).</p>
-</section>
-
-<section id="ports">
-  <div class="eyebrow">03</div>
-  <h2>Gestion des ports</h2>
-  <p class="lead">Confirmé en lisant <code>_lib/launcher_engine.py</code> : les ports sont alloués dynamiquement (<code>find_free_port()</code>), <strong>sauf</strong> si <code>--backend-port</code>/<code>--frontend-port</code> sont passés explicitement — auquel cas <strong>aucune vérification de collision n'est faite</strong>.</p>
-  <div class="card warn">
-    <h4>Conséquence sur la conception</h4>
-    <p style="margin:0;">Le catalogue contient des ports <em>par défaut</em> (affichage seulement) — ils ne sont <strong>jamais</strong> envoyés à <code>launcher.py</code>. Le port réellement utilisé est toujours celui que <code>launcher.py</code> annonce lui-même. Ça permet plusieurs instances en parallèle sans collision, comme pour n'importe quel autre client (terminal manuel, VisionNexus).</p>
-  </div>
-</section>
-
-<section id="electron">
-  <div class="eyebrow">04</div>
-  <h2>Electron — principe et pourquoi ce choix</h2>
-  <p>Electron empaquette Chromium (moteur du navigateur) + un runtime Node.js dans un exécutable autonome. Le process <strong>main</strong> (tout ce qui est dans <code>src/</code>) a accès au système — fichiers, réseau, sous-process. Le process <strong>renderer</strong> (ce qui s'affiche, le frontend React d'une app) tourne dans une sandbox Chromium standard, sans accès système direct — même posture de sécurité qu'un onglet de navigateur (<code>contextIsolation</code>, <code>sandbox</code>, <code>nodeIntegration: false</code> partout dans ce projet).</p>
-
-  <div class="grid2">
-    <div class="card fix">
-      <h4>Pourquoi pas une réécriture native (Qt/PySide, à la FrameViewer)</h4>
-      <p style="margin:0;">Il faudrait soit embarquer <code>QWebEngineView</code> (= encore un Chromium complet, aucune économie), soit réécrire tout le canvas Konva, les stores Zustand, la timeline, les 4 onglets de tracking d'Annotation App en widgets Qt — plusieurs mois, pour un frontend web qui fonctionne déjà.</p>
-    </div>
-    <div class="card fix">
-      <h4>Pourquoi pas Tauri (Rust)</h4>
-      <p style="margin:0;">Les modules à vraie valeur d'ingénierie (découverte de ports, tunnel SSH, protocole image custom avec repli HTTP) sont déjà écrits et fonctionnels en TypeScript. Les réécrire en Rust n'ajoute aucune capacité, juste du travail de traduction, pour un gain de taille de binaire (~10-20 Mo au lieu de ~150 Mo) sans enjeu réel sur un outil interne.</p>
-    </div>
-  </div>
-
-  <h3>Comparé à "juste du React + Vite"</h3>
-  <p>Un frontend React/Vite classique tourne <strong>dans un onglet de navigateur</strong> — sandbox complète, aucun accès au système de fichiers, aucune capacité réseau au-delà de ce que le navigateur autorise (HTTP/WebSocket vers le serveur). Electron garde exactement ce même frontend (chargé tel quel via <code>loadURL</code>), mais l'entoure d'un <strong>process natif</strong> qui, lui, peut :</p>
-  <ul>
-    <li>Lire un fichier directement sur un partage réseau monté (SMB ou autre) — impossible pour un onglet de navigateur classique, sandbox oblige.</li>
-    <li>Piloter des sous-process (SSH, tunnels) sans dépendre d'un terminal externe.</li>
-    <li>S'épingler, avoir sa propre icône par app, se comporter comme une app installée — pas un onglet parmi d'autres.</li>
-  </ul>
-  <p>Le frontend React/Vite lui-même <strong>ne change pas</strong> — c'est la coquille autour qui change ce qu'il est capable de faire.</p>
-
-  <h3>Et Chromium/HTTP tout seul, sans le chemin fichier natif ?</h3>
-  <p>Une partie du gain est <strong>indépendante</strong> du chemin fichier natif décrit plus bas — elle vient juste du fait qu'Electron sert le frontend depuis une fenêtre native plutôt qu'un onglet public :</p>
-  <ul>
-    <li><strong>La limite de 6 connexions simultanées par origine</strong> (HTTP/1.1, imposée par le navigateur) s'applique <em>toujours</em> à Chromium dans Electron — ce n'est pas une sandbox de navigateur qui disparaît, c'est le même moteur de rendu. Un onglet classique et une fenêtre Electron sont logés à la même enseigne sur ce point précis.</li>
-    <li>Le vrai levier disponible <em>sans toucher au backend</em> serait de servir les images en <strong>HTTP/2</strong> (multiplexage natif, une seule connexion TCP, des dizaines de flux en parallèle — plus de plafond à 6) si le serveur (uvicorn) et le tunnel le permettent. Non exploité aujourd'hui : uvicorn tourne en HTTP/1.1 simple, et le tunnel SSH ajoute de toute façon une latence par requête que HTTP/2 seul ne supprime pas.</li>
-    <li>C'est <strong>précisément</strong> pour ça que le chemin natif (section suivante) a plus de valeur ici qu'un simple passage HTTP/2 : il ne contourne pas juste la limite de connexions, il contourne <strong>le tunnel SSH lui-même</strong> pour les pixels — HTTP/2 seul ne l'aurait pas fait.</li>
-  </ul>
-</section>
-
-<section id="packaging">
-  <div class="eyebrow">05</div>
-  <h2>Empaquetage — comment Node/Electron devient un .exe</h2>
-  <p><code>electron-builder</code> (déjà en <code>devDependencies</code>) fait trois choses pour produire <code>VisionNexusElectron.exe</code> :</p>
-  <ol class="steps">
-    <li><strong>Compile</strong> tout <code>src/*.ts</code> en JS (<code>tsc</code>, cf. <code>npm run build</code>) dans <code>dist/</code>.</li>
-    <li><strong>Empaquette</strong> <code>dist/</code> + <code>ui/</code> + <code>assets/</code> dans une archive <code>asar</code> (un seul fichier, lecture rapide, pas modifiable en clic-droit) — voir <code>"files"</code>/<code>"extraResources"</code> dans <code>package.json</code>.</li>
-    <li><strong>Colle</strong> cet asar avec un binaire Electron précompilé pour Windows (Chromium + Node.js déjà liés ensemble par le projet Electron, télécharge une seule fois via <code>devDependencies</code>) — résultat : un seul <code>.exe</code> "portable" (<code>target: "portable"</code> dans <code>package.json</code>), aucune installation, aucun runtime à poser sur la machine cible.</li>
-  </ol>
-  <div class="card note">
-    <h4>Pourquoi c'est ~150 Mo pour un outil aussi simple</h4>
-    <p style="margin:0;">Chromium complet + Node.js sont embarqués dans chaque exe Electron, indépendamment de la taille du code applicatif (quelques centaines de Ko ici). C'est le compromis du choix Electron (cf. section 04) — accepté sciemment, l'outil restant strictement interne.</p>
-  </div>
-
-  <h3>Rebuild l'exe Windows (copier-coller)</h3>
-  <pre><code>cd Computer_Vision_App\desktop
-npm install
-npm run dist:win</code></pre>
-  <p>Sort dans <code>desktop\release\VisionNexusElectron.exe</code>. <code>desktop\release\win-unpacked\</code> est juste le dossier de build intermédiaire non compressé (peut faire 250+ Mo) — pas un livrable, supprimable sans risque, régénéré à chaque build.</p>
-
-  <h3>Un exe Linux, avec le même code ?</h3>
-  <p>Oui, sans réécrire la moindre ligne de <code>src/</code> — <code>electron-builder</code> supporte nativement les cibles Linux (<code>AppImage</code>, <code>.deb</code>, <code>.snap</code>...). La config et le script sont déjà en place :</p>
-  <pre><code># A LANCER SUR UNE MACHINE LINUX (ou WSL2) -- cross-compiler depuis
-# Windows fonctionne parfois mais est fragile (deps natives, symlinks).
-cd Computer_Vision_App/desktop
-npm install
-npm run dist:linux</code></pre>
-  <p>Sort un <code>.AppImage</code> dans <code>desktop/release/</code> — un seul fichier executable (<code>chmod +x</code> puis lancer directement), aucune installation.</p>
-  <table>
-    <thead><tr><th></th><th>Détail</th></tr></thead>
-    <tbody>
-      <tr><td>Icône</td><td>Format <code>.png</code> (<code>assets/logo.png</code>, 256×256) au lieu de <code>.ico</code> — <code>assets/app.ico</code> ne sert qu'à la cible Windows.</td></tr>
-      <tr><td>Le code métier (<code>src/</code>)</td><td>Zéro changement — <code>child_process.spawn</code>, chemins, IPC sont déjà cross-platform ; seul <code>windowsVerbatimArguments</code>/le <code>cmd.exe</code> du lancement local sont Windows-only et resteraient dans une branche déjà conditionnelle (<code>if (selectedVm)</code> vs sinon).</td></tr>
-    </tbody>
-  </table>
-  <div class="card warn">
-    <h4>Utilité réelle ici</h4>
-    <p style="margin:0;">Ce lanceur pilote des commandes <em>locales</em> Windows (<code>cmd.exe</code>) ou <em>SSH vers une VM Linux</em> — sur les deux chemins, la machine qui exécute ce lanceur est aujourd'hui toujours Windows. Un exe Linux n'aurait de sens que si quelqu'un veut lancer ce catalogue depuis un poste Linux (station de dev Linux, autre VM en libre-service...) — la config est prête, mais pas un besoin actuel identifié.</p>
-  </div>
-</section>
-
-<section id="reseau">
-  <div class="eyebrow">06</div>
-  <h2>Chemin natif (partage réseau) — générique, pas figé à un nom d'hôte</h2>
-  <p>Historiquement, le nom d'hôte du partage réseau n'existait que <strong>dans les réglages internes de chaque app</strong> (<code>native_share_host</code>, propre à Annotation App, Inference App...) — invisible depuis ce lanceur, aucun moyen de savoir si le partage était joignable avant qu'une app échoue silencieusement dessus.</p>
-  <p>Paramètres → <strong>"Partage réseau natif"</strong> centralise ça côté lanceur : un champ générique (n'importe quel nom d'hôte, SMB ou autre protocole de fichiers monté côté Windows), testé à la demande (bouton "Tester") avec un statut <span class="tag green">joignable</span> / <span class="tag red">injoignable</span> et la liste des zones (partages) détectées. Rien n'est supposé : champ vide par défaut, aucune app ne tente le chemin natif tant qu'il n'est pas rempli <em>et</em> vérifié joignable.</p>
-
-  <div class="stage">
-    <p style="margin:0 0 10px; color:var(--text);">Mécanique (<code>desktop/src/imageProtocol.ts</code>) — protocole custom <code>app-image://native/?imagePath=...&amp;fallback=...</code>, générique, aucune app en dur dedans :</p>
-    <ol style="margin:0;">
-      <li>Le frontend de l'app fournit lui-même les <strong>deux</strong> urls absolues (il connaît son propre backend) : celle du petit endpoint JSON <code>.../xxx-path</code> et celle de l'endpoint HTTP classique en repli.</li>
-      <li>Si le partage est marqué joignable : GET sur <code>imagePath</code> (sur le tunnel déjà ouvert, coût négligeable) → <code>{"native_path": "\\\\hote\\partage\\..."}</code> ou <code>null</code>.</li>
-      <li>Si présent : lecture directe du fichier (<code>fs.readFile</code>), <strong>hors</strong> tunnel SSH — c'est le gain.</li>
-      <li>Repli automatique et <strong>visible</strong> (badge en haut à droite de la fenêtre de l'app : <span class="tag green">Natif</span> ou <span class="tag amber">HTTP (repli)</span>, tooltip avec la raison) dès qu'une étape échoue — jamais d'image cassée, jamais un repli silencieux.</li>
-    </ol>
-  </div>
-
-  <p>Pourquoi c'est plus rapide quand c'est actif : un navigateur classique est limité à <strong>6 connexions simultanées par origine</strong> (HTTP/1.1, cf. section Electron ci-dessus), et chaque requête image passe par le tunnel SSH (latence + bande passante partagée avec tout le reste). Un partage de fichiers n'a pas cette limite façon navigateur, pas de JSON par image, une session authentifiée une fois, lecture quasi directe.</p>
-
-  <table>
-    <thead><tr><th>App</th><th>Statut</th><th>Endpoints natifs</th></tr></thead>
-    <tbody>
-      <tr><td>Annotation App</td><td><span class="tag green">SMB / HTTP</span></td><td><code>/api/frames/{id}/image-path</code></td></tr>
-      <tr><td>Dataset Explorer</td><td><span class="tag green">SMB / HTTP</span></td><td><code>/api/images/{id}/thumb-path</code>, <code>/api/datasets/{id}/images/{id}/full-path</code></td></tr>
-      <tr><td>Autres apps du catalogue</td><td><span class="tag">HTTP normal</span></td><td>Pas d'endpoint natif — pas de gain identifié (pas de flux d'images volumineux comparable)</td></tr>
-    </tbody>
-  </table>
-
-  <div class="card warn">
-    <h4>État réel</h4>
-    <p style="margin:0;">Le serveur de partage côté VM n'est pas forcément déjà configuré. Le code client suppose un partage déjà accessible (comme celui qu'utilise déjà "Ouvrir dans l'explorateur" de VisionNexus). Si l'hôte configuré ne répond pas, le badge affiche "HTTP (repli)" et tout continue de fonctionner, juste sans le gain de vitesse tant que ce n'est pas en place.</p>
-  </div>
-</section>
-
-<section id="besoin">
-  <div class="eyebrow">07</div>
-  <h2>De quoi j'ai besoin ?</h2>
-  <table>
-    <thead><tr><th>Où</th><th>Ce qu'il faut</th></tr></thead>
-    <tbody>
-      <tr><td>Poste Windows qui <strong>lance</strong> les apps</td><td>Juste <code>VisionNexusElectron.exe</code> (portable). Runtime embarqué — aucune installation de Node.js.</td></tr>
-      <tr><td>Cible lancée (VM ou machine locale)</td><td>Le dépôt <code>Computer_Vision_App/</code> complet doit y exister — <strong>identique</strong> à ce que VisionNexus attend déjà, rien de nouveau.</td></tr>
-      <tr><td>Onglet "Docs par app" de cette fenêtre</td><td>Réutilise directement le champ "Racine Computer_Vision_App" déjà rempli dans Paramètres (aucune config en plus) — lit <code>&lt;App&gt;/docs/*.md</code> sur disque, pas embarqué dans l'exe. Si ce champ est vide ou pointe vers une VM, repli sur un chemin relatif à l'exe (dev uniquement) — sinon message clair, rien ne casse.</td></tr>
-      <tr><td>Pour développer ce lanceur</td><td>Le dépôt source (<code>desktop/src</code>, <code>desktop/ui</code>) + Node.js + <code>npm install</code>.</td></tr>
-    </tbody>
-  </table>
-</section>
-
-<section id="etendre">
-  <div class="eyebrow">08</div>
-  <h2>Étendre le chemin natif à une autre app</h2>
-  <ul>
-    <li><strong>Backend de l'app</strong> — un endpoint <code>GET .../xxx-path</code> reprenant la logique de résolution de fichier existante, renvoyant <code>{"native_path": to_native_share_path(str(chemin))}</code> (chaque app garde sa propre copie de <code>to_native_share_path</code> — <code>backend/utils/native_share.py</code> — zéro lib partagée entre apps, cohérent avec le reste du dépôt) au lieu de streamer les octets. Le champ <code>native_share_host</code> dans les réglages de l'app doit être configuré avec le nom DNS ou l'adresse du partage.</li>
-    <li><strong>Frontend de l'app</strong> — un helper équivalent à <code>nativeImageUrl(httpPath, nativePathEndpoint)</code> (<code>Dataset_Explorer_App/frontend/src/utils/nativeImage.ts</code>) qui bascule vers <code>app-image://native/?imagePath=...&amp;fallback=...</code> quand <code>window.__CV_NATIVE_MOUNT__?.supported</code> est vrai, sinon renvoie l'URL HTTP telle quelle.</li>
-    <li><strong>Ce lanceur</strong> — une seule ligne dans <code>desktop/src/catalog.ts</code> : <code>supportsNativeMount: true</code> sur l'<code>AppDef</code> concernée. <code>imageProtocol.ts</code> n'a besoin d'aucun changement : il est déjà générique (les urls viennent du frontend, il ne connaît aucune app par son nom).</li>
-  </ul>
-</section>
-
-</div>
-</div>
-
-<div id="appsPanel">
+<div id="appsPanel" class="active">
   <div class="appsLayout">
     <div id="appList"></div>
     <div id="appMain">
       <div id="appFileTabs"></div>
-      <div id="appDocBody"><div class="emptyState">Chargement...</div></div>
+      <div id="appDocBody"><div class="emptyState" data-i18n="docsLoading">Chargement...</div></div>
     </div>
   </div>
 </div>
 
-<footer>VisionNexus — documentation embarquée</footer>
+<div id="askPanel">
+  <div class="askWrap">
+    <div class="svcBar">
+      <img src="../assets/icon_docs.png" alt="" onerror="this.style.display='none'">
+      <div class="svcInfo">
+        <div class="svcName">Docs Assistant</div>
+        <div class="svcMeta">
+          <span class="dot off" id="askDot"></span>
+          <span id="askStatusText"></span>
+          <span class="targetChip" id="askTarget"></span>
+          <button type="button" class="linkBtn" id="askReindex" data-i18n="askReindexBtn" hidden>Actualiser l'index</button>
+        </div>
+      </div>
+      <button type="button" class="switch" id="askSwitch" role="switch" aria-checked="false"></button>
+    </div>
+    <div class="svcHint" id="askRetarget" hidden></div>
+
+    <div id="askState"></div>
+
+    <div id="askSearch" hidden>
+      <form class="askForm" id="askForm" role="search">
+        <label class="sr" for="askInput" data-i18n="askInputLabel">Question</label>
+        <input id="askInput" type="text" maxlength="500" autocomplete="off" spellcheck="false"
+               placeholder="Ex : comment exporter en YOLO ?" data-i18n-placeholder="askPlaceholder">
+        <button type="submit" class="primary" id="askSubmit" data-i18n="askSearchBtn">Chercher</button>
+      </form>
+      <div class="askRecent" id="askRecent" hidden></div>
+      <div class="askFilters">
+        <div class="filterGroup apps">
+          <span class="filterLabel" data-i18n="askFilterApps">Apps</span>
+          <div class="chips" id="askApps"></div>
+        </div>
+        <div class="filterGroup">
+          <span class="filterLabel" data-i18n="askFilterAudience">Public</span>
+          <div class="seg" id="askAudience" role="group">
+            <button type="button" data-value="all" data-i18n="askAudAll">Tous</button>
+            <button type="button" data-value="user" data-i18n="askAudUser">Utilisateur</button>
+            <button type="button" data-value="dev" data-i18n="askAudDev">Developpeur</button>
+          </div>
+        </div>
+        <div class="filterGroup">
+          <span class="filterLabel" data-i18n="askFilterLang">Langue</span>
+          <div class="seg" id="askLang" role="group">
+            <button type="button" data-value="fr">FR</button>
+            <button type="button" data-value="en">EN</button>
+            <button type="button" data-value="both" data-i18n="askLangBoth" data-i18n-title="askLangBothTitle">Les deux</button>
+          </div>
+        </div>
+      </div>
+      <div class="askNote" id="askIdxNote" hidden></div>
+      <div class="askMeta" id="askMeta" aria-live="polite"></div>
+      <div id="askResults"></div>
+    </div>
+  </div>
+</div>
+
+<div id="findBar" role="search" hidden>
+  <input id="findInput" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="findPlaceholder">
+  <span id="findCount" aria-live="polite"></span>
+  <button type="button" id="findPrev" data-i18n-title="findPrevTitle">&#x2191;</button>
+  <button type="button" id="findNext" data-i18n-title="findNextTitle">&#x2193;</button>
+  <button type="button" id="findClose" data-i18n-title="findCloseTitle">&times;</button>
+</div>
+
+<footer data-i18n="docsFooter">VisionNexus -- documentation embarquee</footer>
+<script src="i18n.js"></script>
+<script src="vendor/marked.min.js"></script>
+<script src="doc-render.js"></script>
+<script src="ask-render.js"></script>
 
 <script>
 // ---- Bascule d'onglet ----
-const tabStack = document.getElementById('tabStack')
 const tabApps = document.getElementById('tabApps')
-const stackPanel = document.getElementById('stackPanel')
+const tabAsk = document.getElementById('tabAsk')
 const appsPanel = document.getElementById('appsPanel')
+const askPanel = document.getElementById('askPanel')
 
 function showTab(name) {
   const isApps = name === 'apps'
-  tabStack.classList.toggle('active', !isApps)
+  const isAsk = name === 'ask'
   tabApps.classList.toggle('active', isApps)
-  stackPanel.classList.toggle('hidden', isApps)
+  tabAsk.classList.toggle('active', isAsk)
   appsPanel.classList.toggle('active', isApps)
-  if (isApps) void loadAppDocs()
+  askPanel.classList.toggle('active', isAsk)
+  if (isAsk) window.askOnShow()
+  refreshNav()
+  findRefresh()
+  return isApps ? loadAppDocs() : Promise.resolve()
 }
-tabStack.addEventListener('click', () => showTab('stack'))
-tabApps.addEventListener('click', () => showTab('apps'))
+tabApps.addEventListener('click', () => void showTab('apps'))
+tabAsk.addEventListener('click', () => {
+  void showTab('ask')
+  navRecord({ kind: 'ask', snap: window.askSnapshot() })
+})
 
-// ---- Petit convertisseur markdown -> HTML (sous-ensemble courant, suffisant
-// pour les docs internes : titres, code, listes, tableaux, liens, gras/italique) ----
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function inlineMd(s) {
-  s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
-  // Seuls les liens http(s)/mailto deviennent de vrais liens cliquables --
-  // un lien relatif ("architecture.md", vers un autre doc du meme depot) ne
-  // pointe vers rien de valide depuis ce contexte (docs.html vit dans
-  // desktop/ui/, pas a cote des .md) : ouvrait une fenetre Electron blanche
-  // vide en tentant de charger un chemin inexistant. On garde juste le texte.
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) =>
-    /^(https?:|mailto:)/i.test(url) ? `<a href="${url}" target="_blank" rel="noopener">${text}</a>` : text)
-  return s
-}
-
-function mdToHtml(md) {
-  const lines = escapeHtml(md).split(/\r?\n/)
-  let html = ''
-  let i = 0
-  let inList = null // 'ul' | 'ol' | null
-
-  function closeList() {
-    if (inList) { html += `</${inList}>`; inList = null }
+// ---- Langue : fenetre independante du catalogue (bouton FR/EN local),
+// s'ouvre dans la langue de VisionNexus (?lang= passe par main.ts) ----
+// Promesse resolue une fois les docs de la nouvelle langue rechargees si l'onglet
+// Apps est visible. `research` : relancer la recherche de l'onglet "Demander a
+// la doc" (faux quand c'est l'ouverture d'un resultat qui change la langue).
+async function setDocsLang(lang, opts) {
+  if (CV_LANG === lang) return
+  CV_LANG = lang
+  cvApplyI18n()
+  document.getElementById('docsLangEn').classList.toggle('active', lang === 'en')
+  document.getElementById('docsLangFr').classList.toggle('active', lang === 'fr')
+  appDocsCache = null   // la langue des docs par app depend du backend (main.ts) -- refetch
+  window.askOnLangChange(!opts || opts.research !== false)
+  const curView = nav.list[nav.pos]
+  if (curView && curView.kind === 'doc') curView.lang = lang
+  nav.mute++
+  try {
+    if (appsPanel.classList.contains('active')) await loadAppDocs()
+  } finally {
+    nav.mute--
   }
+  refreshNav()
+}
+document.getElementById('docsLangEn').addEventListener('click', () => void setDocsLang('en'))
+document.getElementById('docsLangFr').addEventListener('click', () => void setDocsLang('fr'))
 
-  while (i < lines.length) {
-    const line = lines[i]
+// ---- Historique de navigation ----
+// Une entree par vue : resultats de recherche (instantane fourni par ask.js) ou
+// page de doc (app, page, titre, langue). `ctx` = liste des resultats de la
+// recherche dont la page ouverte est issue : elle alimente Precedent/Suivant.
+const NAV_MAX = 60
+const nav = { list: [], pos: -1, mute: 0, ctx: null }
 
-    // Bloc de code
-    if (/^```/.test(line)) {
-      closeList()
-      const code = []
-      i++
-      while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++ }
-      html += `<pre><code>${code.join('\n')}</code></pre>`
-      i++
-      continue
+function navRecord(view) {
+  if (nav.mute > 0) return
+  if (view.kind === 'ask' && !view.snap.outcome) return   // aucune recherche encore : rien a retrouver
+  const cur = nav.list[nav.pos]
+  if (cur && cur.kind === view.kind) {
+    if (view.kind === 'doc' && cur.appId === view.appId && cur.file === view.file && cur.headingIdx === view.headingIdx) {
+      cur.lang = view.lang
+      cur.ctx = view.ctx
+      refreshNav()
+      return
     }
-
-    // Tableau (ligne | a | b | suivie d'une ligne de separation |---|---|)
-    const isSepLine = (l) => /^[\s|:-]+$/.test(l) && l.includes('-')
-    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && isSepLine(lines[i + 1])) {
-      closeList()
-      const headCells = line.trim().slice(1, -1).split('|').map((c) => inlineMd(c.trim()))
-      html += '<table><thead><tr>' + headCells.map((c) => `<th>${c}</th>`).join('') + '</tr></thead><tbody>'
-      i += 2
-      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-        const cells = lines[i].trim().slice(1, -1).split('|').map((c) => inlineMd(c.trim()))
-        html += '<tr>' + cells.map((c) => `<td>${c}</td>`).join('') + '</tr>'
-        i++
-      }
-      html += '</tbody></table>'
-      continue
+    if (view.kind === 'ask' && cur.snap.query === view.snap.query) {
+      cur.snap = view.snap
+      refreshNav()
+      return
     }
-
-    // Titres
-    const h = line.match(/^(#{1,4})\s+(.*)$/)
-    if (h) {
-      closeList()
-      const level = h[1].length
-      html += `<h${level}>${inlineMd(h[2])}</h${level}>`
-      i++
-      continue
-    }
-
-    // Regle horizontale
-    if (/^(---+|\*\*\*+)\s*$/.test(line)) {
-      closeList()
-      html += '<hr>'
-      i++
-      continue
-    }
-
-    // Citation
-    if (/^&gt;\s?/.test(line)) {
-      closeList()
-      const quote = []
-      while (i < lines.length && /^&gt;\s?/.test(lines[i])) { quote.push(lines[i].replace(/^&gt;\s?/, '')); i++ }
-      html += `<blockquote>${quote.map(inlineMd).join('<br>')}</blockquote>`
-      continue
-    }
-
-    // Listes
-    const ul = line.match(/^\s*[-*]\s+(.*)$/)
-    const ol = line.match(/^\s*\d+\.\s+(.*)$/)
-    if (ul) {
-      if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul' }
-      html += `<li>${inlineMd(ul[1])}</li>`
-      i++
-      continue
-    }
-    if (ol) {
-      if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol' }
-      html += `<li>${inlineMd(ol[1])}</li>`
-      i++
-      continue
-    }
-
-    // Ligne vide
-    if (!line.trim()) { closeList(); i++; continue }
-
-    // Paragraphe (fusionne les lignes suivantes jusqu'a une ligne vide/structure)
-    closeList()
-    const para = [line]
-    i++
-    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*[-*]\s|\s*\d+\.\s|\s*\|.*\||&gt;\s?|(---+|\*\*\*+)\s*$)/.test(lines[i])) {
-      para.push(lines[i]); i++
-    }
-    html += `<p>${para.map(inlineMd).join('<br>')}</p>`
   }
-  closeList()
-  return html
+  nav.list.length = nav.pos + 1
+  nav.list.push(view)
+  if (nav.list.length > NAV_MAX) nav.list.shift()
+  nav.pos = nav.list.length - 1
+  refreshNav()
+}
+
+async function navGo(delta) {
+  const target = nav.pos + delta
+  if (target < 0 || target >= nav.list.length) return
+  nav.pos = target
+  const view = nav.list[target]
+  nav.mute++
+  try {
+    if (view.kind === 'ask') {
+      window.askRestore(view.snap)
+      await showTab('ask')
+    } else {
+      nav.ctx = view.ctx || null
+      if (view.lang && view.lang !== CV_LANG) await setDocsLang(view.lang, { research: false })
+      await openDoc(view.appId, view.file, view.headingIdx)
+    }
+  } finally {
+    nav.mute--
+  }
+  refreshNav()
+}
+
+// Ouvre le resultat voisin de la recherche dont la page courante est issue.
+async function navResult(delta) {
+  if (!nav.ctx) return
+  const i = nav.ctx.index + delta
+  const hit = nav.ctx.hits[i]
+  if (!hit) return
+  nav.ctx = { hits: nav.ctx.hits, index: i }
+  if (hit.lang && hit.lang !== CV_LANG) await setDocsLang(hit.lang, { research: false })
+  await openDoc(hit.app, hit.doc, hit.headingIdx)
+}
+
+function refreshNav() {
+  const onDoc = appsPanel.classList.contains('active')
+  const back = document.getElementById('navBack')
+  const fwd = document.getElementById('navFwd')
+  back.textContent = '\u2190 ' + cvT('navBack')
+  fwd.textContent = cvT('navForward') + ' \u2192'
+  back.title = cvT('navBackTitle')
+  fwd.title = cvT('navForwardTitle')
+  back.disabled = nav.pos <= 0
+  fwd.disabled = nav.pos >= nav.list.length - 1
+  const inSearch = onDoc && !!nav.ctx
+  document.getElementById('navSep').hidden = !inSearch
+  const toResults = document.getElementById('navToResults')
+  toResults.hidden = !inSearch
+  toResults.textContent = cvT('navToResults')
+  const res = document.getElementById('navResult')
+  res.hidden = !inSearch
+  if (inSearch) {
+    const { hits, index } = nav.ctx
+    document.getElementById('navResCount').textContent = cvT('navResultOf', { i: index + 1, n: hits.length })
+    const prev = document.getElementById('navPrevRes')
+    const next = document.getElementById('navNextRes')
+    prev.textContent = '\u25C0 ' + cvT('navPrevRes')
+    next.textContent = cvT('navNextRes') + ' \u25B6'
+    prev.title = cvT('navPrevResTitle')
+    next.title = cvT('navNextResTitle')
+    prev.disabled = index <= 0
+    next.disabled = index >= hits.length - 1
+    document.getElementById('navResTitle').textContent = hits[index].title || ''
+  }
+}
+
+document.getElementById('navBack').addEventListener('click', () => void navGo(-1))
+document.getElementById('navFwd').addEventListener('click', () => void navGo(1))
+document.getElementById('navPrevRes').addEventListener('click', () => void navResult(-1))
+document.getElementById('navNextRes').addEventListener('click', () => void navResult(1))
+document.getElementById('navToResults').addEventListener('click', () => {
+  void showTab('ask')
+  navRecord({ kind: 'ask', snap: window.askSnapshot() })
+})
+document.addEventListener('keydown', (ev) => {
+  if (!ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return
+  const action = { ArrowLeft: () => navGo(-1), ArrowRight: () => navGo(1), ArrowUp: () => navResult(-1), ArrowDown: () => navResult(1) }[ev.key]
+  if (!action) return
+  ev.preventDefault()
+  void action()
+})
+// Boutons precedent / suivant de la souris.
+document.addEventListener('mouseup', (ev) => {
+  if (ev.button !== 3 && ev.button !== 4) return
+  ev.preventDefault()
+  void navGo(ev.button === 3 ? -1 : 1)
+})
+window.docNav = {
+  setResultCtx(ctx) { nav.ctx = ctx },
+  recordAsk() { navRecord({ kind: 'ask', snap: window.askSnapshot() }) },
 }
 
 // ---- Onglet Apps ----
+// Rendu markdown : marked (ui/vendor/marked.min.js) + doc-render.js, qui pose
+// les ancres h-<n> communes au lint et au Docs Assistant.
 let appDocsCache = null
 let activeAppId = null
-let activeFileIdx = 0
+let activeFile = null          // nom de base ('user-guide') : survit au changement de langue
+let pendingHeadingIdx = null   // ancre a atteindre au prochain rendu (openDoc)
+
+// Charge la liste des docs dans la langue courante. Si la langue change pendant
+// l'attente, la reponse est perimee : on recommence plutot que de la ranger.
+async function ensureAppDocs() {
+  while (!appDocsCache) {
+    const lang = CV_LANG
+    const docs = await window.cvDocs.listAppDocs(lang)
+    if (lang === CV_LANG && !appDocsCache) {
+      appDocsCache = docs
+      renderAppList()
+    }
+  }
+  return appDocsCache
+}
 
 async function loadAppDocs() {
-  if (appDocsCache) return renderAppList()
-  appDocsCache = await window.cvDocs.listAppDocs()
-  renderAppList()
+  await ensureAppDocs()
+  const current = appDocsCache.find((e) => e.appId === activeAppId)
+  const target = current || appDocsCache.find((e) => e.files.length) || appDocsCache[0]
+  if (target) selectApp(target.appId)
 }
 
 function renderAppList() {
@@ -496,20 +616,22 @@ function renderAppList() {
   for (const entry of appDocsCache) {
     const btn = document.createElement('button')
     btn.innerHTML = `<img src="../assets/${entry.icon}" onerror="this.style.display='none'"><span>${entry.label}</span><span class="count">${entry.files.length || ''}</span>`
-    btn.addEventListener('click', () => selectApp(entry.appId))
+    btn.addEventListener('click', () => { nav.ctx = null; activeFile = null; selectApp(entry.appId) })
     list.appendChild(btn)
   }
-  const first = appDocsCache.find((e) => e.files.length) || appDocsCache[0]
-  if (first) selectApp(first.appId)
 }
 
 function selectApp(appId) {
   activeAppId = appId
-  activeFileIdx = 0
   document.querySelectorAll('#appList button').forEach((b, idx) => {
     b.classList.toggle('active', appDocsCache[idx].appId === appId)
   })
   renderFileTabs()
+}
+
+function activeFileIdx(entry) {
+  const idx = entry.files.findIndex((f) => f.file === activeFile)
+  return idx >= 0 ? idx : 0
 }
 
 function renderFileTabs() {
@@ -518,16 +640,17 @@ function renderFileTabs() {
   tabsEl.innerHTML = ''
   if (!entry || !entry.files.length) {
     tabsEl.style.display = 'none'
-    document.getElementById('appDocBody').innerHTML =
-      '<div class="emptyState">Pas de documentation trouvée pour cette app depuis ce poste. Ce lanceur réutilise automatiquement le champ "Racine Computer_Vision_App" des Paramètres (fenêtre catalogue) pour trouver le dépôt — vérifie qu\'il est rempli avec un chemin Windows local (pas un chemin de VM). Sinon, le dépôt complet doit être présent à côté de ce lanceur — voir "De quoi j\'ai besoin ?" dans l\'onglet Stack.</div>'
+    document.getElementById('appDocBody').innerHTML = `<div class="emptyState">${cvT('docsAppsEmpty')}</div>`
     return
   }
   tabsEl.style.display = 'flex'
+  const current = activeFileIdx(entry)
+  activeFile = entry.files[current].file
   entry.files.forEach((f, idx) => {
     const btn = document.createElement('button')
     btn.textContent = f.title
-    btn.className = idx === activeFileIdx ? 'active' : ''
-    btn.addEventListener('click', () => { activeFileIdx = idx; renderFileTabs(); renderDocBody() })
+    btn.className = idx === current ? 'active' : ''
+    btn.addEventListener('click', () => { nav.ctx = null; activeFile = f.file; renderFileTabs() })
     tabsEl.appendChild(btn)
   })
   renderDocBody()
@@ -535,9 +658,165 @@ function renderFileTabs() {
 
 function renderDocBody() {
   const entry = appDocsCache.find((e) => e.appId === activeAppId)
-  const file = entry && entry.files[activeFileIdx]
-  document.getElementById('appDocBody').innerHTML = file ? mdToHtml(file.content) : ''
+  const file = entry && entry.files[activeFileIdx(entry)]
+  const body = document.getElementById('appDocBody')
+  body.innerHTML = file ? cvDocRender.renderDoc(marked, file.content, file.baseUrl) : ''
+  const shownHeading = pendingHeadingIdx
+  const anchor = pendingHeadingIdx === null ? null : document.getElementById(cvDocRender.headingId(pendingHeadingIdx))
+  pendingHeadingIdx = null
+  findRefresh()
+  if (file) navRecord({ kind: 'doc', appId: activeAppId, file: file.file, headingIdx: shownHeading, lang: CV_LANG, ctx: nav.ctx })
+  if (anchor) {
+    // instant : un defilement anime sur plusieurs milliers de pixels peut etre interrompu par un reflow.
+    anchor.scrollIntoView({ block: 'start', behavior: 'instant' })
+    anchor.classList.remove('hFlash')
+    void anchor.offsetWidth   // relance l'animation si la meme section est rouverte
+    anchor.classList.add('hFlash')
+  }
 }
+
+// Ouvre une page d'app, et optionnellement un titre (index h-<n>), depuis
+// n'importe quel onglet. Point d'entree des liens entre pages et de la
+// recherche ; file absent ou inconnu = premiere page de l'app.
+async function openDoc(appId, file, headingIdx) {
+  activeAppId = appId
+  activeFile = file || null
+  pendingHeadingIdx = Number.isInteger(headingIdx) ? headingIdx : null
+  const hasAnchor = pendingHeadingIdx !== null
+  await showTab('apps')
+  if (!hasAnchor) window.scrollTo(0, 0)
+}
+window.openDoc = openDoc
+
+// Liens markdown vers une autre page de la meme app (cf. doc-render.js).
+document.getElementById('appDocBody').addEventListener('click', (ev) => {
+  const link = ev.target.closest('a[data-doc-file]')
+  if (!link) return
+  ev.preventDefault()
+  nav.ctx = null
+  const m = /^h-(\d+)$/.exec(link.dataset.docAnchor)
+  const target = link.dataset.docDir ? appDocsCache.find((e) => e.dir === link.dataset.docDir) : null
+  if (link.dataset.docDir && !target) return
+  void openDoc(target ? target.appId : activeAppId, link.dataset.docFile || activeFile, m ? Number(m[1]) : null)
+})
+
+// ---- Recherche dans la page (Ctrl+F) ----
+// Surlignage DOM (TreeWalker + <mark>) plutot que webContents.findInPage :
+// findInPage compte aussi le texte tape dans le champ de recherche et balaie
+// toute la fenetre (liste des apps, barre de nav). Ici on ne cherche que dans
+// le contenu affiche, sans aller-retour IPC. Limite assumee : une occurrence
+// coupee par une mise en forme ("foo **bar**") n'est pas trouvee.
+const findBar = document.getElementById('findBar')
+const findInput = document.getElementById('findInput')
+const find = { hits: [], idx: -1 }
+
+function findScope() {
+  return document.getElementById(appsPanel.classList.contains('active') ? 'appDocBody' : 'askResults')
+}
+
+function findClear() {
+  for (const mark of document.querySelectorAll('mark.findHit')) {
+    const parent = mark.parentNode
+    parent.replaceChild(document.createTextNode(mark.textContent), mark)
+    parent.normalize()   // recolle les morceaux pour que la recherche suivante voie le texte entier
+  }
+  find.hits = []
+  find.idx = -1
+}
+
+function findRun() {
+  findClear()
+  const needle = findInput.value.toLowerCase()
+  if (needle) {
+    // Noeuds collectes avant de decouper : splitText pendant le parcours derouterait le walker.
+    const walker = document.createTreeWalker(findScope(), NodeFilter.SHOW_TEXT)
+    const nodes = []
+    while (walker.nextNode()) nodes.push(walker.currentNode)
+    for (let node of nodes) {
+      // Rare (ex. "I" pointe turc) : la minuscule change la longueur, les indices ne collent plus.
+      if (node.data.toLowerCase().length !== node.data.length) continue
+      let i
+      while ((i = node.data.toLowerCase().indexOf(needle)) >= 0) {
+        const match = node.splitText(i)
+        node = match.splitText(needle.length)
+        const mark = document.createElement('mark')
+        mark.className = 'findHit'
+        match.parentNode.replaceChild(mark, match)
+        mark.appendChild(match)
+        find.hits.push(mark)
+      }
+    }
+  }
+  findShowCount()
+}
+
+function findShowCount() {
+  const n = find.hits.length
+  document.getElementById('findCount').textContent = findInput.value ? `${find.idx + 1}/${n}` : ''
+  findInput.classList.toggle('none', !!findInput.value && n === 0)
+  document.getElementById('findPrev').disabled = n === 0
+  document.getElementById('findNext').disabled = n === 0
+}
+
+function findGo(delta) {
+  // Contenu re-rendu entre-temps (ex. nouveaux resultats de l'onglet Demander) : marques detachees.
+  if (find.hits.length && !find.hits[0].isConnected) findRun()
+  const n = find.hits.length
+  if (!n) return
+  if (find.hits[find.idx]) find.hits[find.idx].classList.remove('cur')
+  find.idx = find.idx < 0 ? (delta > 0 ? 0 : n - 1) : (find.idx + delta + n) % n
+  const cur = find.hits[find.idx]
+  cur.classList.add('cur')
+  cur.scrollIntoView({ block: 'center', behavior: 'instant' })
+  findShowCount()
+}
+
+// Apres un changement de page ou d'onglet : on resurligne sans defiler, pour
+// ne pas contrarier le saut vers une ancre.
+function findRefresh() {
+  if (!findBar.hidden) findRun()
+}
+
+function findOpen() {
+  findBar.hidden = false
+  findInput.focus()
+  findInput.select()
+  if (findInput.value && !find.hits.length) findRun()
+}
+
+function findClose() {
+  findClear()
+  findBar.hidden = true
+}
+
+findInput.addEventListener('input', () => { findRun(); findGo(1) })
+findInput.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter') return
+  ev.preventDefault()
+  findGo(ev.shiftKey ? -1 : 1)
+})
+document.getElementById('findPrev').addEventListener('click', () => findGo(-1))
+document.getElementById('findNext').addEventListener('click', () => findGo(1))
+document.getElementById('findClose').addEventListener('click', findClose)
+document.addEventListener('keydown', (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === 'f') {
+    ev.preventDefault()
+    findOpen()
+  } else if (ev.key === 'Escape' && !findBar.hidden) {
+    ev.preventDefault()
+    findClose()
+  }
+})
+
+// ---- Init : langue de depart = celle de VisionNexus au moment de l'ouverture
+// (query ?lang= posee par main.ts::openDocsWindow), avant tout rendu.
+CV_LANG = new URLSearchParams(location.search).get('lang') === 'fr' ? 'fr' : 'en'
+document.getElementById('docsLangEn').classList.toggle('active', CV_LANG === 'en')
+document.getElementById('docsLangFr').classList.toggle('active', CV_LANG === 'fr')
+cvApplyI18n()
+void showTab(new URLSearchParams(location.search).get('tab') === 'ask' ? 'ask' : 'apps')
+if (window.cvDocs && window.cvDocs.onShowTab) window.cvDocs.onShowTab((tab) => { if (tab === 'ask') void showTab('ask') })
 </script>
+<script src="ask.js"></script>
 </body>
 </html>

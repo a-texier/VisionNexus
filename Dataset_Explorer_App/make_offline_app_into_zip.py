@@ -8,6 +8,7 @@ Ce que le ZIP contient :
   - Tout le code source Python + frontend (src/, public/)
   - launcher.py, requirements.txt, package.json
   - CLAUDE.md, README.md
+  - models/ViT-B-32-openai.safetensors (poids CLIP : l'app ne les telecharge jamais)
 
 Ce qui est EXCLU :
   - node_modules/        (reinstaller avec npm install)
@@ -74,8 +75,10 @@ def should_exclude(path: Path, root: Path, include_data: bool) -> bool:
         if part in EXCLUDE_DIRS:
             return True
 
-    # Exclure par extension
-    if path.suffix.lower() in EXCLUDE_EXTENSIONS:
+    # Exclure par extension, sauf les poids CLIP de models/ : sans eux l'app ne demarre pas hors ligne
+    if path.suffix.lower() in EXCLUDE_EXTENSIONS and not (
+        path.suffix.lower() == ".safetensors" and parts[0] == "models"
+    ):
         return True
 
     # Exclure par nom de fichier

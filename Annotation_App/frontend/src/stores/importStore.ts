@@ -12,6 +12,8 @@
 import { create } from 'zustand'
 import { datasetAPI, taskAPI } from '../services/api'
 import { useProjectStore } from './projectStore'
+import { useSettingsStore } from './settingsStore'
+import { t } from '../i18n/translate'
 
 // Rafraîchissement LÉGER pendant l'import : frames (previews live) + séquences
 // (met à jour frameFloor pour pouvoir switcher). N'appelle PAS fetchProject, qui
@@ -148,9 +150,13 @@ export const useImportStore = create<ImportStore>((set, get) => ({
     }
 
     const importOne = async (spec: ImportJobSpec): Promise<void> => {
-      set((st) => ({ jobs: patchJob(st.jobs, spec.id, { status: 'running', message: 'Démarrage…' }) }))
+      set((st) => ({ jobs: patchJob(st.jobs, spec.id, { status: 'running', message: t('Démarrage…') }) }))
       markPersisted(projectId, spec.id, 'running')
       const { frameKeep, jpegQuality, extractionBatchSize, lossless, useSymlink } = options
+      // Parametres > Import : taille des morceaux d'une source monofichier et des lots d'images
+      const importSettings = useSettingsStore.getState().settings?.import
+      const chunkMb = importSettings?.chunk_size_mb ?? 8
+      const imageBatch = Math.max(1, importSettings?.batch_size_images ?? 20)
 
       if (spec.serverPath.trim()) {
         const p = spec.serverPath.trim()
@@ -166,27 +172,27 @@ export const useImportStore = create<ImportStore>((set, get) => ({
         const first = spec.files[0]
         const name = first.name.toLowerCase()
         if (spec.formatId) {
-          const r = await datasetAPI.importSpecific(projectId, spec.formatId, first, frameKeep, 8, extractionBatchSize, spec.label)
+          const r = await datasetAPI.importSpecific(projectId, spec.formatId, first, frameKeep, chunkMb, extractionBatchSize, spec.label)
           await waitForTask(r.task_id, spec.id)
         } else if (VIDEO_EXTS.some((e) => name.endsWith(`.${e}`))) {
-          const r = await datasetAPI.importVideo(projectId, first, frameKeep, jpegQuality, 8, 3, extractionBatchSize, spec.label)
+          const r = await datasetAPI.importVideo(projectId, first, frameKeep, jpegQuality, chunkMb, 3, extractionBatchSize, spec.label)
           await waitForTask(r.task_id, spec.id)
         } else {
           const files = spec.files
-          for (let i = 0; i < files.length; i += 20) {
+          for (let i = 0; i < files.length; i += imageBatch) {
             const fd = new FormData()
-            files.slice(i, i + 20).forEach((f) => fd.append('files', f))
+            files.slice(i, i + imageBatch).forEach((f) => fd.append('files', f))
             if (spec.label) fd.append('sequence_name', spec.label)
             const res = await fetch(`/api/projects/${projectId}/import/images`, { method: 'POST', body: fd })
-            if (!res.ok) throw new Error(`Upload images batch ${i / 20 + 1} échoué`)
+            if (!res.ok) throw new Error(`${t('Upload images batch')} ${i / imageBatch + 1} ${t('échoué')}`)
             set((st) => ({ jobs: patchJob(st.jobs, spec.id, {
-              progress: Math.round(Math.min(100, ((i + 20) / files.length) * 100)),
-              message: `${Math.min(i + 20, files.length)}/${files.length} images`,
+              progress: Math.round(Math.min(100, ((i + imageBatch) / files.length) * 100)),
+              message: `${Math.min(i + imageBatch, files.length)}/${files.length} images`,
             }) }))
           }
         }
       }
-      set((st) => ({ jobs: patchJob(st.jobs, spec.id, { status: 'done', progress: 100, message: 'Terminé' }) }))
+      set((st) => ({ jobs: patchJob(st.jobs, spec.id, { status: 'done', progress: 100, message: t('Terminé') }) }))
       markPersisted(projectId, spec.id, 'done')
       get().onSequenceDone?.()
     }

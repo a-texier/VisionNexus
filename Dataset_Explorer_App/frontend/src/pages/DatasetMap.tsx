@@ -11,7 +11,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Map, Save, X, MousePointer2, Layers, ChevronRight, ZoomIn, Ban, RefreshCw, Play, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react'
-import { subsetsAPI, datasetsAPI } from '../api/client'
+import { subsetsAPI, datasetsAPI, settingsAPI } from '../api/client'
 import { useDataset, useDatasets, useDatasetClusters, useDatasetMap } from '../hooks/useDataset'
 import { useSelectionStore } from '../hooks/useSubset'
 import { useSettings } from '../hooks/useSettings'
@@ -41,6 +41,12 @@ export default function DatasetMap() {
   const { selectedIds, toggle, addMany, clear } = useSelectionStore()
 
   const [colorMode, setColorMode] = useState<ColorMode>('cluster')
+  // Depart = Parametres > couleur par defaut de la carte ; modifiable ici sans toucher au reglage
+  useEffect(() => {
+    settingsAPI.get()
+      .then(s => { if (s.scatter_default_color === 'cluster' || s.scatter_default_color === 'rarity' || s.scatter_default_color === 'uniform') setColorMode(s.scatter_default_color) })
+      .catch(() => {})
+  }, [])
   const [selectedCluster, setSelectedCluster] = useState<number | null>(null)
   const [minRarity, setMinRarity] = useState(0)
   const [maxRarity, setMaxRarity] = useState(1)

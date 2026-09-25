@@ -60,7 +60,7 @@ def test_model_node_mismatch_is_blocked_before_training():
         ],
         [("ds", "t"), ("m", "t")],
     )
-    with pytest.raises(graph_runner.GraphConfigError, match="Pré-contrôle bloquant"):
+    with pytest.raises(graph_runner.GraphConfigError, match="Blocking pre-check"):
         graph_runner.graph_to_pipeline(graph)
 
 
@@ -83,7 +83,7 @@ def test_optuna_and_training_must_share_the_engine():
         [_dataset(), _node("o", "optuna", engine="yolox"), _node("t", "training", engine="plugin-engine")],
         [("ds", "o"), ("o", "t")],
     )
-    with pytest.raises(graph_runner.GraphConfigError, match="même moteur"):
+    with pytest.raises(graph_runner.GraphConfigError, match="same engine"):
         graph_runner.graph_to_pipeline(graph)
 
 
@@ -112,7 +112,7 @@ def test_inference_refuses_weights_it_cannot_load_yet():
         [_dataset(), _node("t", "training", engine="plugin-engine"), _node("i", "inference", task="detection")],
         [("ds", "t"), ("t", "i")],
     )
-    with pytest.raises(graph_runner.GraphConfigError, match="même moteur"):
+    with pytest.raises(graph_runner.GraphConfigError, match="same engine"):
         graph_runner.graph_to_pipeline(graph)
 
 

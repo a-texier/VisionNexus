@@ -2,6 +2,8 @@ import { useState, useRef } from 'react'
 import { Users, FolderOpen, History } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { openInNativeFileManager } from '../utils/nativeWorkspace'
+import { LanguageToggle } from './common/LanguageToggle'
+import { useT } from '../i18n/useLang'
 
 interface WorkspaceUser {
   user: string
@@ -22,6 +24,7 @@ function initials(name: string) {
 type PanelMode = 'users' | 'history' | null
 
 export function UserBadge() {
+  const t = useT()
   const [panel, setPanel]       = useState<PanelMode>(null)
   const [users, setUsers]       = useState<WorkspaceUser[]>([])
   const [history, setHistory]   = useState<WorkspaceHistory[]>([])
@@ -96,7 +99,7 @@ export function UserBadge() {
         setRemoteOpen({ unc: data.unc, path: path ?? '' })
         return
       }
-      toast.error(data.message ?? "Impossible d'ouvrir le dossier")
+      toast.error(data.message ?? t("Impossible d'ouvrir le dossier"))
     } catch { /* ignore */ }
   }
 
@@ -121,10 +124,9 @@ export function UserBadge() {
         <div className="fixed inset-0 z-[80] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/70" onClick={() => setRemoteOpen(null)} />
           <div className="relative bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-[460px] max-w-[92vw] p-4">
-            <h3 className="text-sm font-semibold text-white mb-1">Ouvrir le dossier</h3>
+            <h3 className="text-sm font-semibold text-white mb-1">{t('Ouvrir le dossier')}</h3>
             <p className="text-xs text-slate-400 mb-3">
-              L'application tourne sur le serveur distant : elle ne peut pas piloter
-              l'Explorateur de votre poste. Le dossier reste accessible via le montage reseau.
+              {t("L'application tourne sur le serveur distant : elle ne peut pas piloter l'Explorateur de votre poste. Le dossier reste accessible via le montage reseau.")}
             </p>
             <code className="block text-[11px] text-cyan-300 bg-slate-900/70 rounded px-2 py-1.5 mb-3 break-all">
               {remoteOpen.unc}
@@ -137,22 +139,21 @@ export function UserBadge() {
                 onClick={() => setRemoteOpen(null)}
                 className="flex-1 text-center px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
               >
-                Telecharger le raccourci .cmd
+                {t('Telecharger le raccourci .cmd')}
               </a>
               <button
                 onClick={() => {
                   void navigator.clipboard.writeText(remoteOpen.unc)
-                  toast.success('Chemin copie')
+                  toast.success(t('Chemin copie'))
                   setRemoteOpen(null)
                 }}
                 className="px-3 py-1.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
               >
-                Copier
+                {t('Copier')}
               </button>
             </div>
             <p className="text-[10px] text-slate-500 mt-2">
-              Le .cmd contient une seule ligne (<code>explorer</code> sur ce chemin) ;
-              votre navigateur le telecharge, a vous de l'executer.
+              {t('Le .cmd contient une seule ligne (')}<code>explorer</code>{t(" sur ce chemin) ; votre navigateur le telecharge, a vous de l'executer.")}
             </p>
           </div>
         </div>
@@ -171,7 +172,7 @@ export function UserBadge() {
       {/* Open Folder button */}
       <button
         onClick={openFolder}
-        title="Ouvrir workspace"
+        title={t('Ouvrir workspace')}
         disabled={openingFolder}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
@@ -182,7 +183,7 @@ export function UserBadge() {
       <button
         ref={historyRef}
         onClick={openHistory}
-        title="Historique des workspaces"
+        title={t('Historique des workspaces')}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
         <History size={13} className={panel === 'history' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'} />
@@ -192,11 +193,14 @@ export function UserBadge() {
       <button
         ref={usersRef}
         onClick={openUsers}
-        title="Utilisateurs connectes"
+        title={t('Utilisateurs connectes')}
         className="p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0"
       >
         <Users size={13} className={panel === 'users' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'} />
       </button>
+
+      {/* Langue FR/EN */}
+      <LanguageToggle />
 
       {/* Panel — fixed, opens upward */}
       {panel && (
@@ -212,7 +216,7 @@ export function UserBadge() {
                 {panel === 'users'   && <Users   size={12} className="text-gray-400" />}
                 {panel === 'history' && <History size={12} className="text-gray-400" />}
                 <span className="text-xs font-semibold text-gray-200">
-                  {panel === 'users' ? 'Utilisateurs connectes' : 'Workspaces recents'}
+                  {panel === 'users' ? t('Utilisateurs connectes') : t('Workspaces recents')}
                 </span>
               </div>
               <button onClick={() => setPanel(null)} className="text-gray-500 hover:text-white text-xs leading-none">
@@ -221,11 +225,11 @@ export function UserBadge() {
             </div>
 
             {loading ? (
-              <p className="text-xs text-gray-500 py-1">Chargement…</p>
+              <p className="text-xs text-gray-500 py-1">{t('Chargement…')}</p>
 
             ) : panel === 'users' ? (
               users.length === 0 ? (
-                <p className="text-xs text-gray-500 py-1">Aucun utilisateur trouve.</p>
+                <p className="text-xs text-gray-500 py-1">{t('Aucun utilisateur trouve.')}</p>
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto">
                   {users.map(u => (
@@ -244,11 +248,11 @@ export function UserBadge() {
                           </div>
                           <span className="text-xs text-gray-200 font-medium truncate">
                             {u.user}
-                            {u.user === IA_USER && <span className="ml-1 text-indigo-400 text-[10px]">(vous)</span>}
+                            {u.user === IA_USER && <span className="ml-1 text-indigo-400 text-[10px]">{t('(vous)')}</span>}
                           </span>
                         </div>
                         <button
-                          title="Ouvrir ce workspace"
+                          title={t('Ouvrir ce workspace')}
                           onClick={async (e) => {
                             e.stopPropagation()
                             await requestOpen(u.workspace)
@@ -268,7 +272,7 @@ export function UserBadge() {
 
             ) : (
               history.length === 0 ? (
-                <p className="text-xs text-gray-500 py-1">Aucun workspace utilise recemment.</p>
+                <p className="text-xs text-gray-500 py-1">{t('Aucun workspace utilise recemment.')}</p>
               ) : (
                 <div className="space-y-1 overflow-y-auto" style={{ maxHeight: '50vh' }}>
                   {history.map((entry, i) => (

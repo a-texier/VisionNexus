@@ -25,9 +25,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "interface": {
         "background_color": "#0f172a",       # Couleur fond canvas (hex)
         "default_tool": "bbox",              # Outil actif au démarrage
-        "timeline_height": 80,               # Hauteur en px de la timeline
         "tracks_panel_height": 92,           # Hauteur en px de la zone tracks (redimensionnable)
-        "annotation_opacity": 0.35,          # Opacité des annotations (0-1)
+        "annotation_opacity": 0.2,           # Opacité du remplissage des annotations (0-1)
         "show_labels": True,                 # Afficher les étiquettes de classe sur les annotations
         "show_confidence": False,            # Afficher le score de confiance sur les annotations
         "annotation_border_width": 2,        # Épaisseur des bordures d'annotations (1-4 px)
@@ -127,6 +126,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "include_unannotated": True,     # coché par défaut (frames non annotées → ligne 0 en .ver) (S11)
         "symlink_images": True,          # True = liens symboliques (dataset local, pas de ZIP)
     },
+    # ---- Langue de l'interface (repli uniquement) ----
+    # La source de verite est VisionNexus (reglage centralise "Langue des apps"
+    # dans son panneau Settings) : quand l'app est lancee depuis le launcher,
+    # ?lang= impose la langue au chargement et rien n'est ecrit ici. Ce champ
+    # ne sert que hors du lanceur (navigateur, dev, ligne de commande).
+    "ui_language": "en",
 }
 
 

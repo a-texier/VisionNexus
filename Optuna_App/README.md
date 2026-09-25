@@ -22,7 +22,7 @@ real time.
 
 HPO trials train with a Training_App engine (`hpo_trial.py --engine`). The built-in
 engine is YOLOX; others can be added via plugin (see
-[../docs/plugins/README.md](../docs/plugins/README.md)). `GET /api/orchestrator/engines` lists the
+[../docs/architecture.md](../docs/architecture.md#plugin-mechanism)). `GET /api/orchestrator/engines` lists the
 usable engines and their catalog: the default search ranges (`hpo_ranges`) and the
 default selection (`hpo_default_optimize`) come from the engine, not from Optuna_App. For YOLOX:
 `basic_lr_per_img`, `mosaic_prob` and `degrees` by default, among `min_lr_ratio`, `momentum`,
@@ -84,4 +84,4 @@ bash start.sh
 Frontend: http://localhost:3003
 Backend: http://localhost:8003
 
-See also [docs/ECOSYSTEM.md](../docs/ECOSYSTEM.md) for this app's place in the suite.
+See also [docs/README.md](../docs/README.md) for this app's place in the suite.

@@ -793,9 +793,9 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
         {(
           [
             { id: 'samurai', label: 'SAMURAI',  icon: <Layers size={10} />,      activeColor: 'text-teal-400 border-teal-400 bg-teal-900/10',     title: t('SAMURAI local si disponible, fallback SAM2') },
-            { id: 'guided',  label: 'Detect.',  icon: <Zap size={10} />,         activeColor: 'text-blue-400 border-blue-400 bg-blue-900/10',    title: t('GD/SAM3 + matching centroide') },
-            { id: 'xfeat',   label: 'Homogr.',  icon: <ArrowRight size={10} />,  activeColor: 'text-purple-400 border-purple-400 bg-purple-900/10', title: t('Propagation par homographie XFeat/SIFT') },
-            { id: 'optflow', label: 'Flux opt.', icon: <Wind size={10} />,        activeColor: 'text-green-400 border-green-400 bg-green-900/10',  title: t('Flux optique Lucas-Kanade') },
+            { id: 'guided',  label: t('Detect.'),  icon: <Zap size={10} />,         activeColor: 'text-blue-400 border-blue-400 bg-blue-900/10',    title: t('GD/SAM3 + matching centroide') },
+            { id: 'xfeat',   label: t('Homogr.'),  icon: <ArrowRight size={10} />,  activeColor: 'text-purple-400 border-purple-400 bg-purple-900/10', title: t('Propagation par homographie XFeat/SIFT') },
+            { id: 'optflow', label: t('Flux opt.'), icon: <Wind size={10} />,        activeColor: 'text-green-400 border-green-400 bg-green-900/10',  title: t('Flux optique Lucas-Kanade') },
           ] as { id: PanelTab; label: string; icon: React.ReactNode; activeColor: string; title: string }[]
         ).map(({ id, label, icon, activeColor, title }) => (
           <button
@@ -980,7 +980,8 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                     hint: t('Écart max cible ↔ détection pour les apparier, en fraction de l\'image (0 = même point, 1 ≈ un bord à l\'autre). 0.15 = 15 % de l\'image.') },
                   { label: t('Var. taille max'), value: sizeVarThreshold, set: setSizeVarThreshold, min: 0.1, max: 2.0, step: 0.1,
                     hint: t('Variation de SURFACE tolérée entre 2 frames avant de signaler une anomalie. 0.5 = ±50 %, 1.0 = ×2.') },
-                ].map(({ label, value, set, min, max, step, hint }) => (
+                ].filter((row) => !(algorithm === 'sam3' && row.set === setTextThreshold))  // SAM3 n'a pas de seuil texte
+                  .map(({ label, value, set, min, max, step, hint }) => (
                   <div key={label} className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-500 w-28 flex-shrink-0">{label}</span>
@@ -1280,8 +1281,8 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
             </div>
 
             <div className="p-2 bg-green-900/10 rounded border border-green-800/30 text-xs text-green-300 leading-relaxed">
-              {t('Grille')} <strong>5×5</strong> {t('de points dans chaque bbox → translation médiane robuste aux outliers.')}
-              {' '}{t('Ne compense')} <strong>{t('pas')}</strong> {t('la rotation/zoom — utiliser Homographie pour ça.')}
+              {t('Suit 29 points par bbox (4 coins + grille 5×5) et estime une transformation affine partielle : translation, rotation et échelle, robuste aux outliers.')}
+              {' '}{t('Ne compense')} <strong>{t('pas')}</strong> {t('la perspective — utiliser Homographie pour ça.')}
             </div>
 
             <button
@@ -1407,7 +1408,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                       <span className="text-slate-500">{g.name} · {g.vram_free_gb}/{g.vram_total_gb} Go</span>
                     </div>
                     <p className="text-slate-600 leading-snug">
-                      {t('Frames en RAM → aucune limite VRAM, mais ~1.5–3× plus lent. Décoche « Offload CPU » dans les paramètres pour le mode GPU rapide.')}
+                      {t('Frames en RAM → aucune limite VRAM, mais ~1.5–3× plus lent. Coche « Mode GPU rapide » dans les paramètres pour repasser sur le GPU.')}
                     </p>
                   </div>
                 )
@@ -1436,7 +1437,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                   </div>
                   {over && (
                     <p className="text-red-400/90 leading-snug">
-                      {t("Plage > capacité VRAM → risque d'OOM. Réduis la plage, décime à l'import, ou coche « Offload CPU » dans les paramètres.")}
+                      {t("Plage > capacité VRAM → risque d'OOM. Réduis la plage, décime à l'import, ou décoche « Mode GPU rapide » dans les paramètres.")}
                     </p>
                   )}
                 </div>
@@ -1536,7 +1537,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                             void taskAPI.pause(taskId).then(() => setIsPaused(true))
                           }
                         }}
-                        title={isPaused ? 'Reprendre' : 'Pause'}
+                        title={isPaused ? t('Reprendre') : t('Pause')}
                         className="p-1 rounded bg-amber-700/50 hover:bg-amber-600/60 text-amber-300 transition-colors"
                       >
                         {isPaused ? <Play size={11} /> : <Pause size={11} />}
@@ -1547,10 +1548,10 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                       onClick={() => {
                         void taskAPI.stop(taskId).then(() => {
                           setIsPaused(false)
-                          setRunStatus('Arrêt en cours...')
+                          setRunStatus(t('Arrêt en cours...'))
                         })
                       }}
-                      title="Arrêter"
+                      title={t('Arrêter')}
                       className="p-1 rounded bg-red-800/50 hover:bg-red-700/60 text-red-400 transition-colors"
                     >
                       <Square size={11} />
@@ -1593,17 +1594,17 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
               onClick={() => { setAlgoLogs([]); logSinceRef.current = 0 }}
               className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
             >
-              Effacer
+              {t('Effacer')}
             </button>
           )}
           {bottomView === 'tracks' && tracks.length > 0 && (
             <button
               onClick={() => void handleDeleteAllTracks()}
-              title="Supprimer tous les tracks (annotations conservées)"
+              title={t('Supprimer tous les tracks (annotations conservées)')}
               className="flex items-center gap-0.5 text-xs text-red-400/70 hover:text-red-400 transition-colors"
             >
               <Trash2 size={10} />
-              Tout suppr.
+              {t('Tout suppr.')}
             </button>
           )}
         </div>
@@ -1617,8 +1618,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
         >
           {algoLogs.length === 0 ? (
             <div className="text-xs text-slate-600 text-center py-6 px-4 font-sans">
-              Aucun log. Lancez SAMURAI, Detect, Homogr. ou Flux opt. —
-              la commande et l'avancement de l'algo s'afficheront ici en temps réel.
+              {t("Aucun log. Lancez SAMURAI, Detect, Homogr. ou Flux opt. — la commande et l'avancement de l'algo s'afficheront ici en temps réel.")}
             </div>
           ) : (
             <div className="px-2 py-1.5 space-y-0.5">
@@ -1650,7 +1650,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
         >
           {tracks.length === 0 ? (
             <div className="text-xs text-slate-600 text-center py-6 px-4">
-              Aucune track. Assignez une track à une annotation (onglet Annots) ou lancez un suivi.
+              {t('Aucune track. Assignez une track à une annotation (onglet Annots) ou lancez un suivi.')}
             </div>
           ) : (
             tracks.map((track) => {
@@ -1660,7 +1660,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                 <div
                   key={track.id}
                   className={`flex items-center gap-2 px-2 py-1 border-b border-slate-800 group cursor-pointer ${isActive ? 'bg-slate-800/50' : 'hover:bg-slate-700/40'}`}
-                  title={`Track #${track.track_uid} — clic = début (frame ${track.start_frame}), double-clic = fin (frame ${track.end_frame})`}
+                  title={`Track #${track.track_uid} — ${t('clic = début (frame')} ${track.start_frame}${t('), double-clic = fin (frame')} ${track.end_frame})`}
                   onClick={() => onFrameNavigate(track.start_frame)}
                   onDoubleClick={() => onFrameNavigate(track.end_frame)}
                 >
@@ -1676,7 +1676,7 @@ export const TrackPanel: React.FC<TrackPanelProps> = ({
                   <button
                     onClick={(e) => { e.stopPropagation(); void handleDeleteTrack(track.id) }}
                     className="p-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400 text-slate-500 transition-all flex-shrink-0"
-                    title="Supprimer cette track"
+                    title={t('Supprimer cette track')}
                   >
                     <Trash2 size={11} />
                   </button>

@@ -39,7 +39,50 @@ export interface LaunchHandle {
 
 const CONFIG_LINE_RE = {
   backend: /\[config\]\s*backend\s*=\s*http:\/\/localhost:(\d+)/i,
-  frontend: /\[config\]\s*frontend\s*=\s*http:\/\/localhost:(\d+)/i,
+  // "none" : un service backend seul n'a pas de frontend (launcher_engine.py).
+  frontend: /\[config\]\s*frontend\s*=\s*(?:http:\/\/localhost:(\d+)|(none))/i,
+}
+
+/** `token` : jeton de session de l'instance (_lib/session_auth.py), absent si l'auth est coupee. */
+export interface AppPorts { backendPort: number; frontendPort: number; token?: string }
+export interface ServicePorts { backendPort: number; frontendPort: number | null; token?: string }
+
+// Annonces du lanceur qui portent un secret : jamais ecrites telles quelles
+// dans le journal (fichier de log, panneau des lancements).
+const TOKEN_LINE_RE = /^\s*\[token\]\s+(\S+)\s*$/
+const AUTH_LINK_RE = /^\s*\[auth\]\s+navigateur/i
+
+/** Version affichable d'une ligne du lanceur : le jeton et le lien d'amorcage sont masques. */
+export function redactLauncherLine(line: string): string {
+  if (TOKEN_LINE_RE.test(line)) return '[auth] jeton de session recu (masque)'
+  if (AUTH_LINK_RE.test(line)) return '[auth] lien navigateur a usage unique emis (masque)'
+  return line
+}
+
+/**
+ * Accumule les lignes "[config] ..." et rend les ports des qu'ils sont tous
+ * connus. `allowNoFrontend` n'est vrai que pour un service : pour une app
+ * normale, "frontend = none" est ignore (on attend le vrai port, comme avant).
+ * Le jeton est annonce avant les ports : il est deja la quand ils sont complets.
+ */
+export function createPortsCollector(allowNoFrontend: boolean): (line: string) => ServicePorts | null {
+  let backendPort: number | null = null
+  let frontendPort: number | null = null
+  let frontendNone = false
+  let token: string | undefined
+  return (line) => {
+    const tMatch = line.match(TOKEN_LINE_RE)
+    if (tMatch) token = tMatch[1]
+    const bMatch = line.match(CONFIG_LINE_RE.backend)
+    if (bMatch) backendPort = parseInt(bMatch[1], 10)
+    const fMatch = line.match(CONFIG_LINE_RE.frontend)
+    if (fMatch) {
+      if (fMatch[1]) frontendPort = parseInt(fMatch[1], 10)
+      else if (allowNoFrontend) frontendNone = true
+    }
+    if (!backendPort || !(frontendPort || frontendNone)) return null
+    return token ? { backendPort, frontendPort, token } : { backendPort, frontendPort }
+  }
 }
 
 /**
@@ -53,7 +96,12 @@ function stripTrailingSlash(p: string): string {
   return p.trim().replace(/[\\/]+$/, '')
 }
 
-export function launchApp(appDef: AppDef, settings: LauncherSettings): LaunchHandle {
+/** `backendOnly` : service sans frontend (le moteur le force deja, l'option le rend explicite). */
+export function launchApp(
+  appDef: Pick<AppDef, 'id'>,
+  settings: LauncherSettings,
+  opts: { backendOnly?: boolean } = {},
+): LaunchHandle {
   const username = settings.username.trim()
   const workspace = stripTrailingSlash(settings.workspace)
   const cvRoot = stripTrailingSlash(settings.cvRoot)
@@ -62,6 +110,7 @@ export function launchApp(appDef: AppDef, settings: LauncherSettings): LaunchHan
   const nativeShareArg = settings.nativeMountHost.trim()
     ? ` --native-share-host '${settings.nativeMountHost.trim().replace(/'/g, "'\\''")}'`
     : ''
+  const backendOnlyArg = opts.backendOnly ? ' --backend-only' : ''
 
   let launchProcess: ChildProcess
   if (selectedVm) {
@@ -69,14 +118,14 @@ export function launchApp(appDef: AppDef, settings: LauncherSettings): LaunchHan
     // dynamique cote launcher.py). Le tunnel est ouvert separement une fois
     // qu'on les a lus sur stdout (cf. waitForPorts + openTunnel plus bas).
     const remoteCmd = `cd '${cvRoot}' && python launcher.py --app ${appDef.id} ` +
-      `--user ${username} --workspace '${workspace}' --conda-path '${condaPath}'${nativeShareArg}`
+      `--user ${username} --workspace '${workspace}' --conda-path '${condaPath}'${nativeShareArg}${backendOnlyArg}`
     launchProcess = spawn('ssh', ['-t', selectedVm, remoteCmd], { windowsHide: true })
   } else {
     const localNativeShareArg = settings.nativeMountHost.trim()
       ? ` --native-share-host "${settings.nativeMountHost.trim().replace(/"/g, '')}"`
       : ''
     const local = `cd /d "${cvRoot}" && python launcher.py --app ${appDef.id} ` +
-      `--user ${username} --workspace "${workspace}" --conda-path "${condaPath}"${localNativeShareArg}`
+      `--user ${username} --workspace "${workspace}" --conda-path "${condaPath}"${localNativeShareArg}${backendOnlyArg}`
     // windowsVerbatimArguments:true est OBLIGATOIRE ici. Sans lui, Node
     // ré-échappe les guillemets internes de `local` a la maniere MSVCRT
     // (\") avant de les passer a cmd.exe -- mais cmd.exe a son PROPRE
@@ -102,14 +151,25 @@ export function launchApp(appDef: AppDef, settings: LauncherSettings): LaunchHan
 export function waitForPorts(
   proc: ChildProcess,
   onLine: (line: string) => void,
+  timeoutMs?: number,
+): Promise<AppPorts | null>
+export function waitForPorts(
+  proc: ChildProcess,
+  onLine: (line: string) => void,
+  timeoutMs: number,
+  allowNoFrontend: true,
+): Promise<ServicePorts | null>
+export function waitForPorts(
+  proc: ChildProcess,
+  onLine: (line: string) => void,
   timeoutMs = 60000,
-): Promise<{ backendPort: number; frontendPort: number } | null> {
+  allowNoFrontend = false,
+): Promise<ServicePorts | null> {
   return new Promise((resolve) => {
-    let backendPort: number | null = null
-    let frontendPort: number | null = null
+    const collect = createPortsCollector(allowNoFrontend)
     let settled = false
 
-    const finish = (result: { backendPort: number; frontendPort: number } | null) => {
+    const finish = (result: ServicePorts | null) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -118,19 +178,19 @@ export function waitForPorts(
 
     const timer = setTimeout(() => finish(null), timeoutMs)
 
+    // Ce listener reste le SEUL relais de la sortie du lanceur pendant toute la
+    // vie de l'app : il ne doit jamais s'arreter au milieu d'un paquet. L'ancien
+    // `return` apres les ports jetait le reste de chaque paquet (le collecteur
+    // renvoie les ports a chaque ligne une fois connus) : une trace Python
+    // n'apparaissait que par sa premiere ligne (rapport 2026-09-25, Docs Assistant).
     const onData = (buf: Buffer) => {
       const text = buf.toString()
       for (const line of text.split(/\r?\n/)) {
         if (!line) continue
-        onLine(line)
-        const bMatch = line.match(CONFIG_LINE_RE.backend)
-        if (bMatch) backendPort = parseInt(bMatch[1], 10)
-        const fMatch = line.match(CONFIG_LINE_RE.frontend)
-        if (fMatch) frontendPort = parseInt(fMatch[1], 10)
-        if (backendPort && frontendPort) {
-          finish({ backendPort, frontendPort })
-          return
-        }
+        onLine(redactLauncherLine(line))
+        if (settled) continue
+        const ports = collect(line)
+        if (ports) finish(ports)
       }
     }
 
@@ -161,15 +221,24 @@ export function waitForPorts(
  * ssh sort en erreur : on peut le detecter (cf. watchTunnel) et le dire.
  */
 export function openTunnel(vm: string, backendPort: number, frontendPort: number): ChildProcess {
-  return spawn('ssh', [
+  return openTunnelPorts(vm, [backendPort, frontendPort])
+}
+
+/** Arguments ssh d'un tunnel pur : un `-L` par port distinct. */
+export function tunnelArgs(vm: string, ports: number[]): string[] {
+  return [
     '-N',
     '-o', 'ExitOnForwardFailure=yes',
     '-o', 'ServerAliveInterval=30',
     '-o', 'ServerAliveCountMax=3',
-    '-L', `${backendPort}:localhost:${backendPort}`,
-    '-L', `${frontendPort}:localhost:${frontendPort}`,
+    ...[...new Set(ports)].flatMap((p) => ['-L', `${p}:localhost:${p}`]),
     vm,
-  ], { windowsHide: true })
+  ]
+}
+
+/** Tunnel sur une liste de ports quelconque : un service n'en forwarde qu'un (backend). */
+export function openTunnelPorts(vm: string, ports: number[]): ChildProcess {
+  return spawn('ssh', tunnelArgs(vm, ports), { windowsHide: true })
 }
 
 /**
