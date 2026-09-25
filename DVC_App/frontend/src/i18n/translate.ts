@@ -66,6 +66,33 @@ export function subscribeLang(listener: (lang: Lang) => void): () => void {
   return () => listeners.delete(listener)
 }
 
+// Pilotage desktop : si ?lang= est present au chargement, VisionNexus impose la
+// langue et cette app ne doit ni lire ni ecrire la preference workspace.
+const desktopPiloted = readQueryLang() !== null
+
+export function isDesktopPiloted(): boolean {
+  return desktopPiloted
+}
+
+// Repli hors lanceur : au boot, si l'app n'est pas pilotee par VisionNexus, on va
+// lire la preference persistee cote workspace (settings.json) et on l'applique.
+export async function initWorkspaceLanguage(fetchSettingsLang: () => Promise<Lang | null | undefined>): Promise<void> {
+  if (desktopPiloted) return
+  try {
+    const fromWorkspace = await fetchSettingsLang()
+    if (isLang(fromWorkspace ?? null)) setLang(fromWorkspace as Lang)
+  } catch {
+    // Pas de backend joignable au boot : repli localStorage/anglais.
+  }
+}
+
+// Change la langue locale, et ne persiste cote workspace que si l'app n'est pas
+// pilotee par VisionNexus (sinon ?lang= resterait la source de verite au reload).
+export function setLangAndMaybePersist(lang: Lang, persistToWorkspace: (lang: Lang) => void): void {
+  setLang(lang)
+  if (!desktopPiloted) persistToWorkspace(lang)
+}
+
 // Dictionnaire de correspondance exacte FR -> EN, complete au fil de la
 // couverture de l'app. Une chaine absente du dictionnaire reste affichee
 // en francais meme en mode EN (degradation silencieuse, jamais de texte
@@ -158,49 +185,18 @@ const EXACT_EN: Record<string, string> = {
   'supprimé': 'deleted',
   'modifié': 'modified',
 
-  // --- DocPage ---
-  'Documentation — DVC dans cette app': 'Documentation — DVC in this app',
-  'DVC (Data Version Control) répond à une question :': 'DVC (Data Version Control) answers one question:',
-  'quelle version exacte des données / modèles lourds a été utilisée ?':
-    'which exact version of the data / heavy models was used?',
-  'Le pourquoi conceptuel (Git vs DVC vs MLflow) est expliqué dans le':
-    'The conceptual why (Git vs DVC vs MLflow) is explained in the',
-  'Guide MLOps': 'MLOps Guide',
-  "de l'Orchestrator. Cette page se concentre sur l'usage réel ici.":
-    'Orchestrator. This page focuses on actual usage here.',
-  'Liste les fichiers/dossiers réellement suivis par DVC dans ce repo, avec leur taille, leur empreinte (':
-    'Lists the files/folders actually tracked by DVC in this repo, with their size, their fingerprint (',
-  ' = identifiant de version) et leur statut (à jour / modifié / manquant).':
-    ' = version identifier) and their status (up to date / modified / missing).',
-  'Chaque commit git touchant un': 'Every git commit touching a',
-  '= une version. Les puces Dataset / Run / mAP viennent des':
-    '= one version. The Dataset / Run / mAP chips come from the',
-  'trailers': 'trailers',
-  "posés par l'Orchestrator au moment du commit — elles traduisent le commit brut en information MLOps.":
-    'set by the Orchestrator at commit time — they translate the raw commit into MLOps information.',
-  'Diff': 'Diff',
-  "Compare deux versions. On affiche d'abord un": 'Compares two versions. It first shows a',
-  'résumé métier': 'business summary',
-  "(+N/−N images, annotations modifiées, run qui a utilisé la version cible), puis le détail fichier par fichier. Si une info n'est pas dans les trailers, c'est indiqué, jamais inventé.":
-    '(+N/−N images, changed annotations, run that used the target version), then the file-by-file detail. If information is not in the trailers, it is indicated, never invented.',
-  'Sync': 'Sync',
-  'Push / Pull DVC vers/depuis le remote, avec la source': 'Push / Pull DVC to/from the remote, with the source',
-  "destination réelle et un log temps réel. Sans remote configuré, l'action est bloquée avec un message clair.":
-    'actual destination and a real-time log. Without a configured remote, the action is blocked with a clear message.',
-  'Push / Pull : quand et pourquoi': 'Push / Pull: when and why',
-  'après avoir versionné un nouveau dataset/modèle, pour que le contenu lourd soit récupérable depuis une autre machine (VM GPU, collègue). Git seul ne stocke que les pointeurs':
-    'after versioning a new dataset/model, so the heavy content can be retrieved from another machine (GPU VM, colleague). Git alone only stores the pointers',
-  '; le contenu part au remote.': '; the content goes to the remote.',
-  'après un': 'after a',
-  "d'une version, pour rapatrier le contenu exact correspondant (reproduire un run à l'identique).":
-    'of a version, to bring back the exact matching content (reproduce a run identically).',
-  'Exemple réel': 'Real example',
-  "Un run d'entraînement produit un dataset YOLO et un": 'A training run produces a YOLO dataset and a',
-  ". Depuis le nœud DVC de l'Orchestrator, on commit ces artefacts : le repo devient":
-    ". From the Orchestrator's DVC node, these artifacts are committed: the repo becomes",
-  'version code+config': 'code+config version',
-  '= version exacte des données': '= exact version of the data',
-  "= run qui l'a utilisée.": '= run that used it.',
+  // DocPage.tsx (pages markdown de docs/)
+  'Documentation': 'Documentation',
+  'Utilisateur': 'User',
+  'Installation et réglages': 'Setup and settings',
+  'Développeur': 'Developer',
+  'Liste des pages indisponible': 'Page list unavailable',
+  'Aucune page de documentation.': 'No documentation page.',
+  'Chargement de la documentation…': 'Loading documentation...',
+  'Documentation non disponible': 'Documentation unavailable',
+  "Cette page n'est pas encore écrite dans le dossier docs/ de l'application.": "This page is not written yet in the app's docs/ folder.",
+  "Le backend ne répond pas. Vérifiez qu'il est démarré puis rechargez la page.": 'The backend is not responding. Check that it is running, then reload the page.',
+  "Cette page n'est pas encore traduite : version dans l'autre langue.": 'This page is not translated yet: showing the other language.',
 
   // --- HistoryPage ---
   'Version': 'Version',
@@ -266,6 +262,16 @@ const EXACT_EN: Record<string, string> = {
   ' — le working dir est une 2e copie ; relie-le au cache :': ' — the working dir is a 2nd copy; link it to the cache:',
   'Re-lier au cache': 'Re-link to cache',
   'Repo DVC introuvable — rien à mesurer.': 'DVC repo not found — nothing to measure.',
+
+  // components/UserBadge.tsx
+  'Ouvrir workspace': 'Open workspace',
+  'Historique des workspaces': 'Workspace history',
+  'Utilisateurs connectes': 'Connected users',
+  'Workspaces recents': 'Recent workspaces',
+  'Aucun utilisateur trouve.': 'No user found.',
+  '(vous)': '(you)',
+  'Ouvrir ce workspace': 'Open this workspace',
+  'Aucun workspace utilise recemment.': 'No recently used workspace.',
 }
 
 const PHRASE_EN: ReadonlyArray<readonly [string, string]> = [

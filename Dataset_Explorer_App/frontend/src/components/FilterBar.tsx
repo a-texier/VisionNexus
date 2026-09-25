@@ -4,6 +4,7 @@
 // ============================================================
 
 import type { ClusterInfo } from '../types/api'
+import { useT } from '../i18n/useLang'
 import type { ColorMode } from './ScatterPlot'
 
 interface Props {
@@ -28,11 +29,12 @@ export default function FilterBar({
   clusters, selectedCluster, onClusterChange,
   minRarity, maxRarity, onRarityChange,
 }: Props) {
+  const t = useT()
   return (
     <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
       {/* Mode couleur */}
       <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-sm">Couleur :</span>
+        <span className="text-gray-400 text-sm">{t('Couleur :')}</span>
         <div className="flex rounded-lg overflow-hidden border border-gray-600">
           {COLOR_MODES.map(m => (
             <button
@@ -43,7 +45,7 @@ export default function FilterBar({
                   ? 'bg-indigo-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
             >
-              {m.label}
+              {t(m.label)}
             </button>
           ))}
         </div>
@@ -51,13 +53,13 @@ export default function FilterBar({
 
       {/* Filtre cluster */}
       <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-sm">Cluster :</span>
+        <span className="text-gray-400 text-sm">{t('Cluster :')}</span>
         <select
           value={selectedCluster ?? ''}
           onChange={e => onClusterChange(e.target.value === '' ? null : Number(e.target.value))}
           className="bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
         >
-          <option value="">Tous</option>
+          <option value="">{t('Tous')}</option>
           {clusters.map(c => (
             <option key={c.cluster_id} value={c.cluster_id}>
               C{c.cluster_id} ({c.count})
@@ -68,7 +70,7 @@ export default function FilterBar({
 
       {/* Filtre rareté */}
       <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-sm">Rareté :</span>
+        <span className="text-gray-400 text-sm">{t('Rareté :')}</span>
         <input
           type="range"
           min={0} max={100}

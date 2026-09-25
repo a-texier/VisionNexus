@@ -2,16 +2,18 @@
 // App.tsx — sidebar layout + routes
 // ============================================================
 
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutList, Rocket, Settings, BookOpen } from 'lucide-react'
+import { LayoutList, Rocket, Settings, BookOpen, LifeBuoy } from 'lucide-react'
 import { UserBadge } from './components/UserBadge'
 import StudiesPage     from './pages/StudiesPage'
 import StudyDetailPage from './pages/StudyDetailPage'
 import LaunchPage      from './pages/LaunchPage'
 import GuidePage       from './pages/GuidePage'
 import HPOLearnPage    from './pages/HPOLearnPage'
-import { studiesAPI }  from './api/client'
+import { studiesAPI, settingsAPI } from './api/client'
+import { initWorkspaceLanguage } from './i18n/translate'
 
 function RunningBadge() {
   const { data } = useQuery({
@@ -50,10 +52,15 @@ function SettingsPlaceholder() {
 const NAV = [
   { to: '/',         label: 'Études',         icon: LayoutList },
   { to: '/learn/hpo', label: 'Comprendre HPO', icon: BookOpen   },
+  { to: '/guide',    label: 'Documentation',   icon: LifeBuoy   },
   { to: '/settings', label: 'Paramètres',      icon: Settings   },
 ]
 
 export default function App() {
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => (s as any).ui_language))
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="flex h-screen overflow-hidden bg-gray-950">

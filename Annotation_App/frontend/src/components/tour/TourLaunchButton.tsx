@@ -8,6 +8,7 @@
 // ============================================================
 
 import React from 'react'
+import { useT } from '../../i18n/useLang'
 
 const KEYFRAMES = `
 @keyframes tour-launch-glow {
@@ -32,16 +33,20 @@ interface TourLaunchButtonProps {
 export const TourLaunchButton: React.FC<TourLaunchButtonProps> = ({
   onClick,
   glow = false,
-  label = 'Tutoriel interactif',
+  label,
   title,
-}) => (
+}) => {
+  const t = useT()
+  const resolvedLabel = label ?? t('Tutoriel interactif')
+  const resolvedTitle = title ?? (glow
+    ? t("Demarrer le tutoriel : creation d'un projet demo guidee de bout en bout")
+    : t('Relancer le tutoriel interactif'))
+  return (
   <>
     <style>{KEYFRAMES}</style>
     <button
       onClick={onClick}
-      title={title ?? (glow
-        ? "Demarrer le tutoriel : creation d'un projet demo guidee de bout en bout"
-        : 'Relancer le tutoriel interactif')}
+      title={resolvedTitle}
       style={{
         position: 'relative',
         overflow: 'hidden',
@@ -88,7 +93,8 @@ export const TourLaunchButton: React.FC<TourLaunchButtonProps> = ({
         <path d="M7 10.5V15c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-4.5" />
         <path d="M21 8v5" />
       </svg>
-      <span style={{ position: 'relative' }}>{label}</span>
+      <span style={{ position: 'relative' }}>{resolvedLabel}</span>
     </button>
   </>
-)
+  )
+}

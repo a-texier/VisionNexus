@@ -32,6 +32,8 @@ const ALGO_COLOR: Record<NonNullable<SourceAlgorithm>, string> = {
   guided_tracking: 'bg-blue-900/40 text-blue-400',
   resnet_tracking: 'bg-cyan-900/40 text-cyan-400',
   sam2_tracking: 'bg-teal-900/40 text-teal-300',
+  homography: 'bg-lime-900/40 text-lime-400',
+  optical_flow: 'bg-sky-900/40 text-sky-400',
 }
 
 const ALGO_SHORT: Record<NonNullable<SourceAlgorithm>, string> = {
@@ -48,6 +50,8 @@ const ALGO_SHORT: Record<NonNullable<SourceAlgorithm>, string> = {
   guided_tracking: 'GT',
   resnet_tracking: 'RN',
   sam2_tracking: 'S2',
+  homography: 'HG',
+  optical_flow: 'OF',
 }
 
 interface GlobalAnnotationsPanelProps {

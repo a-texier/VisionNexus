@@ -17,6 +17,7 @@ import { Search, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-rea
 import type { Frame } from '../../types/api'
 import { trackingAPI } from '../../services/api'
 import { useT } from '../../i18n/useLang'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 interface XFeatDebugPanelProps {
   projectId: number
@@ -47,6 +48,8 @@ export const XFeatDebugPanel: React.FC<XFeatDebugPanelProps> = ({
   currentFrameIndex,
 }) => {
   const t = useT()
+  // Meme seuil que la propagation : celui des reglages (Ratio inliers), pas 0.5 en dur
+  const minInlierRatio = useSettingsStore((s) => s.settings?.algorithms?.min_inlier_ratio)
   const [frameAIndex, setFrameAIndex] = useState(currentFrameIndex)
   const [frameBIndex, setFrameBIndex] = useState(Math.min(currentFrameIndex + 1, frames.length - 1))
   const [isLoading, setIsLoading] = useState(false)
@@ -73,7 +76,7 @@ export const XFeatDebugPanel: React.FC<XFeatDebugPanelProps> = ({
     setResult(null)
 
     try {
-      const data = await trackingAPI.debugHomography(projectId, frameA.id, frameB.id)
+      const data = await trackingAPI.debugHomography(projectId, frameA.id, frameB.id, minInlierRatio)
       setResult(data)
       if (data.error) setError(data.error)
     } catch (e) {

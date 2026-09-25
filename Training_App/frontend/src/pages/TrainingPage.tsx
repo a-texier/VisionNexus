@@ -268,7 +268,7 @@ export default function TrainingPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">{t('Nom du run (optionnel)')}</label>
+              <label className="text-xs text-gray-400 mb-1 block">{t('Nom du dataset (optionnel)')}</label>
               <input
                 type="text"
                 value={datasetName}

@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
+<!-- lang= et tout le texte de cette page sont mis a jour en direct par i18n.js
+     (cvApplyI18n) des que l'utilisateur bascule FR/EN dans Parametres. -->
 <head>
 <meta charset="UTF-8">
 <title>VisionNexus</title>
@@ -331,8 +333,53 @@
   }
   .tile .statusDot.launching{background:var(--blue); opacity:1; animation:cvPulse 1s ease-in-out infinite;}
   .tile .statusDot.running{background:var(--green); opacity:1; box-shadow:0 0 6px rgba(63,185,80,.6);}
-  .tile .statusDot.error, .tile .statusDot.closed, .tile .statusDot.idle{background:var(--red); opacity:1;}
+  .tile .statusDot.error, .tile .statusDot.closed{background:var(--red); opacity:1;}
   @keyframes cvPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  /* ---- Ressources de calcul : services sans interface, interrupteur ON/OFF ---- */
+  #services{width:900px; margin:6px auto 0; padding-top:16px; border-top:1px solid var(--border);}
+  #services h2{
+    margin:0 0 4px; font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#7f8da5;
+  }
+  #services .svcSub{font-size:11.5px; color:var(--muted); margin-bottom:12px; max-width:720px;}
+  .svcCard{
+    display:flex; align-items:center; gap:14px; padding:12px 16px; background:var(--panel);
+    border:1.5px solid var(--border); border-radius:12px; transition:border-color .15s;
+  }
+  .svcCard.ready{border-color:rgba(63,185,80,.4);}
+  .svcCard.error{border-color:rgba(248,81,73,.45);}
+  .svcCard > img{width:44px; height:44px; object-fit:contain; flex-shrink:0;}
+  .svcBody{flex:1; min-width:0;}
+  .svcTitle{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .svcName{font-size:13.5px; font-weight:700; color:#fff;}
+  .svcTarget{
+    font-size:10px; font-weight:700; color:var(--teal);
+    background:rgba(45,212,191,.12); border:1px solid rgba(45,212,191,.35); padding:1px 7px; border-radius:8px;
+  }
+  .svcDesc{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .svcStatus{display:flex; align-items:center; gap:7px; margin-top:7px; font-size:11.5px; color:var(--muted);}
+  .svcDot{width:8px; height:8px; border-radius:50%; background:var(--muted); opacity:.5; flex-shrink:0;}
+  .svcDot.starting, .svcDot.stopping{background:var(--blue); opacity:1; animation:cvPulse 1s ease-in-out infinite;}
+  .svcDot.ready{background:var(--green); opacity:1; box-shadow:0 0 6px rgba(63,185,80,.6);}
+  .svcDot.error{background:var(--red); opacity:1;}
+  .svcMsg{margin-top:5px; font-size:11.5px; color:#f0a19c; overflow-wrap:anywhere;}
+  .svcHint{margin-top:5px; font-size:11.5px; color:var(--amber);}
+  .svcLink{flex-shrink:0; border:1px solid #fb923c; background:rgba(249,115,22,.14); color:#fdba74; font-weight:700; padding:6px 12px; border-radius:8px; font-size:11.5px; cursor:pointer; font-family:inherit;}
+  .svcLink:hover{background:rgba(249,115,22,.26);}
+  .svcLink[hidden]{display:none;}
+  #docsBtn.asstOn{border-color:#fb923c; color:#0f172a; font-weight:700; background:linear-gradient(135deg,#fb923c,#f97316 55%,#ea580c); box-shadow:0 0 10px rgba(249,115,22,.55);}
+  .svcSwitch{
+    position:relative; flex-shrink:0; width:46px; height:26px; padding:0; border-radius:13px; cursor:pointer;
+    border:1px solid var(--border); background:var(--panel2); transition:background .15s, border-color .15s;
+  }
+  .svcSwitch::after{
+    content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+    background:var(--muted); transition:left .15s, background .15s;
+  }
+  .svcSwitch[aria-checked="true"]{background:rgba(63,185,80,.22); border-color:rgba(63,185,80,.55);}
+  .svcSwitch[aria-checked="true"]::after{left:23px; background:var(--green);}
+  .svcSwitch:focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
+  .svcSwitch:disabled{opacity:.45; cursor:not-allowed;}
 
   #logPanel{margin-top:14px; border-top:1px solid var(--border); padding-top:14px; display:none; flex-direction:column; width:900px; margin-left:auto; margin-right:auto;}
   #logPanel.open{display:flex;}
@@ -414,20 +461,20 @@
   <h1>VisionNexus</h1>
   <!-- Entree du tutoriel interactif (ui/tour.js). Halo orange tant qu'il n'a
        jamais ete lance sur ce poste (reglage tutorials.nexus du lanceur). -->
-  <button class="ghost" id="tutoBtn" type="button">Tutoriel</button>
+  <button class="ghost" id="tutoBtn" type="button" data-i18n="tutoBtn">Tutoriel</button>
   <nav id="appMenuBar">
     <div class="menuItem">
-      <button type="button" data-menu="file">Fichier</button>
+      <button type="button" data-menu="file" data-i18n="menuFile">Fichier</button>
       <div class="menuDropdown">
-        <button type="button" id="menuQuit">Quitter</button>
+        <button type="button" id="menuQuit" data-i18n="menuQuit">Quitter</button>
       </div>
     </div>
     <div class="menuItem">
-      <button type="button" data-menu="help">Aide</button>
+      <button type="button" data-menu="help" data-i18n="menuHelp">Aide</button>
       <div class="menuDropdown">
-        <button type="button" id="menuDocs">Documentation</button>
-        <button type="button" id="menuLogs">Dossier des logs</button>
-        <button type="button" id="menuDevtools">Outils de developpement</button>
+        <button type="button" id="menuDocs" data-i18n="menuDocs">Documentation</button>
+        <button type="button" id="menuLogs" data-i18n="menuLogs">Dossier des logs</button>
+        <button type="button" id="menuDevtools" data-i18n="menuDevtools">Outils de developpement</button>
       </div>
     </div>
   </nav>
@@ -438,24 +485,24 @@
     </button>
   </div>
   <div class="headBtns">
-    <div id="splitCtl" title="Disposition des vues">
-      <button type="button" class="splitBtn active" data-layout="single" title="Une seule vue">
+    <div id="splitCtl" title="Disposition des vues" data-i18n-title="layoutTitle">
+      <button type="button" class="splitBtn active" data-layout="single" title="Une seule vue" data-i18n-title="layoutSingle">
         <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
       </button>
-      <button type="button" class="splitBtn" data-layout="v2" title="2 vues cote a cote (gauche/droite)">
+      <button type="button" class="splitBtn" data-layout="v2" title="2 vues cote a cote (gauche/droite)" data-i18n-title="layoutV2">
         <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="1" x2="8" y2="13" stroke="currentColor" stroke-width="1.5"/></svg>
       </button>
-      <button type="button" class="splitBtn" data-layout="h2" title="2 vues empilees (haut/bas)">
+      <button type="button" class="splitBtn" data-layout="h2" title="2 vues empilees (haut/bas)" data-i18n-title="layoutH2">
         <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.5"/></svg>
       </button>
-      <button type="button" class="splitBtn" data-layout="grid4" title="4 vues (grille 2x2)">
+      <button type="button" class="splitBtn" data-layout="grid4" title="4 vues (grille 2x2)" data-i18n-title="layoutGrid4">
         <svg viewBox="0 0 16 14" width="16" height="14"><rect x="1" y="1" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="1" x2="8" y2="13" stroke="currentColor" stroke-width="1.5"/><line x1="1" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.5"/></svg>
       </button>
     </div>
-    <button class="ghost" id="portsBtn">Ports</button>
-    <button class="ghost" id="sidebarToggleBtn" title="Masquer/afficher le bandeau de l'app active (Ctrl+B)">Bandeau</button>
-    <button class="ghost" id="logsBtn">Logs</button>
-    <button class="ghost" id="docsBtn">Documentation</button>
+    <button class="ghost" id="portsBtn" data-i18n="portsBtn">Ports</button>
+    <button class="ghost" id="sidebarToggleBtn" title="Masquer/afficher le bandeau de l'app active (Ctrl+B)" data-i18n="sidebarToggleBtn" data-i18n-title="sidebarToggleTitle">Bandeau</button>
+    <button class="ghost" id="logsBtn" data-i18n="logsBtn">Logs</button>
+    <button class="ghost" id="docsBtn" data-i18n="docsBtn">Documentation</button>
   </div>
 </header>
 <div id="subAppsFlyout"></div>
@@ -466,41 +513,44 @@
 <!-- Mode composition du dock : overlay bleu (carres = volets) + vignettes des apps
      a deposer + message. Affiche au clic sur un bouton de disposition. -->
 <div id="dockCompose">
-  <div id="dockMsg">Glissez une app dans chaque volet</div>
+  <div id="dockMsg" data-i18n="dockMsg">Glissez une app dans chaque volet</div>
   <div id="dockSquares"></div>
   <div id="dockTray"></div>
   <div id="dockActions">
-    <button type="button" id="dockCancel" class="ghost">Annuler</button>
-    <button type="button" id="dockApply">Valider</button>
+    <button type="button" id="dockCancel" class="ghost" data-i18n="dockCancel">Annuler</button>
+    <button type="button" id="dockApply" data-i18n="dockApply">Valider</button>
   </div>
 </div>
 <div id="tabCtxMenu">
-  <button type="button" id="tabCtxCopy">Copier l'URL</button>
-  <button type="button" id="tabCtxOpen">Ouvrir dans le navigateur</button>
+  <button type="button" id="tabCtxCopy" data-i18n="tabCtxCopy">Copier l'URL</button>
+  <button type="button" id="tabCtxOpen" data-i18n="tabCtxOpen">Ouvrir dans le navigateur</button>
 </div>
 <div id="tabUrlToast"></div>
 <div id="portsPanel">
   <div class="box">
     <div class="head">
       <div>
-        <h2>Ports en cours d'utilisation</h2>
-        <div class="sub">Ports TCP en ecoute, local et VM -- pour reperer un process qui traine (orphelin) avant que ca s'accumule.</div>
+        <h2 data-i18n="portsTitle">Ports en cours d'utilisation</h2>
+        <div class="sub" data-i18n="portsSub">Ports TCP en ecoute, local et VM -- pour reperer un process qui traine (orphelin) avant que ca s'accumule.</div>
       </div>
       <div class="headActions">
-        <button class="ghost" id="portsKillAllBtn">Tout arreter</button>
-        <button class="ghost" id="portsRefreshBtn">Rafraichir</button>
-        <button class="ghost" id="portsCloseBtn">Fermer</button>
+        <button class="ghost" id="portsKillAllBtn" data-i18n="portsKillAll">Tout arreter</button>
+        <button class="ghost" id="portsCleanupVmBtn" data-i18n="portsCleanupVm">Nettoyer la VM</button>
+        <button class="ghost" id="portsRefreshBtn" data-i18n="portsRefresh">Rafraichir</button>
+        <button class="ghost" id="portsCloseBtn" data-i18n="portsClose">Fermer</button>
       </div>
     </div>
+    <div id="portsStatus" class="sub" style="white-space:pre-line;margin-bottom:8px"></div>
     <div id="portsContent"></div>
   </div>
 </div>
 
+<script src="i18n.js"></script>
 <div id="body">
   <div id="left">
     <div class="flow">
-      <div class="suiteFrame"><span>Orchestrator + 7 applications</span></div>
-      <div class="standaloneLabel">Application standalone</div>
+      <div class="suiteFrame"><span data-i18n="suiteFrameLabel">Orchestrator + 7 applications</span></div>
+      <div class="standaloneLabel" data-i18n="standaloneLabel">Application standalone</div>
       <svg viewBox="0 0 900 410" width="900" height="410">
         <defs></defs>
         <g stroke="#3a4a68" stroke-width="2.5" fill="none">
@@ -523,14 +573,20 @@
       <div id="tiles"></div>
     </div>
 
+    <div id="services">
+      <h2 data-i18n="svcHead">Ressources de calcul</h2>
+      <div class="svcSub" data-i18n="svcSub">Services sans interface, allumes a la demande.</div>
+      <div id="svcList"></div>
+    </div>
+
     <div id="logPanel">
-      <div class="head">Lancements</div>
+      <div class="head" data-i18n="launchesHead">Lancements</div>
       <div id="logTabs"></div>
       <div id="logActiveHead">
         <img id="logActiveIcon" src="" onerror="this.style.display='none'" alt="">
         <span id="logActiveName"></span>
         <div class="spacer2"></div>
-        <button class="ghost" id="logStopBtn" title="Arreter/fermer proprement cette app">Stop</button>
+        <button class="ghost" id="logStopBtn" title="Arreter/fermer proprement cette app" data-i18n="logStopBtn" data-i18n-title="logStopTitle">Stop</button>
       </div>
       <div id="logStatusLine"></div>
       <div id="logLines"></div>
@@ -538,53 +594,53 @@
   </div>
 
   <div id="right">
-    <h2>Parametres</h2>
-    <div class="warn" id="warnBar">Renseigne les champs ci-dessous pour pouvoir lancer une app.</div>
-    <div class="ok" id="okBar">Reglages complets -- les apps sont lancables.</div>
+    <h2 data-i18n="settingsTitle">Parametres</h2>
+    <div class="warn" id="warnBar" data-i18n="warnBar">Renseigne les champs ci-dessous pour pouvoir lancer une app.</div>
+    <div class="ok" id="okBar" data-i18n="okBar">Reglages complets -- les apps sont lancables.</div>
 
     <div class="field">
-      <span>Langue des apps</span>
+      <span data-i18n="langLabel">Langue des apps</span>
       <div id="langToggle">
         <button class="ghost" id="langEnBtn" type="button">EN</button>
         <button class="ghost" id="langFrBtn" type="button">FR</button>
       </div>
-      <span class="hint">Langue de depart des apps lancees depuis VisionNexus. Chaque app reste libre de basculer localement (son propre bouton FR/EN), ce reglage ne fixe que l'etat au lancement.</span>
+      <span class="hint" data-i18n="langHint">Langue de depart des apps lancees depuis VisionNexus. Chaque app reste libre de basculer localement (son propre bouton FR/EN), ce reglage ne fixe que l'etat au lancement.</span>
     </div>
     <div class="field">
-      <span>Utilisateur</span>
-      <input id="fUser" placeholder="bob">
+      <span data-i18n="userLabel">Utilisateur</span>
+      <input id="fUser" placeholder="bob" data-i18n-placeholder="userPlaceholder">
     </div>
     <div class="field">
-      <span>Workspace</span>
-      <input id="fWs" placeholder="/data/ws ou D:\ws">
+      <span data-i18n="wsLabel">Workspace</span>
+      <input id="fWs" placeholder="/data/ws ou D:\ws" data-i18n-placeholder="wsPlaceholder">
     </div>
     <div class="field">
-      <span>Racine Computer_Vision_App</span>
-      <input id="fRoot" placeholder="chemin vu par la cible">
+      <span data-i18n="rootLabel">Racine Computer_Vision_App</span>
+      <input id="fRoot" placeholder="chemin vu par la cible" data-i18n-placeholder="rootPlaceholder">
       <span class="hint" id="rootHint">Local : chemin Windows (C:\...). VM : chemin Linux (/home/...).</span>
     </div>
     <div class="field">
-      <span>Chemin conda</span>
-      <input id="fConda" placeholder="chemin vers conda">
+      <span data-i18n="condaLabel">Chemin conda</span>
+      <input id="fConda" placeholder="chemin vers conda" data-i18n-placeholder="condaPlaceholder">
     </div>
     <div class="field">
-      <span>VM cible</span>
+      <span data-i18n="vmTargetLabel">VM cible</span>
       <select id="vmSelect"></select>
     </div>
     <div class="field">
-      <span>VM(s) connue(s)</span>
-      <input id="fVms" placeholder="vm-gpu-01">
-      <span class="hint">Une seule VM ? Ecris juste son nom. Plusieurs : separe-les par une virgule (vm-gpu-01, vm-gpu-02).</span>
+      <span data-i18n="vmsLabel">VM(s) connue(s)</span>
+      <input id="fVms" placeholder="vm-gpu-01" data-i18n-placeholder="vmsPlaceholder">
+      <span class="hint" data-i18n="vmsHint">Une seule VM ? Ecris juste son nom. Plusieurs : separe-les par une virgule (vm-gpu-01, vm-gpu-02).</span>
     </div>
 
     <div class="field">
-      <span>Partage reseau natif (optionnel)</span>
-      <input id="fMount" placeholder="ex: share-host.example.net">
-      <span class="hint">"Natif" = l'app compatible lit les images directement sur ce partage reseau au lieu de passer par la connexion SSH -- plus rapide. Hote d'un partage deja monte cote Windows (SMB ou autre). Si joignable, les apps marquees "natif" sur leur tuile l'utilisent en priorite ; sinon HTTP normal, rien ne casse -- laisse vide si tu ne sais pas.</span>
+      <span data-i18n="mountLabel">Partage reseau natif (optionnel)</span>
+      <input id="fMount" placeholder="ex: share-host.example.net" data-i18n-placeholder="mountPlaceholder">
+      <span class="hint" data-i18n="mountHint">"Natif" = l'app compatible lit les images directement sur ce partage reseau au lieu de passer par la connexion SSH -- plus rapide. Hote d'un partage deja monte cote Windows (SMB ou autre). Si joignable, les apps marquees "natif" sur leur tuile l'utilisent en priorite ; sinon HTTP normal, rien ne casse -- laisse vide si tu ne sais pas.</span>
       <div id="mountStatus" class="mountStatus">
         <span id="mountDot" class="dot"></span>
         <span id="mountLabel">Non teste</span>
-        <button class="ghost" id="mountTestBtn" type="button">Tester</button>
+        <button class="ghost" id="mountTestBtn" type="button" data-i18n="mountTest">Tester</button>
       </div>
       <div id="mountShares" class="hint"></div>
     </div>
@@ -594,7 +650,7 @@
       <span class="sub" id="mountToastSub"></span>
     </div>
 
-    <button id="saveBtn">Enregistrer</button>
+    <button id="saveBtn" data-i18n="saveBtn">Enregistrer</button>
   </div>
 </div>
 
@@ -603,9 +659,7 @@ const cv = window.cvLauncher
 
 function updateRootHint() {
   const isVm = !!document.getElementById('vmSelect').value
-  document.getElementById('rootHint').textContent = isVm
-    ? 'VM selectionnee : chemin Linux (/home/... ou /mnt/...).'
-    : 'Aucune VM (local) : chemin Windows (C:\\...).'
+  document.getElementById('rootHint').textContent = isVm ? cvT('rootHintVm') : cvT('rootHintLocal')
 }
 
 async function refreshSettingsUI() {
@@ -623,7 +677,7 @@ async function refreshSettingsUI() {
   else setMountStatus(null, [], '')
 
   const vmSelect = document.getElementById('vmSelect')
-  vmSelect.innerHTML = '<option value="">(local, pas de VM)</option>'
+  vmSelect.innerHTML = `<option value="">${cvT('vmNone')}</option>`
   for (const vm of s.vms) {
     const opt = document.createElement('option')
     opt.value = vm; opt.textContent = vm
@@ -650,17 +704,18 @@ function setTilesEnabled(valid) {
     const st = appState[t.dataset.appId]
     t.disabled = !valid || (st && st.status === 'launching')
   })
+  updateAllServiceCards()
 }
 
 function setMountStatus(ok, shares, error) {
   const dot = document.getElementById('mountDot')
   const label = document.getElementById('mountLabel')
   dot.className = 'dot' + (ok === true ? ' green' : ok === false ? ' red' : '')
-  label.textContent = ok === true ? 'Joignable'
-    : ok === false ? (error || 'Injoignable')
-    : 'Non teste'
+  label.textContent = ok === true ? cvT('mountReachable')
+    : ok === false ? (error || cvT('mountUnreachable'))
+    : cvT('mountUntested')
   document.getElementById('mountShares').textContent = shares && shares.length
-    ? `Zones accessibles : ${shares.join(', ')}`
+    ? cvT('mountSharesFound', { shares: shares.join(', ') })
     : ''
 }
 
@@ -669,12 +724,10 @@ function showMountToast(ok, host, shares, error) {
   const el = document.getElementById('mountToast')
   const title = document.getElementById('mountToastTitle')
   const sub = document.getElementById('mountToastSub')
-  title.textContent = ok
-    ? `Partage "${host}" joignable (port SMB 445 ouvert)`
-    : `Partage "${host}" injoignable`
+  title.textContent = ok ? cvT('mountToastOk', { host }) : cvT('mountToastErr', { host })
   sub.textContent = ok
-    ? (shares && shares.length ? `Zones accessibles : ${shares.join(', ')}` : 'Aucune zone de la liste confirmee (verifie "Zones connues"), mais le serveur repond -- le chemin natif s\'activera quand meme.')
-    : (error || 'Verifie le nom, le VPN/reseau.')
+    ? (shares && shares.length ? cvT('mountToastOkSubShares', { shares: shares.join(', ') }) : cvT('mountToastOkSubNoShares'))
+    : (error || cvT('mountToastErrSub'))
   el.className = ok ? 'show ok' : 'show err'
   if (mountToastTimer) clearTimeout(mountToastTimer)
   mountToastTimer = setTimeout(() => { el.className = el.className.replace('show', '').trim() }, ok ? 5000 : 8000)
@@ -683,7 +736,7 @@ function showMountToast(ok, host, shares, error) {
 async function testMount(host) {
   if (!host || !host.trim()) { setMountStatus(null, [], ''); return }
   setMountStatus(null, [], '')
-  document.getElementById('mountLabel').textContent = 'Test en cours...'
+  document.getElementById('mountLabel').textContent = cvT('mountTesting')
   const res = await cv.checkMount(host.trim())
   setMountStatus(res.ok, res.shares, res.error)
   showMountToast(res.ok, host.trim(), res.shares, res.error)
@@ -702,10 +755,11 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     cvRoot: document.getElementById('fRoot').value.trim(),
     condaPath: document.getElementById('fConda').value.trim(),
     vms,
-    selectedVm: vms.includes(current.selectedVm) ? current.selectedVm : (vms[0] || ''),
+    selectedVm: (!current.selectedVm || vms.includes(current.selectedVm)) ? current.selectedVm : (vms[0] || ''),
     nativeMountHost: document.getElementById('fMount').value.trim(),
   })
   await refreshSettingsUI()
+  await refreshServiceStatuses()
 })
 
 document.getElementById('vmSelect').addEventListener('change', async (e) => {
@@ -713,10 +767,23 @@ document.getElementById('vmSelect').addEventListener('change', async (e) => {
   s.selectedVm = e.target.value
   await cv.saveSettings(s)
   updateRootHint()
+  await refreshServiceStatuses()
 })
 
 async function setUiLanguage(lang) {
   const s = await cv.getSettings()
+  CV_LANG = lang === 'fr' ? 'fr' : 'en'
+  cvApplyI18n()
+  updateAllServiceCards()
+  renderTabStrip()      // re-render : titres et libelles dynamiques des onglets
+  renderLogTabs()
+  if (activeLogAppId) renderActiveLog()
+  document.querySelectorAll('.tile').forEach((btn) => {
+    const dot = btn.querySelector('.statusDot')
+    if (dot) dot.title = STATUS_LABEL()[dot.className.replace('statusDot ', '').trim()] || ''
+    const nativeTag = btn.querySelector('.nativeTag')
+    if (nativeTag) nativeTag.title = cvT('nativeMountTileTitle')
+  })
   if (s.uiLanguage === lang) return
   s.uiLanguage = lang
   await cv.saveSettings(s)
@@ -763,7 +830,7 @@ function closePortsPanel() {
 function renderPortsTable(title, rows, known, target) {
   const knownPorts = new Map(known.map((k) => [k.port, k.label]))
   if (!rows.length) {
-    return `<h3>${title}</h3><div class="sub" style="margin-bottom:16px">Aucun port en ecoute detecte.</div>`
+    return `<h3>${title}</h3><div class="sub" style="margin-bottom:16px">${cvT('portsNone')}</div>`
   }
   // Ports lies a une app (nous ou Orchestrator) en priorite en haut, en
   // evidence (teal) -- le reste (orphelins potentiels) reste en dessous,
@@ -781,10 +848,10 @@ function renderPortsTable(title, rows, known, target) {
     const fromRegistry = !!label && label.includes('registre')
     const rowClass = !label ? 'orphan' : (fromRegistry ? 'registry' : 'known')
     const statusCell = label
-      ? (fromRegistry ? `<span class="badge reg">app active</span> ${label}` : label)
-      : '<span class="badge">a verifier</span>'
+      ? (fromRegistry ? `<span class="badge reg">${cvT('portsBadgeActive')}</span> ${label}` : label)
+      : `<span class="badge">${cvT('portsBadgeCheck')}</span>`
     const killCell = r.pid
-      ? `<button type="button" class="killBtn" data-target="${target}" data-port="${r.port}">Tuer</button>`
+      ? `<button type="button" class="killBtn" data-target="${target}" data-port="${r.port}">${cvT('portsKill')}</button>`
       : ''
     return `<tr class="${rowClass}">
       <td>${r.port}</td>
@@ -796,36 +863,67 @@ function renderPortsTable(title, rows, known, target) {
   }).join('')
   return `<h3>${title}</h3>
     <table>
-      <thead><tr><th>Port</th><th>Process</th><th>Utilisateur</th><th>Statut</th><th></th></tr></thead>
+      <thead><tr><th>${cvT('portsColPort')}</th><th>${cvT('portsColProcess')}</th><th>${cvT('portsColUser')}</th><th>${cvT('portsColStatus')}</th><th></th></tr></thead>
       <tbody>${body}</tbody>
     </table>`
 }
+// Un refresh demande pendant un scan (typiquement juste apres un kill) etait
+// jete : la ligne tuee restait affichee jusqu'au poll suivant, comme si
+// "Tuer" n'avait rien fait. On le note et on le rejoue a la fin du scan.
+let portsRefreshPending = false
+// Kill en cours par "target:port" : un re-rendu du tableau pendant le kill ne
+// doit pas remettre un bouton "Tuer" cliquable sur la meme ligne.
+const portsKilling = new Set()
 async function refreshPortsPanel() {
-  if (portsScanInFlight) return
+  if (portsScanInFlight) { portsRefreshPending = true; return }
   portsScanInFlight = true
+  portsRefreshPending = false
   const content = document.getElementById('portsContent')
   try {
     const res = await cv.scanPorts()
-    let html = renderPortsTable('Local (cette machine)', res.local, res.known, 'local')
+    let html = renderPortsTable(cvT('portsLocal'), res.local, res.known, 'local')
     if (res.remote) {
-      html += renderPortsTable(`VM (${res.remote.vm})`, res.remote.rows, res.known, 'remote')
+      html += renderPortsTable(cvT('portsVm', { vm: res.remote.vm }), res.remote.rows, res.known, 'remote')
     }
     content.innerHTML = html
     content.querySelectorAll('.killBtn').forEach((btn) => {
+      const key = `${btn.dataset.target}:${btn.dataset.port}`
+      if (portsKilling.has(key)) { btn.disabled = true; btn.textContent = cvT('portsKilling') }
       btn.addEventListener('click', async () => {
         btn.disabled = true
-        btn.textContent = '...'
-        await cv.killPort(btn.dataset.target, parseInt(btn.dataset.port, 10))
+        btn.textContent = cvT('portsKilling')
+        portsKilling.add(key)
+        let res
+        try {
+          res = await cv.killPort(btn.dataset.target, parseInt(btn.dataset.port, 10))
+        } catch (err) {
+          res = { ok: false, error: String(err) }
+        } finally {
+          portsKilling.delete(key)
+        }
+        if (!res.ok) showPortsError(`${cvT('portsKill')} ${btn.dataset.port} : ${res.error || cvT('portsFailed')}`)
         refreshPortsPanel()
       })
     })
   } catch {
-    content.innerHTML = '<div class="sub">Erreur pendant la lecture des ports.</div>'
+    content.innerHTML = `<div class="sub">${cvT('portsError')}</div>`
   } finally {
     portsScanInFlight = false
-    schedulePortsPoll()
+    if (portsRefreshPending) refreshPortsPanel()
+    else schedulePortsPoll()
   }
 }
+// Resultat d'un kill : ligne au-dessus du tableau, que le poll (qui re-rend
+// le tableau toutes les 10 s) n'efface pas.
+let portsStatusTimer = null
+function showPortsStatus(text, isError) {
+  const el = document.getElementById('portsStatus')
+  el.textContent = text
+  el.style.color = isError ? 'var(--red)' : 'var(--green)'
+  if (portsStatusTimer) clearTimeout(portsStatusTimer)
+  portsStatusTimer = setTimeout(() => { el.textContent = '' }, isError ? 15000 : 5000)
+}
+function showPortsError(text) { showPortsStatus(text, true) }
 document.getElementById('portsBtn').addEventListener('click', openPortsPanel)
 document.getElementById('portsCloseBtn').addEventListener('click', closePortsPanel)
 document.getElementById('portsRefreshBtn').addEventListener('click', refreshPortsPanel)
@@ -834,19 +932,40 @@ document.getElementById('portsRefreshBtn').addEventListener('click', refreshPort
 // confirme, et on nomme ce qui va etre arrete plutot qu'un "Etes-vous sur ?".
 document.getElementById('portsKillAllBtn').addEventListener('click', async (e) => {
   const btn = e.currentTarget
-  const names = openTabs.map((t) => t.label).join(', ')
-  const detail = names ? `Applications ouvertes : ${names}.` : 'Aucun onglet ouvert.'
-  if (!confirm(`Arreter toutes les applications lancees par VisionNexus ?\n\n${detail}\nLes ports connus seront aussi liberes, en local et sur la VM.`)) return
+  const running = svcDefs.filter((s) => ['starting', 'ready'].includes((svcStatus[s.id] || {}).state)).map((s) => s.label)
+  const names = [...openTabs.map((t) => t.label), ...running].join(', ')
+  const detail = names ? cvT('portsKillAllDetailOpen', { names }) : cvT('portsKillAllDetailNone')
+  if (!confirm(cvT('portsKillAllConfirm', { detail }))) return
   btn.disabled = true
   const previous = btn.textContent
-  btn.textContent = 'Arret...'
+  btn.textContent = cvT('portsStopping')
   try {
     const res = await cv.killAll()
-    btn.textContent = `${res.stopped} arretee(s)`
-  } catch {
-    btn.textContent = 'Echec'
+    btn.textContent = cvT('portsStopped', { n: res.stopped })
+    if (res.failed) showPortsError(`${cvT('portsStoppedWithFailures', { n: res.stopped, f: res.failed })}\n${res.error || ''}`)
+    else showPortsStatus(cvT('portsStopped', { n: res.stopped }), false)
+  } catch (err) {
+    btn.textContent = cvT('portsFailed')
+    showPortsError(String(err))
   }
   setTimeout(() => { btn.textContent = previous; btn.disabled = false }, 2500)
+  refreshPortsPanel()
+})
+document.getElementById('portsCleanupVmBtn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget
+  if (!confirm(cvT('portsCleanupConfirm'))) return
+  btn.disabled = true
+  const previous = btn.textContent
+  btn.textContent = cvT('portsStopping')
+  try {
+    const res = await cv.cleanupVm()
+    if (res.ok) showPortsStatus(cvT('portsCleaned', { n: res.killed }), false)
+    else showPortsError(res.error || cvT('portsFailed'))
+  } catch (err) {
+    showPortsError(String(err))
+  }
+  btn.textContent = previous
+  btn.disabled = false
   refreshPortsPanel()
 })
 document.getElementById('portsPanel').addEventListener('click', (e) => {
@@ -929,12 +1048,12 @@ function renderSubAppsFlyoutContent() {
         // (navigateur) ; starting -> desactive ; sinon -> Lancer.
         let actionBtn
         if (a.status === 'running') {
-          actionBtn = `<button type="button" class="open" data-open="${a.app_id}">Ouvrir</button>`
-                    + `<button type="button" class="openBrowser" data-browser="${a.app_id}" title="Ouvrir dans le navigateur">Nav</button>`
+          actionBtn = `<button type="button" class="open" data-open="${a.app_id}">${cvT('subAppsOpen')}</button>`
+                    + `<button type="button" class="openBrowser" data-browser="${a.app_id}" title="${cvT('subAppsNavTitle')}">${cvT('subAppsNav')}</button>`
         } else if (a.launched && a.status === 'starting') {
-          actionBtn = `<button type="button" disabled>Demarrage...</button>`
+          actionBtn = `<button type="button" disabled>${cvT('subAppsStarting')}</button>`
         } else {
-          actionBtn = `<button type="button" data-launch="${a.app_id}">Lancer</button>`
+          actionBtn = `<button type="button" data-launch="${a.app_id}">${cvT('subAppsLaunch')}</button>`
         }
         return `<div class="subAppRow">
           <img src="../assets/${icon}" onerror="this.style.display='none'">
@@ -943,20 +1062,20 @@ function renderSubAppsFlyoutContent() {
           ${actionBtn}
         </div>`
       }).join('')
-    : '<div class="subAppsEmpty">Orchestrator ne connait aucune sous-app.</div>'
+    : `<div class="subAppsEmpty">${cvT('subAppsEmpty')}</div>`
   flyout.innerHTML = `
     <button type="button" class="subAppsAll" id="subAppsLaunchAll"${(!total || launchedCount === total) ? ' disabled' : ''}>
-      <span>Lancer tout</span><span>${launchedCount}/${total}</span>
+      <span>${cvT('subAppsLaunchAll')}</span><span>${launchedCount}/${total}</span>
     </button>
     ${rows}`
   const allBtn = document.getElementById('subAppsLaunchAll')
   if (allBtn) allBtn.addEventListener('click', async (e) => {
     e.stopPropagation()
     allBtn.disabled = true
-    allBtn.querySelector('span').textContent = 'Lancement...'
+    allBtn.querySelector('span').textContent = cvT('subAppsLaunching')
     const r = await cv.launchAllOrchestratorSubApps()
     if (r && !r.ok) {
-      showTabUrlToast(r.error || 'Lancement impossible')
+      showTabUrlToast(r.error || cvT('subAppsLaunchAllFailed'))
       renderSubAppsFlyoutContent()
     }
   })
@@ -973,7 +1092,7 @@ function renderSubAppsFlyoutContent() {
       e.stopPropagation()
       closeSubAppsFlyout()
       const r = await cv.openOrchestratorSubApp(btn.dataset.open)
-      if (r && !r.ok) showTabUrlToast(r.error || 'Ouverture impossible')
+      if (r && !r.ok) showTabUrlToast(r.error || cvT('subAppsOpenFailed'))
     })
   })
   flyout.querySelectorAll('button[data-browser]').forEach((btn) => {
@@ -981,25 +1100,9 @@ function renderSubAppsFlyoutContent() {
       e.stopPropagation()
       closeSubAppsFlyout()
       const r = await cv.openOrchestratorSubAppInBrowser(btn.dataset.browser)
-      if (r && !r.ok) showTabUrlToast(r.error || 'Ouverture navigateur impossible')
+      if (r && !r.ok) showTabUrlToast(r.error || cvT('subAppsOpenBrowserFailed'))
     })
   })
-}
-
-function openSubAppsFlyout(anchorEl) {
-  renderSubAppsFlyoutContent()
-  const flyout = document.getElementById('subAppsFlyout')
-  const rect = anchorEl.getBoundingClientRect()
-  flyout.style.left = Math.round(rect.left) + 'px'
-  flyout.style.top = Math.round(rect.bottom + 4) + 'px'
-  flyout.classList.add('open')
-  subAppsFlyoutOpen = true
-  // Au lieu de MASQUER toute la vue active (ce qui revelait le catalog VisionNexus
-  // derriere -> sensation d'etre projete hors de l'onglet), on ROGNE la vue par le
-  // haut jusqu'au bas du flyout : l'app reste visible dessous, seul un fin bandeau
-  // en haut (ou s'affiche le flyout) est libere. On passe le bas reel du flyout.
-  const fb = Math.round(flyout.getBoundingClientRect().bottom)
-  cv.setSubAppsFlyout(true, fb)
 }
 
 // ---- Menu contextuel d'onglet (clic droit) : copier/ouvrir l'URL reelle ----
@@ -1033,14 +1136,14 @@ document.getElementById('tabCtxCopy').addEventListener('click', async () => {
   closeTabCtxMenu()
   if (!appId) return
   const ok = await cv.copyTabUrl(appId)
-  showTabUrlToast(ok ? 'URL copiee dans le presse-papiers' : "Onglet ferme, plus d'URL disponible")
+  showTabUrlToast(ok ? cvT('tabUrlCopied') : cvT('tabUrlGone'))
 })
 document.getElementById('tabCtxOpen').addEventListener('click', async () => {
   const appId = tabCtxMenuAppId
   closeTabCtxMenu()
   if (!appId) return
   const ok = await cv.openTabInBrowser(appId)
-  if (!ok) showTabUrlToast("Onglet ferme, plus d'URL disponible")
+  if (!ok) showTabUrlToast(cvT('tabUrlGone'))
 })
 
 function renderTabStrip() {
@@ -1056,9 +1159,7 @@ function renderTabStrip() {
     btn.className = 'wtab' + (t.appId === activeTabId ? ' active' : '') + (isDetached ? ' detached' : '')
     btn.dataset.appId = t.appId   // repere pour le tutoriel (ui/tour.js)
     btn.draggable = !isDetached
-    btn.title = isDetached
-      ? 'Fenetre detachee -- clic pour la ramener au premier plan, ou re-docker avec le bouton'
-      : 'Glisser hors de la barre pour detacher dans sa propre fenetre'
+    btn.title = isDetached ? cvT('tabDetachedTitle') : cvT('tabDetachHint')
 
     // Pastille de statut (vivant/mort) -- reprend l'etat suivi par le
     // panneau de logs (appState), deja alimente par cv.onStatus ailleurs
@@ -1068,8 +1169,8 @@ function renderTabStrip() {
       ? `<span class="natTag${t.native.active ? '' : ' fallback'}" title="${t.native.reason}">${t.native.active ? 'SMB' : 'HTTP'}</span>`
       : ''
     const trailingBtn = isDetached
-      ? '<span class="dockBtn" title="Redocker dans cette fenetre">&#8676;</span>'
-      : '<span class="closeX" title="Fermer">&times;</span>'
+      ? `<span class="dockBtn" title="${cvT('tabDockTitle')}">&#8676;</span>`
+      : `<span class="closeX" title="${cvT('tabCloseTitle')}">&times;</span>`
     // Orchestrator lance ses propres sous-apps (annotation, explorer, ...) hors
     // de notre launchApp() habituel -- ce bandeau les rend accessibles comme
     // de vrais onglets ici, sans avoir a ouvrir un navigateur a la main.
@@ -1078,7 +1179,7 @@ function renderTabStrip() {
       ? orchestratorSubApps.filter((a) => a.status === 'starting' || a.status === 'running').length
       : 0
     const subAppsMenu = isOrchestrator
-      ? `<span class="subAppsTrigger" title="Sous-apps Orchestrator">&#9662; ${launchedCount}/${orchestratorSubApps.length}</span>`
+      ? `<span class="subAppsTrigger" title="${cvT('subAppsTitle')}">&#9662; ${launchedCount}/${orchestratorSubApps.length}</span>`
       : ''
     btn.innerHTML = `<span class="statusDot ${st}"></span><img src="../assets/${t.icon}" onerror="this.style.display='none'"><span>${t.label}</span>${natTag}${subAppsMenu}${trailingBtn}`
 
@@ -1191,7 +1292,7 @@ function renderSplitHandles() {
     const h = document.createElement('div'); h.className = `splitHandle ${axis}`
     if (axis === 'x') { h.style.left=`${pos}px`; h.style.top=`${body.top}px`; h.style.height=`${body.height}px` }
     else { h.style.left=`${body.left}px`; h.style.top=`${pos}px`; h.style.width=`${body.width}px` }
-    h.title = axis === 'x' ? 'Tirer pour redimensionner gauche/droite' : 'Tirer pour redimensionner haut/bas'
+    h.title = axis === 'x' ? cvT('resizeX') : cvT('resizeY')
     h.addEventListener('pointerdown', (e) => {
       e.preventDefault(); h.classList.add('dragging'); h.setPointerCapture(e.pointerId)
       const move = (ev) => {
@@ -1218,7 +1319,7 @@ function renderEmptyPanes() {
     if (currentLayout.panes[i]) return   // volet occupe -> vue native par-dessus
     const d = document.createElement('div'); d.className = 'emptyPane'
     d.style.left = s.x + 'px'; d.style.top = s.y + 'px'; d.style.width = s.width + 'px'; d.style.height = s.height + 'px'
-    d.textContent = 'Volet vide — utilisez un bouton de disposition pour y placer une app'
+    d.textContent = cvT('emptyPane')
     host.appendChild(d)
   })
 }
@@ -1259,12 +1360,12 @@ function renderComposeSquares(rects) {
     const appId = composePanes[i]
     if (appId) {
       const t = openTabs.find((x) => x.appId === appId)
-      sq.innerHTML = `<div class="dsNum">Volet ${i + 1}</div>`
+      sq.innerHTML = `<div class="dsNum">${cvT('paneNum', { n: i + 1 })}</div>`
         + `<div class="dsApp"><img src="../assets/${(t && t.icon) || 'app.ico'}" onerror="this.style.display='none'"><span>${(t && t.label) || appId}</span></div>`
-        + `<div class="dsClear">retirer</div>`
+        + `<div class="dsClear">${cvT('paneRemove')}</div>`
       sq.querySelector('.dsClear').addEventListener('click', (e) => { e.stopPropagation(); composePanes[i] = null; refreshCompose() })
     } else {
-      sq.innerHTML = `<div class="dsNum">Volet ${i + 1}</div><div>Déposez une app ici</div>`
+      sq.innerHTML = `<div class="dsNum">${cvT('paneNum', { n: i + 1 })}</div><div>${cvT('paneDrop')}</div>`
     }
     sq.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; sq.classList.add('hover') })
     sq.addEventListener('dragleave', () => sq.classList.remove('hover'))
@@ -1276,7 +1377,7 @@ function renderComposeSquares(rects) {
 function renderComposeTray() {
   const tray = document.getElementById('dockTray'); tray.innerHTML = ''
   const apps = openTabs.filter((t) => t.location === 'docked')
-  if (!apps.length) { tray.innerHTML = '<span style="color:var(--muted);font-size:12px">Aucune app ouverte a placer</span>'; return }
+  if (!apps.length) { tray.innerHTML = `<span style="color:var(--muted);font-size:12px">${cvT('trayEmpty')}</span>`; return }
   apps.forEach((t) => {
     const th = document.createElement('div'); th.className = 'dockThumb' + (composePick === t.appId ? ' picked' : ''); th.draggable = true
     th.innerHTML = `<img src="../assets/${t.icon || 'app.ico'}" onerror="this.style.display='none'"><span>${t.label}</span>`
@@ -1357,12 +1458,14 @@ function getState(appId) {
   return appState[appId]
 }
 
-const STATUS_LABEL = {
-  idle: 'Jamais lance',
-  launching: 'Lancement en cours...',
-  running: 'En cours d\'execution',
-  error: 'Erreur',
-  closed: 'Fenetre fermee',
+function STATUS_LABEL() {
+  return {
+    idle: cvT('statusIdle'),
+    launching: cvT('statusLaunching'),
+    running: cvT('statusRunning'),
+    error: cvT('statusError'),
+    closed: cvT('statusClosed'),
+  }
 }
 
 async function buildTiles() {
@@ -1380,9 +1483,9 @@ async function buildTiles() {
     btn.style.top = app.y + 'px'
     btn.style.borderColor = app.color + '55'
     const nativeTag = app.supportsNativeMount
-      ? '<span class="nativeTag" title="Cette app peut lire ses images directement sur le partage reseau natif (Parametres) au lieu de passer par SSH, si configure et joignable -- sinon HTTP normal automatiquement">SMB</span>'
+      ? `<span class="nativeTag" title="${cvT('nativeMountTileTitle')}">SMB</span>`
       : ''
-    btn.innerHTML = `<span class="statusDot idle" title="${STATUS_LABEL.idle}"></span><img src="../assets/${app.icon}" onerror="this.style.opacity=0"><span>${app.label}</span>${nativeTag}`
+    btn.innerHTML = `<span class="statusDot idle" title="${STATUS_LABEL().idle}"></span><img src="../assets/${app.icon}" onerror="this.style.opacity=0"><span>${app.label}</span>${nativeTag}`
     btn.addEventListener('click', () => launch(app.id))
     container.appendChild(btn)
   }
@@ -1394,7 +1497,7 @@ function updateTileDot(appId) {
   const st = getState(appId)
   const dot = btn.querySelector('.statusDot')
   dot.className = 'statusDot ' + st.status
-  dot.title = STATUS_LABEL[st.status] + (st.detail ? ` -- ${st.detail}` : '')
+  dot.title = STATUS_LABEL()[st.status] + (st.detail ? ` -- ${st.detail}` : '')
 }
 
 function renderLogTabs() {
@@ -1417,7 +1520,7 @@ function renderActiveLog() {
   logLines.scrollTop = logLines.scrollHeight
   const statusLine = document.getElementById('logStatusLine')
   statusLine.className = st.status
-  statusLine.textContent = `${appLabels[activeLogAppId] || activeLogAppId} -- ${STATUS_LABEL[st.status]}${st.detail ? ' : ' + st.detail : ''}`
+  statusLine.textContent = `${appLabels[activeLogAppId] || activeLogAppId} -- ${STATUS_LABEL()[st.status]}${st.detail ? ' : ' + st.detail : ''}`
 
   document.getElementById('logActiveIcon').src = `../assets/${appIcons[activeLogAppId] || 'app.ico'}`
   document.getElementById('logActiveName').textContent = appLabels[activeLogAppId] || activeLogAppId
@@ -1491,11 +1594,157 @@ cv.onStatus((appId, status, detail) => {
   setTilesEnabled(settingsValid)
 })
 
+// ---- Ressources de calcul (services backend seul) ----
+// Etat unique cote main (main.ts::services) : ici on affiche cv:service-status et
+// on ne fait que demander start/stop. Une ressource n'ouvre jamais d'onglet.
+const svcStatus = {}     // id -> ServiceStatus
+let svcDefs = []
+const svcCards = {}      // id -> {card, dot, status, target, msg, hint, sw}
+
+function svcTargetLabel(target) {
+  return target || cvT('svcTargetLocal')
+}
+
+function svcStatusText(st) {
+  const idx = st.index
+  switch (st.state) {
+    case 'starting': return cvT('svcStateStarting')
+    case 'stopping': return cvT('svcStateStopping')
+    case 'error': return cvT('svcStateError')
+    case 'ready':
+      if (idx && idx.syncing) {
+        return idx.total > 0 ? cvT('svcIndexing', { done: idx.done, total: idx.total }) : cvT('svcIndexingBare')
+      }
+      return idx && idx.chunks ? cvT('svcIndexed', { n: idx.chunks }) : cvT('svcStateReady')
+    default: return cvT('svcStateOff')
+  }
+}
+
+function updateServiceCard(id) {
+  const ui = svcCards[id]
+  const st = svcStatus[id]
+  const def = svcDefs.find((s) => s.id === id)
+  if (!ui || !st || !def) return
+  ui.card.className = 'svcCard ' + st.state
+  ui.dot.className = 'svcDot ' + st.state
+  ui.status.textContent = svcStatusText(st)
+  ui.target.textContent = svcTargetLabel(st.target)
+  ui.desc.textContent = cvT(def.descKey)
+  // Message traduit par cle quand le processus principal en fournit une ; le repli
+  // francais et la fin de sortie du launcher restent en info-bulle pour le diagnostic.
+  const shown = st.messageKey ? cvT(st.messageKey, st.messageParams || undefined) : st.message
+  ui.msg.hidden = !(st.state === 'error' && shown)
+  ui.msg.textContent = st.state === 'error' ? shown : ''
+  ui.msg.title = st.state === 'error' && st.detail ? st.detail.trim() : ''
+  const running = st.state === 'starting' || st.state === 'ready'
+  const stale = running && st.target !== st.selected
+  ui.hint.hidden = !stale
+  ui.hint.textContent = stale ? cvT('svcRetarget', { target: svcTargetLabel(st.target), selected: svcTargetLabel(st.selected) }) : ''
+  if (id === 'docs') {
+    ui.link.hidden = !running
+    ui.link.textContent = cvT('svcOpenDocs')
+    const docsBtn = document.getElementById('docsBtn')
+    docsBtn.classList.toggle('asstOn', running)
+    docsBtn.title = running ? cvT('docsAssistantOnTitle') : ''
+  }
+  const needsSettings = !running && !settingsValid
+  ui.sw.setAttribute('aria-checked', running ? 'true' : 'false')
+  ui.sw.disabled = st.state === 'stopping' || needsSettings
+  ui.sw.title = needsSettings ? cvT('svcNeedSettings') : cvT('svcSwitchTitle', { name: def.label })
+  ui.sw.setAttribute('aria-label', cvT('svcSwitchTitle', { name: def.label }))
+}
+
+function updateAllServiceCards() {
+  for (const def of svcDefs) updateServiceCard(def.id)
+}
+
+async function toggleService(id) {
+  const st = svcStatus[id]
+  if (!st) return
+  if (st.state === 'off' || st.state === 'error') {
+    // Les lignes du lancement arrivent dans le panneau de logs, comme pour une app.
+    activeLogAppId = id
+    document.getElementById('logPanel').classList.add('open')
+    renderLogTabs()
+    renderActiveLog()
+    await cv.startService(id)
+  } else if (st.state === 'starting' || st.state === 'ready') {
+    await cv.stopService(id)
+  }
+}
+
+function buildServiceCard(def) {
+  const card = document.createElement('div')
+  const img = document.createElement('img')
+  img.src = '../assets/' + def.icon
+  img.alt = ''
+  img.addEventListener('error', () => { img.style.opacity = 0 })
+  const body = document.createElement('div')
+  body.className = 'svcBody'
+  const title = document.createElement('div')
+  title.className = 'svcTitle'
+  const name = document.createElement('span')
+  name.className = 'svcName'
+  name.textContent = def.label
+  const target = document.createElement('span')
+  target.className = 'svcTarget'
+  title.append(name, target)
+  const desc = document.createElement('div')
+  desc.className = 'svcDesc'
+  const statusRow = document.createElement('div')
+  statusRow.className = 'svcStatus'
+  const dot = document.createElement('span')
+  const status = document.createElement('span')
+  statusRow.append(dot, status)
+  const msg = document.createElement('div')
+  msg.className = 'svcMsg'
+  const hint = document.createElement('div')
+  hint.className = 'svcHint'
+  body.append(title, desc, statusRow, msg, hint)
+  const sw = document.createElement('button')
+  sw.type = 'button'
+  sw.className = 'svcSwitch'
+  sw.setAttribute('role', 'switch')
+  sw.addEventListener('click', () => void toggleService(def.id))
+  const link = document.createElement('button')
+  link.type = 'button'
+  link.className = 'svcLink'
+  link.hidden = true
+  link.addEventListener('click', () => void cv.openDocs('ask'))
+  card.append(img, body, link, sw)
+  svcCards[def.id] = { card, dot, status, target, desc, msg, hint, sw, link }
+  return card
+}
+
+async function refreshServiceStatuses() {
+  for (const def of svcDefs) {
+    svcStatus[def.id] = await cv.getServiceStatus(def.id)
+    updateServiceCard(def.id)
+  }
+}
+
+async function buildServices() {
+  svcDefs = await cv.listServices()
+  const list = document.getElementById('svcList')
+  list.innerHTML = ''
+  for (const def of svcDefs) {
+    appLabels[def.id] = def.label
+    appIcons[def.id] = def.icon
+    list.appendChild(buildServiceCard(def))
+  }
+  cv.onServiceStatus((st) => { svcStatus[st.id] = st; updateServiceCard(st.id) })
+  await refreshServiceStatuses()
+}
+
 // Ordre garanti : tuiles construites (desactivees par defaut) PUIS etat des
 // reglages applique -- evite que les tuiles restent cliquables avant que la
 // validation n'ait eu la chance de s'appliquer dessus.
 async function init() {
+  const s = await cv.getSettings()
+  CV_LANG = s.uiLanguage === 'fr' ? 'fr' : 'en'
+  cvApplyI18n()
   await buildTiles()
+  await buildServices()
   await refreshSettingsUI()
 }
 void init()

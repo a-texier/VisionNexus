@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { TrackLane } from './TrackLane'
 import { useAnnotationStore } from '../../stores/annotationStore'
+import { useT } from '../../i18n/useLang'
 import type { Frame, Track, LabelClass } from '../../types/api'
 
 interface TimelineProps {
@@ -58,6 +59,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onTracksHeightChange,
   leftSlot,
 }) => {
+  const t = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const anchorIndexRef = useRef<number | null>(null)
   const isHoveredRef = useRef(false)
@@ -102,6 +104,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   // Efface la sélection de bloc, et inversement. (S5)
   const selectTrack = useCallback((trackId: number, e?: React.MouseEvent) => {
     setSelectedBlock(null)
+    setSelectedIndices(new Set())
     setSelectedTrackIds((prev) => {
       const next = new Set(prev)
       if (e && (e.ctrlKey || e.metaKey)) {
@@ -123,7 +126,25 @@ export const Timeline: React.FC<TimelineProps> = ({
   const selectBlock = useCallback((trackId: number, s: number, e: number) => {
     setSelectedBlock({ trackId, s, e })
     setSelectedTrackIds(new Set())
+    setSelectedIndices(new Set())
   }, [])
+
+  // Une seule selection "vivante" a la fois, la plus recente gagne. Avant, une
+  // piste cliquee restait selectionnee sous tout le reste et Suppr la visait
+  // encore alors qu'on venait de choisir des frames ou des annotations.
+  const clearTrackSelection = useCallback(() => {
+    setSelectedTrackIds((prev) => (prev.size ? new Set() : prev))
+    setSelectedBlock(null)
+  }, [])
+
+  // Selectionner des annotations (canvas ou liste) libere la timeline : Suppr
+  // revient alors au handler global, qui ne supprime que ces annotations.
+  const hasSelectedAnnotations = useAnnotationStore((s) => s.selectedAnnotationIds.size > 0)
+  useEffect(() => {
+    if (!hasSelectedAnnotations) return
+    clearTrackSelection()
+    setSelectedIndices((prev) => (prev.size ? new Set() : prev))
+  }, [hasSelectedAnnotations, clearTrackSelection])
 
   // Réinitialiser la sélection (track ou bloc) si elle disparaît (changement séquence/suppression)
   useEffect(() => {
@@ -194,11 +215,11 @@ export const Timeline: React.FC<TimelineProps> = ({
     const sel = tracks.filter((tk) => selectedTrackIds.has(tk.id))
     if (sel.length === 0) return
     const label = sel.length === 1
-      ? `le track #${sel[0].track_uid} (${trackLabel(sel[0])})`
-      : `${sel.length} pistes (#${sel.map((t) => t.track_uid).join(', #')})`
+      ? `${t('le track')} #${sel[0].track_uid} (${trackLabel(sel[0])})`
+      : `${sel.length} ${t('pistes')} (#${sel.map((tk) => tk.track_uid).join(', #')})`
     const ok = window.confirm(
-      `Supprimer ${label} ?\n\n` +
-      `⚠ Cette action supprime AUSSI toutes les annotations liées. Irréversible.`,
+      `${t('Supprimer')} ${label} ?\n\n` +
+      `⚠ ${t('Cette action supprime AUSSI toutes les annotations liées. Irréversible.')}`,
     )
     if (!ok) return
     setIsDeleting(true)
@@ -241,30 +262,35 @@ export const Timeline: React.FC<TimelineProps> = ({
 
       if (event.key !== 'Delete' && event.key !== 'Backspace') return
 
+      // Quand la timeline prend Suppr, elle le garde : ecoute en phase de
+      // capture + stopPropagation, sinon les handlers globaux (canvas, liste)
+      // supprimaient en plus les annotations selectionnees.
+      const claim = () => { event.preventDefault(); event.stopPropagation() }
+
       // Priorité 1 : un BLOC sélectionné → suppression de ce bloc uniquement
       if (selectedBlock != null && isHoveredRef.current) {
-        event.preventDefault()
+        claim()
         deleteSelectedBlock()
         return
       }
 
       // Priorité 2 : une ou plusieurs pistes sélectionnées → suppression track + annots
       if (selectedTrackIds.size > 0 && isHoveredRef.current) {
-        event.preventDefault()
+        claim()
         deleteSelectedTrack()
         return
       }
 
       if (!onDeleteAnnotationsForFrames || selectedIndices.size === 0 || isDeleting) return
-      event.preventDefault()
+      claim()
       const targets = [...selectedIndices].sort((a, b) => a - b)
       setIsDeleting(true)
       void onDeleteAnnotationsForFrames(targets)
         .then(() => setSelectedIndices(new Set()))
         .finally(() => setIsDeleting(false))
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [isDeleting, onDeleteAnnotationsForFrames, selectedIndices, selectedTrackIds, selectedBlock, deleteSelectedTrack, deleteSelectedBlock, winCount, winStart])
 
   const handlePrev = useCallback(() => {
@@ -283,6 +309,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   }, [scrollLeft, winCount, viewportWidth])
 
   const handleFrameClick = useCallback((event: React.MouseEvent, idx: number) => {
+    clearTrackSelection()
     if (event.shiftKey) {
       const anchor = anchorIndexRef.current ?? currentFrameIndex
       const from = Math.min(anchor, idx)
@@ -300,10 +327,20 @@ export const Timeline: React.FC<TimelineProps> = ({
       anchorIndexRef.current = idx
       return
     }
-    setSelectedIndices(new Set())
+    // Clic simple = cette frame devient la selection, pour que Suppr efface
+    // ses annotations comme apres un Shift/Ctrl+clic (avant : rien de
+    // selectionne, donc Suppr ne faisait rien ou visait une piste).
+    setSelectedIndices(new Set([idx]))
     anchorIndexRef.current = idx
     onFrameSelect(idx)
-  }, [currentFrameIndex, onFrameSelect, selectedIndices])
+  }, [currentFrameIndex, onFrameSelect, selectedIndices, clearTrackSelection])
+
+  // Selection d'une seule frame laissee par un clic simple : elle suit la
+  // navigation (fleches, lecture). Sans ca, Suppr effacerait une frame qu'on
+  // a quittee depuis longtemps.
+  useEffect(() => {
+    setSelectedIndices((prev) => (prev.size === 1 && !prev.has(currentFrameIndex) ? new Set() : prev))
+  }, [currentFrameIndex])
 
   const framesByIndex = useMemo(() => {
     const map = new Map<number, Frame>()
@@ -330,7 +367,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           onPointerMove={onResizeMove}
           onPointerUp={onResizeUp}
           className="group h-2 -mt-px cursor-ns-resize bg-slate-800 hover:bg-blue-600/50 transition-colors flex items-center justify-center flex-shrink-0"
-          title="Glisser (haut/bas) pour agrandir / réduire la zone des tracks"
+          title={t('Glisser (haut/bas) pour agrandir / réduire la zone des tracks')}
         >
           <div className="w-12 h-0.5 rounded-full bg-slate-600 group-hover:bg-blue-300 transition-colors" />
         </div>
@@ -341,11 +378,11 @@ export const Timeline: React.FC<TimelineProps> = ({
             <span className="text-[10px] text-slate-500">
               {visibleTracks.length} track{visibleTracks.length > 1 ? 's' : ''}
               {selectedBlock != null ? (
-                <span className="text-amber-300"> · bloc #{tracks.find((t) => t.id === selectedBlock.trackId)?.track_uid} [{selectedBlock.s}–{selectedBlock.e}] — Suppr efface CE bloc</span>
+                <span className="text-amber-300"> · {t('bloc')} #{tracks.find((tk) => tk.id === selectedBlock.trackId)?.track_uid} [{selectedBlock.s}–{selectedBlock.e}] — {t('Suppr efface CE bloc')}</span>
               ) : selectedTrackIds.size > 0 ? (
-                <span className="text-amber-300"> · {selectedTrackIds.size} piste{selectedTrackIds.size > 1 ? 's' : ''} sélectionnée{selectedTrackIds.size > 1 ? 's' : ''} (Ctrl/Shift + clic) — Suppr efface</span>
+                <span className="text-amber-300"> · {selectedTrackIds.size} {t('piste')}{selectedTrackIds.size > 1 ? 's' : ''} {t('sélectionnée')}{selectedTrackIds.size > 1 ? 's' : ''} ({t('Ctrl/Shift + clic')}) — {t('Suppr efface')}</span>
               ) : (
-                <span className="text-slate-600"> · clic = piste · Ctrl/Shift+clic = plusieurs · clic sur un bloc = ce bloc</span>
+                <span className="text-slate-600"> · {t('clic = piste · Ctrl/Shift+clic = plusieurs · clic sur un bloc = ce bloc')}</span>
               )}
             </span>
             {selectedBlock != null && onDeleteTrackBlock ? (
@@ -353,18 +390,18 @@ export const Timeline: React.FC<TimelineProps> = ({
                 onClick={deleteSelectedBlock}
                 disabled={isDeleting}
                 className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 disabled:opacity-50"
-                title="Supprimer uniquement ce bloc (annotations de la piste sur cette plage)"
+                title={t('Supprimer uniquement ce bloc (annotations de la piste sur cette plage)')}
               >
-                <Trash2 size={11} /> Supprimer ce bloc
+                <Trash2 size={11} /> {t('Supprimer ce bloc')}
               </button>
             ) : selectedTrackIds.size > 0 && onDeleteTrack ? (
               <button
                 onClick={deleteSelectedTrack}
                 disabled={isDeleting}
                 className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 disabled:opacity-50"
-                title="Supprimer la (les) piste(s) sélectionnée(s) et leurs annotations"
+                title={t('Supprimer la (les) piste(s) sélectionnée(s) et leurs annotations')}
               >
-                <Trash2 size={11} /> Supprimer {selectedTrackIds.size > 1 ? `${selectedTrackIds.size} pistes` : 'la piste'}
+                <Trash2 size={11} /> {t('Supprimer')} {selectedTrackIds.size > 1 ? `${selectedTrackIds.size} ${t('pistes')}` : t('la piste')}
               </button>
             ) : null}
           </div>
@@ -372,6 +409,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             data-tour="timeline-tracks"
             className="px-3 py-1 space-y-1 overflow-y-auto border-b border-slate-800"
             style={{ height: effectiveTracksH }}
+            onClick={(e) => { if (e.target === e.currentTarget) clearTrackSelection() }}
           >
             {visibleTracks.map((track) => (
               <TrackLane
@@ -409,6 +447,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           <div
             className="relative py-1"
             style={{ width: `${winCount * ITEM_WIDTH}px`, height: CELL_HEIGHT + 8 }}
+            onClick={(e) => { if (e.target === e.currentTarget) clearTrackSelection() }}
           >
             {Array.from({ length: visibleRange.end - visibleRange.start }, (_, offset) => {
               const local = visibleRange.start + offset
@@ -439,7 +478,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       : 'border-red-900/50'
                   }`}
                   style={{ left: local * ITEM_WIDTH, width: CELL_WIDTH, height: CELL_HEIGHT }}
-                  title={`Frame ${local} (séquence) — ${annotationCount} annotation${annotationCount !== 1 ? 's' : ''}. Ctrl/clic selection, Shift/clic plage, Suppr efface les annotations selectionnees.`}
+                  title={`${t('Frame')} ${local} (${t('séquence')}) — ${annotationCount} annotation${annotationCount !== 1 ? 's' : ''}. ${t('Ctrl/clic selection, Shift/clic plage, Suppr efface les annotations selectionnees.')}`}
                 >
                   <span
                     className={`leading-none font-mono ${isActive ? 'text-blue-300' : 'text-slate-500'}`}
@@ -474,25 +513,25 @@ export const Timeline: React.FC<TimelineProps> = ({
         {/* Badge user + explorateur workspace (bas-gauche) — S8 */}
         {leftSlot && <div className="flex-shrink-0 max-w-[220px] min-w-0 mr-2">{leftSlot}</div>}
         <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
-        <span>Frame {currentFrameIndex - winStart + 1} / {winCount}</span>
+        <span>{t('Frame')} {currentFrameIndex - winStart + 1} / {winCount}</span>
         <button
           onClick={selectAll}
           className="text-slate-500 hover:text-amber-300 transition-colors"
-          title="Sélectionner toutes les frames de la séquence (Ctrl+A quand la timeline est survolée)"
+          title={t('Sélectionner toutes les frames de la séquence (Ctrl+A quand la timeline est survolée)')}
         >
-          · Tout sélectionner
+          · {t('Tout sélectionner')}
         </button>
         {selectedIndices.size > 0 && (
           <>
             <span className="text-amber-300">
-              {selectedIndices.size} sélectionnée{selectedIndices.size > 1 ? 's' : ''}
-              {isDeleting ? ' — suppression…' : ', Suppr pour vider'}
+              {selectedIndices.size} {t('sélectionnée')}{selectedIndices.size > 1 ? 's' : ''}
+              {isDeleting ? ` — ${t('suppression…')}` : `, ${t('Suppr pour vider')}`}
             </span>
             <button
               onClick={() => setSelectedIndices(new Set())}
               className="text-slate-500 hover:text-slate-300 transition-colors"
             >
-              (annuler)
+              ({t('annuler')})
             </button>
           </>
         )}

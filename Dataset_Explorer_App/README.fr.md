@@ -35,7 +35,7 @@ python <racine-suite>/launcher.py --app explorer --workspace <racine-workspaces>
 
 # Manuel, depuis Dataset_Explorer_App/
 conda activate IA_env
-BACKEND_PORT=8001 EXPLORER_FRONTEND_PORT=5173 uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
+BACKEND_PORT=8001 EXPLORER_FRONTEND_PORT=5173 uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
 cd frontend && VITE_BACKEND_PORT=8001 npm run dev -- --port 5173
 ```
 
@@ -43,7 +43,7 @@ Frontend par defaut : http://localhost:5173
 Backend par defaut : http://localhost:8001
 
 Installation complete (dependances Python/Node, premiere fois) : voir
-[docs/developer-guide.md](docs/developer-guide.md).
+[docs/configuration.fr.md](docs/configuration.fr.md).
 
 ## Documentation
 
@@ -52,6 +52,5 @@ Installation complete (dependances Python/Node, premiere fois) : voir
 ## Adaptateur De Format Optionnel
 
 Le support format specialise est isole dans `backend/utils/format specialise.py`. Le backend publie les adaptateurs
-physiquement presents via `GET /api/capabilities`; l'aide frontend n'affiche la section
-correspondante que si cette liste n'est pas vide. Retirer ce fichier puis redemarrer supprime
-donc toute option format specialise de l'interface sans affecter les datasets d'images standards.
+physiquement presents via `GET /api/capabilities`. Retirer ce fichier puis redemarrer supprime la conversion format specialise sans
+affecter les datasets d'images standards.

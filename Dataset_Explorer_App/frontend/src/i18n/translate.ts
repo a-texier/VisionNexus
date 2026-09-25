@@ -66,6 +66,33 @@ export function subscribeLang(listener: (lang: Lang) => void): () => void {
   return () => listeners.delete(listener)
 }
 
+// Pilotage desktop : ?lang= present au chargement -> VisionNexus impose la
+// langue, l'app ne doit jamais ecrire dans les settings du workspace.
+const desktopPiloted = readQueryLang() !== null
+
+export function isDesktopPiloted(): boolean {
+  return desktopPiloted
+}
+
+// Repli workspace hors lanceur : au boot, si aucun ?lang= n'a ete impose,
+// on interroge les settings du workspace (utile navigateur/dev/CLI).
+export async function initWorkspaceLanguage(fetchSettingsLang: () => Promise<Lang | null | undefined>): Promise<void> {
+  if (desktopPiloted) return
+  try {
+    const fromWorkspace = await fetchSettingsLang()
+    if (isLang(fromWorkspace ?? null)) setLang(fromWorkspace as Lang)
+  } catch {
+    // Pas de backend joignable au boot : repli localStorage/anglais.
+  }
+}
+
+// Change la langue et, hors pilotage desktop, persiste le choix dans le
+// workspace (repli pour retrouver la langue au prochain lancement standalone).
+export function setLangAndMaybePersist(lang: Lang, persistToWorkspace: (lang: Lang) => void): void {
+  setLang(lang)
+  if (!desktopPiloted) persistToWorkspace(lang)
+}
+
 // Dictionnaire de correspondance exacte FR -> EN, complete au fil de la
 // couverture de l'app. Une chaine absente du dictionnaire reste affichee
 // en francais meme en mode EN (degradation silencieuse, jamais de texte
@@ -102,8 +129,8 @@ const EXACT_EN: Record<string, string> = {
   'Clusters :': 'Clusters:',
   'Dossier de destination': 'Destination folder',
   'Racine (aucun dossier)': 'Root (no folder)',
-  'Partager ce dataset dans la galerie globale (symlink dans data/dataset_gallery/)':
-    'Share this dataset in the global gallery (symlink in data/dataset_gallery/)',
+  'Partager ce dataset dans la galerie globale (dossier dans data/dataset_gallery/)':
+    'Share this dataset in the global gallery (folder in data/dataset_gallery/)',
   'Partager : ON': 'Share: ON',
   'Partager': 'Share',
   'Scan...': 'Scan...',
@@ -125,7 +152,7 @@ const EXACT_EN: Record<string, string> = {
     'Information only: no column is renamed. The matching is used to',
   "retrouver ces images dans le Catalogue même si l'en-tête diffère.":
     'find these images in the Catalog even if the header differs.',
-  'Un symlink sera créé dans': 'A symlink will be created in',
+  'Un dossier sera créé dans': 'A folder will be created in',
   'nom': 'name',
   '5 miniatures seront copiées pour la prévisualisation dans tous les workspaces.':
     '5 thumbnails will be copied for preview in all workspaces.',
@@ -494,305 +521,57 @@ const EXACT_EN: Record<string, string> = {
   'Décision :': 'Decision:',
 
   // -- pages/HelpPage.tsx --
-  'Démarrage rapide': 'Quick start',
-  'Ajouter et indexer un dataset': 'Add and index a dataset',
-  'Carte UMAP — Exploration visuelle': 'UMAP map — Visual exploration',
-  'Détection de doublons': 'Duplicate detection',
-  'Subsets et export': 'Subsets and export',
-  'Dataset Gallery et datasets globaux': 'Dataset Gallery and global datasets',
-  'Formats optionnels détectés': 'Optional formats detected',
-  'Concepts ML (CLIP, UMAP, FAISS)': 'ML concepts (CLIP, UMAP, FAISS)',
-  'API & ligne de commande': 'API & command line',
   'Documentation': 'Documentation',
-  'Guide complet de Dataset Explorer': 'Complete guide to Dataset Explorer',
   'Lancer le tutoriel interactif': 'Start the interactive tutorial',
-  'Crée un dataset démo « Tuto Cars 10 » et déroule tout le parcours': 'Creates a demo dataset "Tuto Cars 10" and walks through the whole tour',
-  'Scan récursif': 'Recursive scan',
-  'Embeddings 512D sur GPU': '512D embeddings on GPU',
-  'Visualisation interactive + lasso': 'Interactive visualization + lasso',
-  'Recherche texte': 'Text search',
-  'Top-K par similarité cosine': 'Top-K by cosine similarity',
-  'Détection par seuil cosine': 'Detection by cosine threshold',
-  'Gallery globale': 'Global gallery',
-  'Datasets partagés entre workspaces': 'Datasets shared across workspaces',
-  'Export multi': 'Multi-export',
-  'Symlinks ou copie physique': 'Symlinks or physical copy',
-  'via adaptateur optionnel': 'via optional adapter',
-  'En 5 étapes, votre dataset est explorable :': 'In 5 steps, your dataset is explorable:',
-  'Ajouter un dataset (Dataset Gallery)': 'Add a dataset (Dataset Gallery)',
-  'Depuis la': 'From the',
-  "collez le chemin absolu de votre dossier d'images": 'paste the absolute path of your image folder',
-  'ex:': 'e.g.:',
-  'et cliquez': 'and click',
-  'Formats supportés : JPG, PNG, BMP, TIFF et WebP. Les formats optionnels installés côté backend sont ajoutés automatiquement.':
-    'Supported formats: JPG, PNG, BMP, TIFF and WebP. Optional formats installed on the backend side are added automatically.',
-  'Les miniatures 256px sont générées en arrière-plan.': 'The 256px thumbnails are generated in the background.',
-  "Cliquez l'icône": 'Click the icon',
-  "à côté du dataset pour l'épingler dans le": 'next to the dataset to pin it in the',
-  'Seuls les datasets épinglés apparaissent dans le Playground.': 'Only pinned datasets appear in the Playground.',
-  'Lancer les embeddings (Playground)': 'Run the embeddings (Playground)',
-  'Dans le Playground, cliquez': 'In the Playground, click',
-  'sur le dataset.': 'on the dataset.',
-  'Une barre SSE suit les 5 phases : embedding → indexing → umap → clustering → scoring.':
-    'An SSE bar tracks the 5 phases: embedding → indexing → umap → clustering → scoring.',
-  'Explorer la carte': 'Explore the map',
-  'Cliquez': 'Click',
-  'scatter plot UMAP interactif.': 'interactive UMAP scatter plot.',
-  'Utilisez le lasso Plotly pour sélectionner une zone, puis créez un subset ou excluez les images du dataset.':
-    'Use the Plotly lasso to select an area, then create a subset or exclude the images from the dataset.',
-  'Créer un subset et exporter': 'Create a subset and export',
-  'Depuis la page': 'From the',
-  'gérez vos collections, dupliquez-les, exportez vers Annotation App (symlinks ou copie physique configurable dans Paramètres).':
-    'manage your collections, duplicate them, export to Annotation App (symlinks or physical copy configurable in Settings).',
-  'Chaque subset peut être exporté plusieurs fois vers des destinations différentes.':
-    'Each subset can be exported several times to different destinations.',
-  'Formats supportés': 'Supported formats',
-  'Le scan récursif parcourt tous les sous-dossiers.': 'The recursive scan goes through all subfolders.',
-  'Workspace et cache': 'Workspace and cache',
-  'Toutes les données sont dans le workspace (': 'All data lives in the workspace (',
-  'Le MD5 de chaque fichier évite de recalculer les embeddings existants.':
-    'Each file\'s MD5 avoids recomputing existing embeddings.',
-  'Modifier le': 'Changing the',
-  'contenu': 'content',
-  "d'une image → nouveau MD5 → nouvel embedding.": 'of an image → new MD5 → new embedding.',
-  'Nombre de clusters': 'Number of clusters',
-  'Choisissez': 'Choose',
-  'avant de scanner (défaut : 20).': 'before scanning (default: 20).',
-  'Règle empirique :': 'Rule of thumb:',
-  "(N = nb d'images).": '(N = number of images).',
-  'Pour 1000 images → 15–25 clusters. Pour 10 000 images → 50–80.': 'For 1000 images → 15-25 clusters. For 10,000 images → 50-80.',
-  'Scan non-bloquant et barre de progression': 'Non-blocking scan and progress bar',
-  "Le scan d'un grand dossier (des milliers d'images) est": 'Scanning a large folder (thousands of images) is',
-  'non-bloquant': 'non-blocking',
-  "l'application retourne immédiatement et le scan s'effectue en arrière-plan.":
-    'the application returns immediately and the scan runs in the background.',
-  'Vous pouvez naviguer librement sans risque de timeout.': 'You can navigate freely without risk of timeout.',
-  'Le dataset apparaît avec le statut': 'The dataset appears with the status',
-  '(clignotant)': '(blinking)',
-  'pendant le scan. La progression': 'during the scan. The progress',
-  "s'affiche en temps réel.": 'is displayed in real time.',
-  "Une barre de progression horizontale montre l'avancement.": 'A horizontal progress bar shows the advancement.',
-  'La page se rafraîchit automatiquement toutes les 2 secondes.': 'The page refreshes automatically every 2 seconds.',
-  'Une fois terminé, le statut passe à': 'Once finished, the status switches to',
-  'le dataset est prêt pour les embeddings.': 'the dataset is ready for the embeddings.',
-  'Via curl': 'Via curl',
-  'Interactions Plotly': 'Plotly interactions',
-  "(icône lasso dans la barre) — sélectionner une zone d'images": '(lasso icon in the toolbar) — select an area of images',
-  'zoom avant/arrière': 'zoom in/out',
-  'pan sur la carte': 'pan across the map',
-  'affiche le nom du fichier': 'shows the file name',
-  'Double-clic': 'Double-click',
-  'réinitialiser le zoom': 'reset the zoom',
-  'Modes de couleur': 'Color modes',
-  'chaque couleur = un cluster KMeans. Révèle les groupes sémantiques.': 'each color = a KMeans cluster. Reveals semantic groups.',
   'Rareté': 'Rarity',
-  'gradient viridis : violet=commun, jaune=rare. Les images rares sont éloignées du centre de leur cluster.':
-    'viridis gradient: purple=common, yellow=rare. Rare images are far from the center of their cluster.',
+  'Couleur :': 'Color:',
+  'Cluster :': 'Cluster:',
+  'Rareté :': 'Rarity:',
+  'gardée(s)': 'kept',
+  'rejetée(s)': 'rejected',
+  'Auto-sélection appliquée sur': 'Auto-selection applied to',
+  'Filtre appliqué :': 'Filter applied:',
+  'image(s) retirée(s) du subset': 'image(s) removed from the subset',
+  "Erreur lors de l'application du filtre": 'Error while applying the filter',
+  'Analyse locale au subset': 'Analysis local to the subset',
+  'ne modifie pas les autres subsets': 'does not change the other subsets',
+  'ATTENTION — Sauvegarder': 'WARNING — Save',
+  'écrit les décisions doublon dans le': 'writes the duplicate decisions to the',
+  'dataset principal': 'main dataset',
+  'flag': 'flag',
+  'Les images rejetées seront exclues de la carte UMAP et du rebuild dans le': 'Rejected images will be excluded from the UMAP map and from the rebuild in the',
+  '= retire les images uniquement de ce subset, sans toucher le dataset.': '= removes the images from this subset only, without touching the dataset.',
+  '= inclus dans les exports': '= included in exports',
+  '= exclu des exports et des recherches': '= excluded from exports and searches',
+  'Aucune suppression physique': 'No file is ever deleted',
+  "Retire définitivement les images 'Rejeter' de ce subset": "Permanently removes the 'Reject' images from this subset",
+  'Application...': 'Applying...',
+  'Analyse des embeddings en cours...': 'Analyzing embeddings...',
+  'Aucun doublon dans ce subset avec ce seuil.': 'No duplicates in this subset at this threshold.',
+  "Pas d'image": 'No image',
   'Uniforme': 'Uniform',
-  'couleur unique, utile avec le lasso.': 'single color, useful with the lasso.',
-  'Score de rareté': 'Rarity score',
-  "Le score de rareté [0–1] mesure la distance euclidienne de l'image au centroïde de son cluster, normalisée au sein du cluster.":
-    "The rarity score [0-1] measures the image's euclidean distance to its cluster centroid, normalized within the cluster.",
   'Commun': 'Common',
-  'image très représentative du cluster': 'very representative image of the cluster',
   'Moyen': 'Medium',
-  'cas intermédiaire': 'intermediate case',
   'Rare': 'Rare',
-  'cas atypique, à la limite du cluster': 'atypical case, at the edge of the cluster',
-  'Utilisez "Rareté min : 70%" dans FilterBar pour isoler les images rares et vérifier si ce sont des anomalies ou des cas intéressants.':
-    'Use "Min rarity: 70%" in FilterBar to isolate rare images and check whether they are anomalies or interesting cases.',
-  "La recherche sémantique encode votre texte avec CLIP et trouve les images dont les features sont les plus proches dans l'espace 512D.":
-    "Semantic search encodes your text with CLIP and finds the images whose features are closest in the 512D space.",
-  'Exemples de requêtes efficaces': 'Examples of effective queries',
-  'CLIP comprend les descriptions en anglais. Les requêtes descriptives ("rainy night street") donnent de meilleurs résultats que les mots seuls ("rain").':
-    'CLIP understands descriptions in English. Descriptive queries ("rainy night street") give better results than single words ("rain").',
-  'Modes de filtrage : Top-K vs Seuil %': 'Filtering modes: Top-K vs Threshold %',
-  'Deux modes disponibles via le toggle': 'Two modes available via the toggle',
-  'retourne les': 'returns the',
-  'images les plus similaires (1–500).': 'most similar images (1-500).',
-  'Utile quand vous voulez un nombre fixe de résultats.': 'Useful when you want a fixed number of results.',
   'Seuil %': 'Threshold %',
-  'retourne': 'returns',
-  'toutes': 'all',
-  'les images avec un score ≥ au seuil choisi.': 'the images with a score ≥ the chosen threshold.',
-  'Entrez "35%" → toutes les images avec ≥ 35% de correspondance sont retournées.':
-    'Enter "35%" → all images with ≥ 35% match are returned.',
-  'Utile pour récupérer tout ce qui correspond vraiment, sans limite arbitraire.':
-    'Useful for retrieving everything that truly matches, without an arbitrary limit.',
-  'Le score affiché est la similarité cosine [0–1]. Typiquement, les scores': 'The displayed score is the cosine similarity [0-1]. Typically, scores',
-  'sont pertinents pour des images de trafic routier avec CLIP ViT-B-32.': 'are relevant for road traffic images with CLIP ViT-B-32.',
-  'Sauvegarder les résultats': 'Save the results',
-  'Sélectionnez des images (checkbox hover) puis cliquez': 'Select images (checkbox on hover) then click',
-  'Sauver (N)': 'Save (N)',
-  'pour créer un subset avec uniquement la sélection.': 'to create a subset with only the selection.',
-  'Sans sélection,': 'Without a selection,',
   'Tout sauver': 'Save all',
-  'crée un subset avec tous les résultats.': 'creates a subset with all the results.',
-  'La détection de doublons identifie les images quasi-identiques en comparant leurs embeddings CLIP par similarité cosine.':
-    'Duplicate detection identifies near-identical images by comparing their CLIP embeddings by cosine similarity.',
-  'Comment ça fonctionne': 'How it works',
-  'Chaque embedding est comparé aux 50 voisins les plus proches (FAISS)': 'Each embedding is compared to the 50 nearest neighbors (FAISS)',
-  'Les paires avec similarité': 'Pairs with similarity',
-  'seuil forment un graphe': 'threshold form a graph',
-  'Les composantes connexes (BFS) = groupes de doublons': 'Connected components (BFS) = duplicate groups',
-  'Choisir le seuil': 'Choosing the threshold',
-  'copies quasi-exactes (même image resizée, recadrée légèrement)': 'near-exact copies (same image resized, slightly cropped)',
-  '(défaut)': '(default)',
-  'duplicates avec compression différente, renommage': 'duplicates with different compression, renaming',
-  'images très similaires (même scène, angle légèrement différent)': 'very similar images (same scene, slightly different angle)',
-  'peut regrouper des images juste similaires thématiquement': 'may group images that are just thematically similar',
-  'Workflow de nettoyage': 'Cleanup workflow',
-  'Ajuster le seuil et cliquer': 'Adjust the threshold and click',
-  "Pour chaque groupe : identifier l'image de meilleure qualité": 'For each group: identify the best-quality image',
-  'Cocher': 'Check',
-  "sur l'image choisie,": 'on the chosen image,',
-  'sur les autres': 'on the others',
-  'les décisions sont persistées en DB': 'the decisions are persisted to the DB',
-  'Créer un subset avec uniquement les images "Gardées" depuis la carte UMAP (filtrer par':
-    'Create a subset with only the "Kept" images from the UMAP map (filter by',
-  "Un subset est une collection d'images représentée par un dossier de symlinks — les fichiers originaux ne sont pas copiés.":
-    'A subset is a collection of images represented by a folder of symlinks — the original files are not copied.',
-  'Trois façons :': 'Three ways:',
-  'sélectionner une zone': 'select an area',
-  'sélectionner des résultats': 'select results',
-  'Page Subsets': 'Subsets page',
-  'avec la sélection courante (badge en sidebar)': 'with the current selection (badge in the sidebar)',
-  "La sélection d'images (set d'image_ids) est globale et persiste entre les pages.":
-    "The image selection (set of image_ids) is global and persists across pages.",
-  'Structure des symlinks': 'Symlink structure',
-  'Mode symlink ou copie physique configurable dans': 'Symlink or physical copy mode configurable in',
-  'Paramètres → Subsets & liens': 'Settings → Subsets & links',
-  'Sur Windows, les symlinks nécessitent le': 'On Windows, symlinks require',
-  'mode Développeur': 'Developer mode',
-  'Export vers Annotation App (multi-export)': 'Export to Annotation App (multi-export)',
-  'Chaque subset peut être exporté': 'Each subset can be exported',
-  'plusieurs fois': 'several times',
-  'vers des destinations différentes.': 'to different destinations.',
-  'Chaque export crée une ligne verte avec le chemin et le type (symlink / copie).':
-    'Each export creates a green row with the path and the type (symlink / copy).',
-  "Le même chemin ne peut pas être exporté deux fois (vérification d'unicité).":
-    'The same path cannot be exported twice (uniqueness check).',
-  'Dupliquer un subset': 'Duplicate a subset',
-  'Le bouton': 'The',
   'Dupliquer': 'Duplicate',
-  'crée une copie du subset avec un nom auto-numéroté': 'creates a copy of the subset with an auto-numbered name',
-  'La duplication fonctionne même si le subset a déjà été exporté.': 'Duplication works even if the subset has already been exported.',
-  'Bouton Carte': 'Map button',
-  "Chaque subset dispose d'un bouton": 'Each subset has a',
-  'qui ouvre directement la carte UMAP du dataset source.': 'button that opens the source dataset\'s UMAP map directly.',
-  "Cela permet de visualiser les images du subset sur la carte globale du dataset, d'y sélectionner de nouvelles images et de créer d'autres subsets.":
-    "This lets you view the subset's images on the dataset's overall map, select new images there, and create other subsets.",
-  'Doublons dans un subset — impact sur le dataset': 'Duplicates in a subset — impact on the dataset',
-  'Important : les décisions de doublons dans un subset affectent le dataset principal.':
-    'Important: duplicate decisions in a subset affect the main dataset.',
-  'les décisions (Garder/Rejeter) → met à jour': 'the decisions (Keep/Reject) → updates',
-  'dans le dataset.': 'in the dataset.',
-  'Ces images sont alors comptées comme "rejetées" dans tout le Playground.':
-    'These images are then counted as "rejected" throughout the Playground.',
   'Appliquer au subset': 'Apply to the subset',
-  'retire uniquement les images rejetées': 'removes only the rejected images',
-  'du subset': 'from the subset',
-  "(supprime les liens SubsetImage). Le dataset principal n'est": '(removes the SubsetImage links). The main dataset is',
-  'pas': 'not',
-  'modifié physiquement.': 'physically modified.',
-  'Pour': 'To',
-  'annuler': 'undo',
-  'les décisions sur le dataset principal, utilisez': 'the decisions on the main dataset, use',
-  'dans le Playground (efface tous les': 'in the Playground (clears all the',
-  "La Gallery est le point d'entrée principal. Elle affiche": 'The Gallery is the main entry point. It shows',
-  'les datasets :': 'the datasets:',
-  'ceux du workspace actuel et les datasets globaux partagés entre tous les workspaces.':
-    'those of the current workspace and the global datasets shared across all workspaces.',
-  'Datasets globaux': 'Global datasets',
-  'Créer un dataset global': 'Create a global dataset',
-  'cochez "Partager" lors du scan.': 'check "Share" when scanning.',
-  '5 miniatures sont copiées dans': '5 thumbnails are copied into',
-  '(répertoire fixe, indépendant du workspace), et le dataset est enregistré': '(fixed directory, independent of the workspace), and the dataset is registered',
-  'dans un': 'in a',
-  'registre JSON global': 'global JSON registry',
-  'Changer de workspace': 'Switching workspace',
-  'les datasets globaux restent visibles dans la section': 'the global datasets remain visible in the',
-  'Importer': 'Import',
-  'pour les ajouter au workspace courant.': 'section to add them to the current workspace.',
-  'Ils apparaissent alors dans la section': 'They then appear in the',
-  'avec un badge "global".': 'section with a "global" badge.',
-  "L'app stocke dans le registre : chemin, nombre d'images, clusters, stats de base et 5 miniatures fixes pour la prévisualisation sans workspace.":
-    "The app stores in the registry: path, number of images, clusters, basic stats and 5 fixed thumbnails for preview without a workspace.",
-  'Une fois un dataset dans votre workspace ("Mon workspace"), cliquez l\'icône':
-    'Once a dataset is in your workspace ("My workspace"), click the',
-  "pour l'ajouter au Dashboard Playground. L'icône": 'icon to add it to the Dashboard Playground. The',
-  'dans le Playground le retire sans supprimer le dataset.': 'icon in the Playground removes it without deleting the dataset.',
-  "L'ajout/retrait du Playground est mémorisé dans": 'Adding/removing from the Playground is remembered in',
-  'Statistiques et aperçu': 'Statistics and preview',
-  'Dépliez une card (bouton ▼) pour voir :': 'Expand a card (▼ button) to see:',
-  'Dimensions moyennes, min/max des images': 'Average dimensions, min/max of images',
-  'Distribution des formats (.jpg, .png…)': 'Distribution of formats (.jpg, .png…)',
-  'Mode couleur (RGB, niveaux de gris…) — échantillonné sur 20 images': 'Color mode (RGB, grayscale…) — sampled over 20 images',
-  'Poids moyen et total des fichiers': 'Average and total file size',
-  '5 thumbnails aléatoires (workspace) ou miniatures fixes (dataset global non importé)':
-    '5 random thumbnails (workspace) or fixed thumbnails (non-imported global dataset)',
-  'Ces formats sont publiés par les adaptateurs Python présents côté backend.':
-    'These formats are published by the Python adapters present on the backend side.',
-  "La section disparaît entièrement si aucun adaptateur n'est installé.": 'The section disappears entirely if no adapter is installed.',
-  'Adaptateurs disponibles': 'Available adapters',
-  'Découverte et retrait': 'Discovery and removal',
-  "Les métadonnées sont découvertes sans importer les modules. Seul l'adaptateur correspondant à un fichier traité est ensuite chargé.":
-    "Metadata is discovered without importing the modules. Only the adapter matching a processed file is then loaded.",
-  "Retirer son fichier supprime la capacité au prochain démarrage, sans modifier le frontend ni empêcher les formats d'image standards de fonctionner.":
-    "Removing its file removes the capability on next startup, without modifying the frontend or preventing standard image formats from working.",
-  'Architecture :': 'Architecture:',
-  '(Vision Transformer, patch 32×32)': '(Vision Transformer, 32×32 patch)',
-  'Dimension de sortie : 512 floats L2-normalisés': 'Output dimension: 512 L2-normalized floats',
-  'Propriété clé :': 'Key property:',
-  'similarité cosine = produit scalaire': 'cosine similarity = dot product',
-  '(vecteurs normalisés)': '(normalized vectors)',
-  'Traite images ET texte → recherche cross-modale': 'Processes images AND text → cross-modal search',
-  'Réduction dimensionnelle (UMAP / t-SNE / PCA)': 'Dimensionality reduction (UMAP / t-SNE / PCA)',
-  'La méthode de projection 512D → 2D est configurable dans': 'The 512D → 2D projection method is configurable in',
-  'Paramètres → Réduction dimensionnelle': 'Settings → Dimensionality reduction',
-  "Les hyperparamètres sont sauvegardés et s'appliquent à tous les prochains pipelines.":
-    'The hyperparameters are saved and apply to all future pipelines.',
-  '(défaut — recommandé)': '(default — recommended)',
-  'Préserve structure locale ET globale — meilleurs clusters visuels': 'Preserves local AND global structure — best visual clusters',
-  '(défaut 15) : voisins considérés par point': '(default 15): neighbors considered per point',
-  '(défaut 0.1) : compacité des clusters': '(default 0.1): compactness of clusters',
-  'Clusters bien séparés visuellement, mais distances inter-clusters peu fiables':
-    'Visually well-separated clusters, but unreliable inter-cluster distances',
-  '(défaut 30) : balance local/global': '(default 30): local/global balance',
-  "(défaut 200) : vitesse d'apprentissage": '(default 200): learning speed',
-  'Déterministe et rapide, mais moins expressif sur grands datasets': 'Deterministic and fast, but less expressive on large datasets',
-  'Utilisé en fallback automatique si': 'Used as an automatic fallback if',
-  'points': 'points',
-  'Fallback automatique : UMAP → t-SNE si UMAP échoue → PCA si': 'Automatic fallback: UMAP → t-SNE if UMAP fails → PCA if',
-  'images.': 'images.',
-  'Tous utilisent la métrique cosine (cohérente avec CLIP) et random_state=42 (reproductible).':
-    'All use the cosine metric (consistent with CLIP) and random_state=42 (reproducible).',
-  "FAISS gère l'index de recherche vectorielle. On utilise": "FAISS manages the vector search index. It uses",
-  '(Inner Product exact) — adapté car les vecteurs sont L2-normalisés.': '(exact Inner Product) — suited since the vectors are L2-normalized.',
-  'Complexité : O(N) par requête (recherche exacte, pas approchée)': 'Complexity: O(N) per query (exact search, not approximate)',
-  'Persisté sur disque : rechargé au démarrage, jamais recalculé inutilement': 'Persisted to disk: reloaded at startup, never needlessly recomputed',
-  'Invariant : position i dans FAISS = Image.id ordonnée par ascendant': 'Invariant: position i in FAISS = Image.id ordered ascending',
-  'KMeans et rareté': 'KMeans and rarity',
-  'KMeans partitionne les embeddings en N clusters sphériques.': 'KMeans partitions the embeddings into N spherical clusters.',
-  "Le score de rareté mesure l'éloignement au centroïde du cluster.": "The rarity score measures the distance to the cluster's centroid.",
-  'Une image "rare" n\'est pas nécessairement mauvaise — elle peut représenter un cas difficile, une condition météo inhabituelle, ou simplement un angle unique.':
-    'A "rare" image is not necessarily bad — it can represent a difficult case, an unusual weather condition, or simply a unique angle.',
-  "C'est un signal d'intérêt, pas de qualité.": "It's a signal of interest, not of quality.",
-  'Lancement': 'Launch',
-  'Endpoints API principaux': 'Main API endpoints',
-  'Scanner un dossier (adaptateurs optionnels auto-détectés)': 'Scan a folder (optional adapters auto-detected)',
-  'Lister datasets (workspace + globaux)': 'List datasets (workspace + global)',
-  'Stats descriptives + thumbnails': 'Descriptive stats + thumbnails',
-  'Lancer pipeline (SSE)': 'Run pipeline (SSE)',
-  'Rebuild UMAP sans rejetés (SSE)': 'Rebuild UMAP without rejected (SSE)',
-  'Exclure images du dataset': 'Exclude images from the dataset',
-  'Relancer KMeans': 'Restart KMeans',
-  'Groupes doublons': 'Duplicate groups',
-  'Dupliquer subset': 'Duplicate subset',
-  'Exporter (multi-export)': 'Export (multi-export)',
-  'Statut backend': 'Backend status',
-  'Documentation interactive :': 'Interactive documentation:',
-  'Tests': 'Tests',
+  'Utilisateur': 'User',
+  'Installation et reglages': 'Setup and settings',
+  'Developpeur': 'Developer',
+  'Liste des pages indisponible': 'Page list unavailable',
+  'Aucune page de documentation.': 'No documentation page.',
+  'Chargement de la documentation...': 'Loading the documentation...',
+  'Documentation non disponible': 'Documentation not available',
+  "Cette page n'est pas encore ecrite dans le dossier docs/ de l'application.":
+    "This page is not written yet in the application's docs/ folder.",
+  "Le backend ne repond pas. Verifiez qu'il est demarre puis rechargez la page.":
+    'The backend is not responding. Check that it is running, then reload the page.',
+  "Cette page n'est pas encore traduite : version dans l'autre langue.":
+    'This page is not translated yet: showing the other language.',
+  'Recherche sémantique': 'Semantic search',
+  'Rechercher': 'Search',
 
   // -- pages/SemanticSearch.tsx --
   'Entrez une requête': 'Enter a query',
@@ -936,6 +715,134 @@ const EXACT_EN: Record<string, string> = {
   'Les images originales ne sont jamais supprimées du disque.': 'The original images are never deleted from disk.',
   'Les exports déjà réalisés vers Annotation App ne sont pas retirés.': 'Exports already made to Annotation App are not removed.',
   'Supprimer': 'Delete',
+
+  // -- components/help/datasetTourSteps.ts --
+  'Bienvenue': 'Welcome',
+  'Dataset Explorer en quelques minutes': 'Dataset Explorer in a few minutes',
+  "Cette application repond a une question simple : qu'y a-t-il vraiment dans mon dataset ? Elle encode chaque image avec CLIP, puis permet de la cartographier, d'y chercher en langage naturel, d'y traquer les doublons et d'en extraire des sous-ensembles.":
+    "This application answers a simple question: what's really in my dataset? It encodes each image with CLIP, then lets you map it, search it in natural language, track duplicates in it, and extract subsets from it.",
+  "Le tour cree un dataset demo a partir des 10 images de circulation livrees avec la suite : rien a telecharger, rien a preparer.":
+    'The tour creates a demo dataset from the 10 traffic images shipped with the suite: nothing to download, nothing to prepare.',
+  'Ce dataset s\'appellera "Tuto Cars 10" et reste supprimable a tout moment.':
+    'This dataset will be called "Tuto Cars 10" and can be deleted at any time.',
+  'Echap ferme le tutoriel a tout moment. La page reste utilisable pendant le tour.':
+    'Escape closes the tutorial at any time. The page remains usable during the tour.',
+  "Les 10 images d'exemple sont introuvables sur cette installation (dossier data_tuto a la racine de Computer_Vision_App) : saisissez vous-meme le chemin d'un dossier d'images, ou glissez-le dans le champ.":
+    'The 10 sample images cannot be found on this installation (data_tuto folder missing at the root of Computer_Vision_App): enter the path of an image folder yourself, or drag it into the field.',
+  '1. Se reperer': '1. Getting your bearings',
+  "Les six espaces de l'application": 'The six areas of the application',
+  "Dataset Gallery : ajouter, organiser et epingler les datasets. Catalogue : interroger TOUS les datasets d'un coup, sans les fusionner. Playground : l'espace de calcul, ou l'on lance les embeddings et ou l'on ouvre carte, recherche et doublons.":
+    'Dataset Gallery: add, organize, and pin datasets. Catalog: query ALL datasets at once, without merging them. Playground: the computation space, where you run the embeddings and open the map, search, and duplicates.',
+  'Subsets : les sous-ensembles extraits, exportables vers Annotation App. Documentation et Parametres completent le tout.':
+    'Subsets: the extracted subsets, exportable to Annotation App. Documentation and Settings complete the picture.',
+  'Le parcours normal va de haut en bas : Gallery, puis Playground, puis Subsets.':
+    'The normal path goes top to bottom: Gallery, then Playground, then Subsets.',
+  'Trois compteurs, trois notions': 'Three counters, three concepts',
+  'Dans ce workspace : les datasets qui vous appartiennent. Globaux disponibles : ceux partages par vos collegues, importables en un clic. Epingles dans Playground : ceux sur lesquels vous travaillez en ce moment.':
+    'In this workspace: the datasets you own. Global available: those shared by your colleagues, importable in one click. Pinned in Playground: the ones you are currently working on.',
+  "Un dataset global n'est pas copie : il est reference. L'importer dans votre workspace le rend analysable sans dupliquer les images.":
+    'A global dataset is not copied: it is referenced. Importing it into your workspace makes it analyzable without duplicating the images.',
+  '2. Ajouter un dataset': '2. Add a dataset',
+  'Ajouter un dataset = scanner un dossier': 'Adding a dataset = scanning a folder',
+  "Rien n'est copie : vous donnez le chemin d'un dossier d'images, l'application le scanne, indexe les fichiers et fabrique des miniatures.":
+    'Nothing is copied: you give the path of an image folder, the application scans it, indexes the files, and generates thumbnails.',
+  'Les champs suivants se remplissent de haut en bas ; seul le premier est obligatoire.':
+    'The following fields fill in from top to bottom; only the first one is required.',
+  "Le chemin du dossier d'images": 'The image folder path',
+  "Chemin vu par le SERVEUR qui execute l'application : chemin Windows en local, chemin Linux si le backend tourne sur une VM. Un dossier peut aussi y etre glisse-depose.":
+    'Path as seen by the SERVER running the application: a Windows path locally, a Linux path if the backend runs on a VM. A folder can also be dragged and dropped there.',
+  "Le tutoriel a saisi le chemin des 10 images d'exemple livrees avec la suite.":
+    'The tutorial entered the path of the 10 sample images shipped with the suite.',
+  'Le nom du dataset': 'The dataset name',
+  "Laisse vide, il reprend le nom du dossier. C'est ce nom qui apparait dans la Gallery, le Playground, le Catalogue et les exports.":
+    "Left empty, it takes the folder's name. This is the name that appears in the Gallery, the Playground, the Catalog, and the exports.",
+  'Le tutoriel a saisi "Tuto Cars 10".': 'The tutorial entered "Tuto Cars 10".',
+  'Le nombre de clusters': 'The number of clusters',
+  'Combien de groupes le clustering doit-il former sur les embeddings CLIP. Trop peu : tout se melange ; trop : le bruit devient des groupes.':
+    'How many groups should clustering form on the CLIP embeddings. Too few: everything blends together; too many: noise becomes groups.',
+  "Sur 10 images, 3 suffisent -- le tutoriel l'a regle. Ce choix se refait a tout moment depuis le Playground, sans re-encoder les images.":
+    "For 10 images, 3 is enough -- the tutorial has set it. This choice can be redone at any time from the Playground, without re-encoding the images.",
+  'Partager, et le dossier de destination': 'Sharing, and the destination folder',
+  "Partager : ON publie le dataset dans la galerie globale -- vos collegues le voient depuis leur propre workspace, par lien symbolique, sans copie des images.":
+    'Share: ON publishes the dataset in the global gallery -- your colleagues see it from their own workspace, via symbolic link, without copying the images.',
+  'Le menu deroulant a cote range le dataset dans un dossier de la Gallery ; les dossiers se creent depuis les sections du bas.':
+    'The dropdown next to it files the dataset into a Gallery folder; folders are created from the sections below.',
+  'Associer des annotations (optionnel)': 'Attach annotations (optional)',
+  "Un fichier .ver, un dossier YOLO ou un .txt produit par Annotation App : les boites sont alors lues et affichees sur les images, et deviennent filtrables.":
+    'A .ver file, a YOLO folder, or a .txt produced by Annotation App: the boxes are then read and displayed on the images, and become filterable.',
+  "C'est ce qui ferme la boucle entre les deux applications : on annote d'un cote, on verifie la qualite du dataset de l'autre.":
+    "This is what closes the loop between the two applications: you annotate on one side, you check the dataset's quality on the other.",
+  'Associer des metadonnees (optionnel)': 'Attach metadata (optional)',
+  'Un .csv ou .xlsx dont une colonne identifie l\'image (nom de fichier). "Analyser colonnes" lit l\'en-tete et vous fait choisir cette colonne cle.':
+    'A .csv or .xlsx file with a column identifying the image (file name). "Analyze columns" reads the header and lets you choose this key column.',
+  'Les colonnes restantes deviennent des filtres et des facettes dans le Catalogue : meteo, zone, capteur, campagne... tout ce que votre tableau contient.':
+    'The remaining columns become filters and facets in the Catalog: weather, zone, sensor, campaign... whatever your table contains.',
+  'Le scan liste les images, calcule leurs empreintes et genere les miniatures. Il tourne en tache de fond : la carte du dataset affiche sa progression.':
+    "The scan lists the images, computes their fingerprints, and generates thumbnails. It runs in the background: the dataset's card shows its progress.",
+  'Suivant lance le scan des 10 images.': 'Next launches the scan of the 10 images.',
+  '3. Epingler et calculer': '3. Pin and compute',
+  'Epingler dans le Playground': 'Pin in the Playground',
+  "La Gallery gere les datasets ; le Playground les traite. L'epingle decide de ce sur quoi vous travaillez, sans rien deplacer sur le disque.":
+    'The Gallery manages the datasets; the Playground processes them. Pinning decides what you are working on, without moving anything on disk.',
+  'Suivant epingle le dataset demo.': 'Next pins the demo dataset.',
+  'Direction le Playground': 'Off to the Playground',
+  'Suivant ouvre le Playground, ou le dataset epingle nous attend.': 'Next opens the Playground, where the pinned dataset awaits us.',
+  'La fiche du dataset': "The dataset's card",
+  "Tout l'etat du dataset tient sur cette ligne : statut, nombre d'images, nombre d'embeddings deja calcules, nombre de clusters, et les methodes utilisees pour le clustering et la reduction 2D.":
+    "The dataset's entire state fits on this line: status, number of images, number of embeddings already computed, number of clusters, and the methods used for clustering and 2D reduction.",
+  '"0 embeddings" signifie simplement que le pipeline CLIP n\'a pas encore tourne : c\'est l\'etape suivante.':
+    '"0 embeddings" simply means the CLIP pipeline has not run yet: that is the next step.',
+  'Embeddings : le calcul qui debloque tout': 'Embeddings: the computation that unlocks everything',
+  "Ce bouton lance le pipeline complet : CLIP encode chaque image en un vecteur de 512 dimensions, l'index de recherche est construit, la carte 2D est projetee et les clusters sont formes.":
+    'This button launches the full pipeline: CLIP encodes each image into a 512-dimension vector, the search index is built, the 2D map is projected, and the clusters are formed.',
+  "Tout ce qui suit en depend : sans embeddings, ni carte, ni recherche par texte, ni detection de doublons. Le calcul tourne cote serveur avec une barre de progression, et 10 images sont l'affaire de quelques secondes.":
+    'Everything that follows depends on it: without embeddings, no map, no text search, no duplicate detection. The computation runs server-side with a progress bar, and 10 images take just a few seconds.',
+  "Le tutoriel ne le declenche pas a votre place : lancez-le quand vous voulez, il n'y a rien a attendre pour continuer le tour.":
+    'The tutorial does not trigger it on your behalf: run it whenever you want, there is nothing to wait for to continue the tour.',
+  'Cliquez sur Embeddings pour voir le pipeline tourner sur les 10 images.': 'Click Embeddings to see the pipeline run on the 10 images.',
+  'Ce qui apparait apres le calcul': 'What appears after the computation',
+  "Carte : la projection 2D (UMAP, t-SNE ou PCA) ou chaque point est une image -- on y voit les groupes, les trous et les images aberrantes, et on peut y selectionner une zone entiere.":
+    'Map: the 2D projection (UMAP, t-SNE, or PCA) where each point is an image -- you can see the groups, the gaps, and the outlier images, and you can select an entire area.',
+  'Recherche : une requete en langage naturel ("voiture rouge de nuit") classee par similarite CLIP. Doublons : les paires trop semblables, a arbitrer une par une.':
+    'Search: a natural-language query ("red car at night") ranked by CLIP similarity. Duplicates: pairs that are too similar, to be arbitrated one by one.',
+  "Cluster et Reduc. rejouent le regroupement ou la projection avec d'autres reglages, sans re-encoder les images. Les deux icones a gauche desepinglent le dataset ou le suppriment definitivement.":
+    'Cluster and Reduc. replay the grouping or the projection with different settings, without re-encoding the images. The two icons on the left unpin the dataset or permanently delete it.',
+  '4. Exploiter': '4. Put it to work',
+  'Filtrer la Gallery par texte': 'Filter the Gallery by text',
+  'Depuis la Gallery, ce champ interroge CLIP sur plusieurs termes a la fois ("voiture, nuit, pluie") et ne garde que les images correspondantes -- de quoi fabriquer un dataset filtre en une requete.':
+    'From the Gallery, this field queries CLIP on several terms at once ("car, night, rain") and keeps only the matching images -- enough to build a filtered dataset in one query.',
+  'Suivant y retourne.': 'Next goes back there.',
+  'La recherche CLIP de la Gallery': "The Gallery's CLIP search",
+  'Plusieurs termes separes par des virgules : chacun devient un filtre, et le resultat peut etre enregistre comme un nouveau dataset filtre.':
+    'Several terms separated by commas: each becomes a filter, and the result can be saved as a new filtered dataset.',
+  'Cette recherche ne fonctionne que sur les datasets dont les embeddings sont calcules.':
+    'This search only works on datasets whose embeddings have been computed.',
+  'Subsets : extraire pour annoter': 'Subsets: extracting to annotate',
+  'Une selection faite sur la carte, dans la recherche ou dans les doublons devient un subset : un dossier de liens symboliques (ou de copies) vers les images retenues.':
+    'A selection made on the map, in search, or in duplicates becomes a subset: a folder of symbolic links (or copies) to the retained images.',
+  "Un subset s'exporte vers Annotation App : on part d'un gros dataset brut, on en extrait les images qui valent la peine, on les annote. C'est le circuit complet de la suite.":
+    "A subset is exported to Annotation App: you start from a large raw dataset, extract the images worth keeping, and annotate them. This is the suite's full circuit.",
+  'Catalogue : tous les datasets a la fois': 'Catalog: all datasets at once',
+  "Meme recherche visuelle, meme recherche par metadonnees et meme detection de doublons, mais appliquees a TOUS les datasets prets en meme temps -- sans avoir a les fusionner.":
+    'The same visual search, the same metadata search, and the same duplicate detection, but applied to ALL ready datasets at the same time -- without having to merge them.',
+  "C'est la vue a utiliser quand on ne sait plus dans quel dataset se trouve telle image, ou pour reperer les recouvrements entre campagnes.":
+    'This is the view to use when you no longer know which dataset an image is in, or to spot overlaps between campaigns.',
+  '5. Reglages et aide': '5. Settings and help',
+  'Les parametres': 'The settings',
+  "Valeurs par defaut du pipeline (nombre de clusters, taille des resultats), methode de reduction et ses hyperparametres, methode de clustering, chemin d'export vers Annotation App, liens symboliques ou copies physiques, et theme de l'interface.":
+    'Default pipeline values (number of clusters, result size), reduction method and its hyperparameters, clustering method, export path to Annotation App, symbolic links or physical copies, and the interface theme.',
+  'Ces reglages vivent dans le workspace : ils suivent le contexte de travail, pas la machine.':
+    'These settings live in the workspace: they follow the work context, not the machine.',
+  'La documentation': 'The documentation',
+  "Le manuel complet de l'application, en pages : guide ecran par ecran, procedures pas a pas, concepts (CLIP, carte 2D, clustering, doublons), configuration et depannage, puis les pages developpeur. Le bouton en haut de la page relance ce tutoriel.":
+    'The complete manual of the application, split into pages: screen-by-screen guide, step-by-step procedures, concepts (CLIP, 2D map, clustering, duplicates), configuration and troubleshooting, then the developer pages. The button at the top of the page restarts this tutorial.',
+  'Termine': 'Done',
+  'Le circuit est boucle': 'The circuit is complete',
+  "Dossier scanne, dataset epingle, embeddings calcules, carte et recherche disponibles, subset exportable vers l'annotation : c'est tout le cycle de Dataset Explorer.":
+    "Folder scanned, dataset pinned, embeddings computed, map and search available, subset exportable for annotation: that's the whole Dataset Explorer cycle.",
+  'Le dataset "Tuto Cars 10" vous appartient : gardez-le pour experimenter, ou supprimez-le depuis le Playground.':
+    'The "Tuto Cars 10" dataset belongs to you: keep it to experiment, or delete it from the Playground.',
+  'Bonne exploration.': 'Happy exploring.',
 }
 
 const PHRASE_EN: ReadonlyArray<readonly [string, string]> = [

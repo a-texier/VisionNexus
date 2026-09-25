@@ -38,7 +38,7 @@ def test_load_merges_saved_values_with_defaults(svc):
     loaded = service.load()
     assert loaded["interface"]["default_tool"] == "polygon"
     # Les autres cles de la section restent celles par defaut.
-    assert loaded["interface"]["timeline_height"] == DEFAULT_SETTINGS["interface"]["timeline_height"]
+    assert loaded["interface"]["annotation_border_width"] == DEFAULT_SETTINGS["interface"]["annotation_border_width"]
     # Les sections absentes du fichier sauvegarde restent presentes.
     assert loaded["export"] == DEFAULT_SETTINGS["export"]
 

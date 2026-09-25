@@ -10,6 +10,7 @@ import {
 import type { NodeExecStatus } from './shared'
 import { STATUS_DOT, STATUS_RING } from './shared'
 import NodePorts from './NodePorts'
+import { useT } from '../i18n/useLang'
 
 export type AppNodeType = 'explorer' | 'annotation' | 'dvc' | 'mlflow' | 'optuna' | 'training' | 'inference'
 
@@ -74,6 +75,7 @@ export function NodeActivity({
   progress?: { current: number; total: number; phase: string }
   results?: ResultItem[]
 }) {
+  const t = useT()
   const hasSteps = (steps?.length ?? 0) > 0
   const hasResults = (results?.length ?? 0) > 0
   if (!hasSteps && !hasResults) return null
@@ -90,7 +92,7 @@ export function NodeActivity({
       <div className={`mx-auto w-px h-1.5 ${active ? 'bg-blue-500/70' : 'bg-gray-700/70'}`} />
       <div className={`rounded-lg border shadow-inner px-2 py-1.5 space-y-1 transition-colors ${shell}`}>
         <div className={`flex items-center gap-1 text-[8px] uppercase tracking-wider font-bold ${active ? 'text-blue-300' : 'text-gray-500'}`}>
-          <Activity size={9} className={active ? 'text-blue-400 animate-pulse' : 'text-gray-400'} /> Suivi live
+          <Activity size={9} className={active ? 'text-blue-400 animate-pulse' : 'text-gray-400'} /> {t('Suivi live')}
         </div>
 
         {hasSteps && (
@@ -269,6 +271,7 @@ function PickerButton({ nodeId, label, color }: { nodeId: string; label: string;
 
 // Toggle réutilisable visible sur le nœud lui-même
 function FullAutoToggle({ nodeId, value, color = 'indigo' }: { nodeId: string; value: boolean; color?: string }) {
+  const t = useT()
   const on  = color === 'violet'
     ? 'bg-violet-900/50 text-violet-300 border-violet-700/40'
     : 'bg-indigo-900/50 text-indigo-300 border-indigo-700/40'
@@ -278,12 +281,13 @@ function FullAutoToggle({ nodeId, value, color = 'indigo' }: { nodeId: string; v
       onClick={e => { e.stopPropagation(); dispatchUpdateNodeData(nodeId, { full_auto: !value }) }}
       className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${value ? on : off}`}
     >
-      {value ? 'Full Auto' : 'Manuel'}
+      {value ? 'Full Auto' : t('Manuel')}
     </button>
   )
 }
 
 function AppNode({ id, data, selected }: NodeProps) {
+  const t = useT()
   const d = data as AppNodeData
   const [expanded, setExpanded] = useState(false)
   const inputHandles = (d.input_handles as string[] | undefined) ?? []
@@ -313,14 +317,14 @@ function AppNode({ id, data, selected }: NodeProps) {
         {(d.node_type === 'explorer' || d.node_type === 'annotation' || d.node_type === 'inference') && d.has_input !== undefined && (
           d.has_input === false
             ? <span title={d.node_type === 'inference'
-                ? 'Mode FREE : ouvre Inference App pour choisir un fichier et un modèle'
-                : 'Mode FREE : utilise des outputs existants du workspace'}
+                ? t('Mode FREE : ouvre Inference App pour choisir un fichier et un modèle')
+                : t('Mode FREE : utilise des outputs existants du workspace')}
                 className="flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-emerald-900/50 text-emerald-400 border border-emerald-700/40 font-bold tracking-wide shrink-0">
                 <Unlock size={8} />FREE
               </span>
             : <span title={d.node_type === 'inference'
-                ? 'Mode LOCKED : reçoit un modèle/flux → éval / inférence'
-                : 'Mode LOCKED : exécute un nouveau pipeline'}
+                ? t('Mode LOCKED : reçoit un modèle/flux → éval / inférence')
+                : t('Mode LOCKED : exécute un nouveau pipeline')}
                 className="flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-700/30 font-bold tracking-wide shrink-0">
                 <Lock size={8} />LOCKED
               </span>
@@ -334,7 +338,7 @@ function AppNode({ id, data, selected }: NodeProps) {
             rel="noreferrer"
             onClick={e => e.stopPropagation()}
             className={`${meta.color} hover:opacity-80 transition-opacity`}
-            title="Ouvrir l'application"
+            title={t("Ouvrir l'application")}
           >
             <ExternalLink size={12} />
           </a>
@@ -350,7 +354,7 @@ function AppNode({ id, data, selected }: NodeProps) {
           <div className="flex items-start gap-2">
             <XCircle size={12} className="text-red-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-red-300">Étape échouée</p>
+              <p className="text-[10px] font-semibold text-red-300">{t('Étape échouée')}</p>
               <p className="text-[10px] text-red-400/80 mt-0.5 leading-tight break-words">{d.waiting_hint}</p>
             </div>
           </div>
@@ -358,7 +362,7 @@ function AppNode({ id, data, selected }: NodeProps) {
       )}
       {status === 'warning' && d.waiting_hint && (
         <div className="mx-2 mb-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-2 py-1.5 text-[10px] text-amber-200 whitespace-pre-wrap">
-          <b>HPO échoué — fallback Training activé</b><br/>{d.waiting_hint}
+          <b>{t('HPO échoué — fallback Training activé')}</b><br/>{d.waiting_hint}
         </div>
       )}
 
@@ -369,7 +373,7 @@ function AppNode({ id, data, selected }: NodeProps) {
           <div className="flex items-start gap-2">
             <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-amber-300">Déjà annoté ailleurs</p>
+              <p className="text-[10px] font-semibold text-amber-300">{t('Déjà annoté ailleurs')}</p>
               <p className="text-[10px] text-amber-400/80 mt-0.5 leading-tight break-words">
                 {d.duplicate_matches!.map(p => p.name).join(', ')}
               </p>
@@ -384,7 +388,7 @@ function AppNode({ id, data, selected }: NodeProps) {
           <div className="flex items-start gap-2">
             <AlertTriangle size={13} className="text-orange-400 shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-orange-300">Action requise</p>
+              <p className="text-[11px] font-semibold text-orange-300">{t('Action requise')}</p>
               {d.waiting_hint && (
                 <p className="text-[10px] text-orange-400/80 mt-0.5 leading-tight">{String(d.waiting_hint)}</p>
               )}
@@ -397,7 +401,7 @@ function AppNode({ id, data, selected }: NodeProps) {
                   className={`mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium ${meta.color} hover:opacity-80`}
                 >
                   <ExternalLink size={10} />
-                  Ouvrir {meta.title} →
+                  {t('Ouvrir')} {meta.title} →
                 </a>
               )}
             </div>
@@ -440,10 +444,11 @@ function AppNode({ id, data, selected }: NodeProps) {
 // Badge « ordre d'exécution logique » — petit numéro léger en haut à droite du node.
 // Deux nodes avec le même numéro s'exécutent en parallèle (aucun ordre garanti entre eux).
 function ExecOrderBadge({ order }: { order?: number }) {
+  const t = useT()
   if (typeof order !== 'number') return null
   return (
     <div
-      title={`Ordre d'exécution logique : étape ${order}`}
+      title={`${t("Ordre d'exécution logique : étape")} ${order}`}
       className="absolute -top-2 -right-2 z-10 min-w-[18px] h-[18px] px-1 rounded-full bg-gray-950/90 border border-gray-600 text-gray-400 text-[10px] font-semibold flex items-center justify-center shadow-sm pointer-events-none"
     >
       {order}
@@ -452,6 +457,7 @@ function ExecOrderBadge({ order }: { order?: number }) {
 }
 
 function VisuNodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data: AppNodeData; isFreeMode: boolean }) {
+  const t = useT()
   const fullAuto = d.full_auto === undefined ? true : Boolean(d.full_auto)
   return (
     <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
@@ -467,27 +473,28 @@ function VisuNodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data
           de settings et y fait défiler/briller la liste (orch:open-node-picker). */}
       {isFreeMode && (
         <PickerButton nodeId={nodeId} color="violet"
-          label={d.subset_name ? `Subset : ${d.subset_name as string}` : 'Choisir un subset existant'} />
+          label={d.subset_name ? `${t('Subset')} : ${d.subset_name as string}` : t('Choisir un subset existant')} />
       )}
     </div>
   )
 }
 
 function AnnotationNodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data: AppNodeData; isFreeMode: boolean }) {
+  const t = useT()
   const cls = (d.label_classes ?? []) as { name: string }[]
-  const mode = (d.annotation_mode as string) === 'random' ? 'Aléatoire' : 'Séquentiel'
+  const mode = (d.annotation_mode as string) === 'random' ? t('Aléatoire') : t('Séquentiel')
   const fullAuto = Boolean(d.full_auto)
   return (
     <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
       {!isFreeMode && (d.project_name || d.subset_name) && (
-        <p>projet: <span className="text-gray-400">{(d.project_name as string) || (d.subset_name as string)}</span></p>
+        <p>{t('projet')}: <span className="text-gray-400">{(d.project_name as string) || (d.subset_name as string)}</span></p>
       )}
       {!isFreeMode && <FullAutoToggle nodeId={nodeId} value={fullAuto} />}
       {!isFreeMode && fullAuto && (
         <p>
           mode: <span className="text-gray-400">{mode}</span>
           <span className="ml-1.5 px-1 py-0.5 rounded text-[10px] bg-indigo-900/50 text-indigo-300">
-            {`Auto IA · ${d.ai_model ?? 'sam3'}`}
+            {`${t('Auto IA')} · ${d.ai_model ?? 'sam3'}`}
           </span>
         </p>
       )}
@@ -503,7 +510,7 @@ function AnnotationNodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string
           sur le node (lourd, coûteux à chaque changement FREE/LOCKED). */}
       {isFreeMode && (
         <PickerButton nodeId={nodeId} color="rose"
-          label={d.export_name ? `Export : ${d.export_name as string}` : 'Choisir une annotation existante'} />
+          label={d.export_name ? `Export : ${d.export_name as string}` : t('Choisir une annotation existante')} />
       )}
     </div>
   )
@@ -514,14 +521,15 @@ function AnnotationNodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string
 // détail (chemins, download, choix de ce qui va dedans, commit) est dans le hub du
 // panneau de config (DvcConfig). Ici : vue compacte sur le nœud.
 function DvcNodeSummary({ data: d }: { data: AppNodeData }) {
+  const t = useT()
   const arts = (d.dvc_artifacts as { kind: string; present: boolean; label: string }[] | undefined) ?? []
   const n = arts.filter(a => a.present).length
   return (
     <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
       <span className="inline-block text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40">
-        Observateur · versionne / télécharge à la demande
+        {t('Observateur · versionne / télécharge à la demande')}
       </span>
-      <p className="text-[10px] text-gray-600 mt-0.5">Artefacts du graphe ({n}) :</p>
+      <p className="text-[10px] text-gray-600 mt-0.5">{t('Artefacts du graphe')} ({n}) :</p>
       <div className="space-y-0.5">
         {arts.map(a => (
           <p key={a.kind} className={`text-[10px] leading-tight ${a.present ? 'text-amber-300/80' : 'text-gray-600 italic'}`}>
@@ -529,13 +537,14 @@ function DvcNodeSummary({ data: d }: { data: AppNodeData }) {
           </p>
         ))}
       </div>
-      <p className="text-[10px] text-gray-600 italic">→ ouvrir le node : hub récup + download + commit</p>
+      <p className="text-[10px] text-gray-600 italic">{t('→ ouvrir le node : hub récup + download + commit')}</p>
     </div>
   )
 }
 
 interface MlflowExp { name: string; n_runs: number; latest: { run_name: string; metrics: Record<string, number> }[] }
 function MLflowNodeSummary({ data: d }: { nodeId: string; data: AppNodeData }) {
+  const t = useT()
   // SUPERVISOR : observe le store MLflow du workspace (aucun branchement).
   const planned = (d.planned_runs as { label: string; kind: string; run: string }[] | undefined) ?? []
   const [exps, setExps] = useState<MlflowExp[] | null>(null)
@@ -556,11 +565,11 @@ function MLflowNodeSummary({ data: d }: { nodeId: string; data: AppNodeData }) {
   return (
     <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
       <span className="inline-block text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40">
-        Superviseur · observe le store (pas de branchement)
+        {t('Superviseur · observe le store (pas de branchement)')}
       </span>
       {planned.length > 0 && (
         <div className="mt-0.5 border-l border-emerald-800/40 pl-1.5 space-y-0.5">
-          <p className="text-[10px] text-emerald-400/80">À logger ({planned.length}) :</p>
+          <p className="text-[10px] text-emerald-400/80">{t('À logger')} ({planned.length}) :</p>
           {planned.map((p, i) => (
             <p key={i} className="text-[10px] text-gray-400 break-all leading-tight">
               <span className="text-gray-500">{p.kind === 'training' ? '⚙' : '◎'}</span> {p.run}
@@ -568,9 +577,9 @@ function MLflowNodeSummary({ data: d }: { nodeId: string; data: AppNodeData }) {
           ))}
         </div>
       )}
-      <p className="text-[10px] text-gray-600 mt-0.5">Store (live) :</p>
-      {err && <p className="text-[10px] text-gray-600 italic mt-0.5">MLflow_App non lancée</p>}
-      {exps && exps.length === 0 && !err && <p className="text-[10px] text-gray-600 italic mt-0.5">aucun run encore</p>}
+      <p className="text-[10px] text-gray-600 mt-0.5">{t('Store (live)')} :</p>
+      {err && <p className="text-[10px] text-gray-600 italic mt-0.5">{t('MLflow_App non lancée')}</p>}
+      {exps && exps.length === 0 && !err && <p className="text-[10px] text-gray-600 italic mt-0.5">{t('aucun run encore')}</p>}
       {exps && exps.slice(0, 3).map(e => (
         <p key={e.name} className="text-[10px] break-all leading-tight">
           <span className="text-gray-400">{e.name}</span> · {e.n_runs} run{e.n_runs > 1 ? 's' : ''}
@@ -585,14 +594,15 @@ const TASK_LABEL: Record<string, string> = {
   tracking: 'Tracking', detection: 'Détection (YOLO)',
 }
 function InferenceNodeSummary({ nodeId, data: d }: { nodeId: string; data: AppNodeData }) {
+  const t = useT()
   // FREE = ouverture manuelle de l'app ; LOCKED = évaluation ou inférence.
   if (d.has_input === false) {
     return (
       <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
         <span className="inline-block text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300 border border-emerald-700/40">
-          Session fichier manuelle
+          {t('Session fichier manuelle')}
         </span>
-        <p className="text-[10px] text-gray-600">image, vidéo ou dossier · YOLO / MOT / SOT clic</p>
+        <p className="text-[10px] text-gray-600">{t('image, vidéo ou dossier · YOLO / MOT / SOT clic')}</p>
       </div>
     )
   }
@@ -607,25 +617,26 @@ function InferenceNodeSummary({ nodeId, data: d }: { nodeId: string; data: AppNo
       <button onClick={e => { e.stopPropagation(); dispatchUpdateNodeData(nodeId, { full_auto: !fullAuto }) }}
         className={`text-[10px] px-1.5 py-0.5 rounded border ${fullAuto
           ? 'bg-gray-800 text-gray-400 border-gray-700/40' : 'bg-amber-900/50 text-amber-300 border-amber-700/40'}`}>
-        {fullAuto ? 'Auto (headless)' : 'Manuel (app)'}
+        {fullAuto ? t('Auto (headless)') : t('Manuel (app)')}
       </button>
       {fullAuto ? (
         <>
           <button onClick={e => { e.stopPropagation(); cycleTask() }}
             className="ml-1 text-[10px] px-1.5 py-0.5 rounded border bg-cyan-900/50 text-cyan-300 border-cyan-700/40">
-            {TASK_LABEL[task] ?? task}
+            {t(TASK_LABEL[task] ?? task)}
           </button>
-          {task === 'tracking' && <span className="ml-1 text-[10px] text-amber-400">{d.tracker_mot === 'none' ? 'YOLO pur' : 'ByteTrack'}</span>}
-          <p className="text-[10px]">modèle : <span className="text-gray-400">{(d.model_path as string) || 'best.pt amont'}</span></p>
+          {task === 'tracking' && <span className="ml-1 text-[10px] text-amber-400">{d.tracker_mot === 'none' ? t('YOLO pur') : 'ByteTrack'}</span>}
+          <p className="text-[10px]">{t('modèle')} : <span className="text-gray-400">{(d.model_path as string) || t('best.pt amont')}</span></p>
         </>
       ) : (
-        <p className="text-[10px] text-amber-400/80 italic">SOT/MOT dans l'app</p>
+        <p className="text-[10px] text-amber-400/80 italic">{t("SOT/MOT dans l'app")}</p>
       )}
     </div>
   )
 }
 
 function OptunaNodeSummary({ nodeId, data: d }: { nodeId: string; data: AppNodeData }) {
+  const t = useT()
   const fullAuto = d.full_auto === undefined ? true : Boolean(d.full_auto)
   const optimize = (d.optimize as string[]) ?? []
   const nTrials  = (d.n_trials as number) ?? 20
@@ -634,15 +645,15 @@ function OptunaNodeSummary({ nodeId, data: d }: { nodeId: string; data: AppNodeD
       <FullAutoToggle nodeId={nodeId} value={fullAuto} />
       {fullAuto ? (
         <>
-          <p className="text-[10px]">optimise : <span className="text-cyan-300">{optimize.length ? optimize.join(', ') : 'à définir (config)'}</span></p>
-          <p className={`text-[10px] ${d.stop_on_failure === false ? 'text-amber-300' : 'text-red-300'}`}>{d.stop_on_failure === false ? 'échec → paramètres Training' : 'échec → arrêt pipeline'}</p>
-          <p className="text-[10px]">trials : <span className="text-gray-400">{nTrials}</span> · TPE + pruning</p>
-          <p className="text-[10px] text-gray-600">→ best params auto → Training aval</p>
+          <p className="text-[10px]">{t('optimise')} : <span className="text-cyan-300">{optimize.length ? optimize.join(', ') : t('à définir (config)')}</span></p>
+          <p className={`text-[10px] ${d.stop_on_failure === false ? 'text-amber-300' : 'text-red-300'}`}>{d.stop_on_failure === false ? t('échec → paramètres Training') : t('échec → arrêt pipeline')}</p>
+          <p className="text-[10px]">{t('trials')} : <span className="text-gray-400">{nTrials}</span> · TPE + pruning</p>
+          <p className="text-[10px] text-gray-600">{t('→ best params auto → Training aval')}</p>
         </>
       ) : (
         <>
-          <p className="text-[10px] text-amber-400 italic">Gate — ouvrir Optuna App, puis inscrire les best params</p>
-          {d.best_params ? <p className="text-[10px]">params : <span className="text-cyan-300 font-mono">{String(d.best_params)}</span></p> : null}
+          <p className="text-[10px] text-amber-400 italic">{t('Gate — ouvrir Optuna App, puis inscrire les best params')}</p>
+          {d.best_params ? <p className="text-[10px]">{t('params')} : <span className="text-cyan-300 font-mono">{String(d.best_params)}</span></p> : null}
         </>
       )}
     </div>
@@ -650,6 +661,7 @@ function OptunaNodeSummary({ nodeId, data: d }: { nodeId: string; data: AppNodeD
 }
 
 function NodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data: AppNodeData; isFreeMode: boolean }) {
+  const t = useT()
   if (d.node_type === 'explorer') return <VisuNodeSummary nodeId={nodeId} data={d} isFreeMode={isFreeMode} />
   if (d.node_type === 'annotation') return <AnnotationNodeSummary nodeId={nodeId} data={d} isFreeMode={isFreeMode} />
   if (d.node_type === 'mlflow') return <MLflowNodeSummary nodeId={nodeId} data={d} />
@@ -658,15 +670,15 @@ function NodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data: Ap
   if (d.node_type === 'dvc') return <DvcNodeSummary data={d} />
   if (d.node_type === 'training') {
     const fullAuto = d.full_auto === undefined ? true : Boolean(d.full_auto)
-    const size = [d.engine, d.model_size].filter(Boolean).join(' ') || 'taille par défaut'
+    const size = [d.engine, d.model_size].filter(Boolean).join(' ') || t('taille par défaut')
     const ep   = (d.epochs as number) ?? 300
     return (
       <div className="text-[11px] text-gray-500 mt-0.5 space-y-0.5">
         <FullAutoToggle nodeId={nodeId} value={fullAuto} />
-        <p>modèle : <span className="text-blue-400 font-mono">{size}</span></p>
+        <p>{t('modèle')} : <span className="text-blue-400 font-mono">{size}</span></p>
         <p>epochs : <span className="text-gray-400">{ep}</span></p>
         {!fullAuto && (
-          <p className="text-[10px] text-amber-400 italic">Manuel — ouvrir Training App</p>
+          <p className="text-[10px] text-amber-400 italic">{t('Manuel — ouvrir Training App')}</p>
         )}
       </div>
     )
@@ -675,6 +687,7 @@ function NodeSummary({ nodeId, data: d, isFreeMode }: { nodeId: string; data: Ap
 }
 
 function NodeConfig({ data: d, isFreeMode }: { data: AppNodeData; isFreeMode: boolean }) {
+  const t = useT()
   return (
     <div className="px-3 pb-3 pt-2 border-t border-gray-800 space-y-1.5">
       {d.node_type === 'explorer' && (
@@ -688,8 +701,8 @@ function NodeConfig({ data: d, isFreeMode }: { data: AppNodeData; isFreeMode: bo
       {d.node_type === 'annotation' && (
           <>
             <Field label="subset"  value={d.subset_name ?? '—'} />
-            <Field label="projet"  value={(d.project_name as string) || (d.subset_name ?? '—')} />
-            {!isFreeMode && <Field label="mode"    value={(d.annotation_mode as string) === 'random' ? 'Aléatoire' : 'Séquentiel'} />}
+            <Field label={t('projet')}  value={(d.project_name as string) || (d.subset_name ?? '—')} />
+            {!isFreeMode && <Field label="mode"    value={(d.annotation_mode as string) === 'random' ? t('Aléatoire') : t('Séquentiel')} />}
             {!isFreeMode && <Field label="train"   value={`${((d.split_train ?? 0.8) * 100).toFixed(0)}%`} />}
             {!isFreeMode && <Field label="val"     value={`${((d.split_val ?? 0.2) * 100).toFixed(0)}%`} />}
             {!isFreeMode && Boolean(d.full_auto) && (
@@ -707,12 +720,12 @@ function NodeConfig({ data: d, isFreeMode }: { data: AppNodeData; isFreeMode: bo
         <Field label="message" value={d.commit_message ?? '—'} />
       )}
       {(d.node_type === 'mlflow' || d.node_type === 'optuna') && (
-        <p className="text-[11px] text-gray-500 italic">Étape manuelle</p>
+        <p className="text-[11px] text-gray-500 italic">{t('Étape manuelle')}</p>
       )}
       {d.node_type === 'training' && (
         <>
-          <Field label="moteur"   value={(d.engine as string) || 'par défaut'} />
-          <Field label="taille"   value={(d.model_size   as string) || 'par défaut'} />
+          <Field label={t('moteur')}   value={(d.engine as string) || t('par défaut')} />
+          <Field label={t('taille')}   value={(d.model_size   as string) || t('par défaut')} />
           <Field label="epochs"   value={String((d.epochs as number) ?? 300)} />
           <Field label="batch"    value={String((d.batch  as number) ?? 16)} />
           <Field label="imgsz"    value={String((d.imgsz  as number) ?? 640)} />

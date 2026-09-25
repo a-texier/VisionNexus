@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { experimentsAPI, runsAPI } from "../api/client";
 import type { RunSummary } from "../types/api";
-import { LanguageToggle } from "../components/common/LanguageToggle";
 import { useT } from "../i18n/useLang";
 
 type Kind =
@@ -484,7 +483,6 @@ function Inner() {
             className="w-64 bg-gray-900 border border-gray-700 rounded-lg pl-8 pr-3 py-2 text-xs text-white"
           />
         </div>
-        <LanguageToggle />
       </header>
       <div className="flex-1 flex min-h-0">
         <div className="flex-1">

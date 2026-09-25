@@ -116,7 +116,7 @@ async def resume_run(run_id: str) -> bool:
     if state.waiting_at_step and state.waiting_at_step in state.steps:
         ss = state.steps[state.waiting_at_step]
         ss.status = "success"
-        ss.output = "Validé par l'utilisateur"
+        ss.output = "Validated by user"
         ss.finished_at = time.monotonic()
         _emit(state, {
             "step_id": state.waiting_at_step,
@@ -169,7 +169,7 @@ async def stop_run(run_id: str) -> bool:
     for ss in state.steps.values():
         if ss.status in ("pending", "running", "waiting"):
             ss.status = "stopped"
-            ss.output = "Arrêté par l'utilisateur"
+            ss.output = "Stopped by user"
             if not ss.finished_at:
                 ss.finished_at = time.monotonic()
 
@@ -177,7 +177,7 @@ async def stop_run(run_id: str) -> bool:
     state.waiting_at_step = None
     state.done = True
     _emit(state, {"type": "done", "status": "stopped",
-                  "output": "Pipeline arrêté par l'utilisateur", "ts": time.time()})
+                  "output": "Pipeline stopped by user", "ts": time.time()})
 
     try:
         mark_run(state.pipeline_id, "stopped")
@@ -300,7 +300,7 @@ async def _execute(pipeline: PipelineDef, state: RunState) -> None:
             if dep_failed:
                 ss = state.steps[sid]
                 ss.status = "failed"
-                ss.output = "Skipped: un prérequis a échoué"
+                ss.output = "Skipped: a prerequisite failed"
                 _emit(state, {
                     "step_id": sid, "status": "failed",
                     "output": ss.output, "ts": time.time(),
@@ -324,7 +324,7 @@ async def _execute(pipeline: PipelineDef, state: RunState) -> None:
             for remaining in pipeline.steps:
                 if state.steps[remaining.id].status == "pending":
                     state.steps[remaining.id].status = "failed"
-                    state.steps[remaining.id].output = "Annulé: une étape précédente a échoué"
+                    state.steps[remaining.id].output = "Cancelled: a previous step failed"
                     _emit(state, {
                         "step_id": remaining.id, "status": "failed",
                         "output": state.steps[remaining.id].output, "ts": time.time(),
@@ -393,7 +393,7 @@ async def _wait_for_app(app_name: str, max_wait: float = 240.0,
             last_ping = elapsed
             _emit(state, {
                 "step_id": step_id, "status": "running",
-                "message": f"Démarrage de {app_name}… ({int(elapsed)} s)",
+                "message": f"Starting {app_name}... ({int(elapsed)}s)",
                 "ts": time.time(),
             })
         await asyncio.sleep(2)
@@ -531,7 +531,7 @@ async def _run_step(step, state: RunState) -> None:
     # Human gate — pause et attente validation
     if getattr(step, "type", "task") == "human_gate":
         ss.status = "waiting"
-        ss.output = "En attente de validation humaine"
+        ss.output = "Waiting for human validation"
         ss.started_at = time.monotonic()
         state.status = "waiting"
         state.waiting_at_step = step.id
@@ -562,10 +562,10 @@ async def _run_step(step, state: RunState) -> None:
     if not await _wait_for_app(step.app, max_wait=240.0, state=state, step_id=step.id):
         ss.status = "failed"
         ss.output = (
-            f"{step.app} non accessible après 240s (démarrage à froid trop long).\n"
-            f"→ Vérifiez que l'application est lancée (onglet Applications).\n"
-            f"→ Relancez le pipeline une fois l'app affichée « running ».\n"
-            f"→ Étape : {step.label}"
+            f"{step.app} not reachable after 240s (cold start took too long).\n"
+            f"-> Check that the application is running (Applications tab).\n"
+            f"-> Restart the pipeline once the app shows \"running\".\n"
+            f"-> Step: {step.label}"
         )
         ss.finished_at = time.monotonic()
         _emit(state, {
@@ -639,8 +639,8 @@ async def _run_step(step, state: RunState) -> None:
             # vert : le statut warning conserve l'échec et le fallback dans le graphe.
             app_warning = "\n".join(filter(None, [
                 _body.get("error"), _body.get("warning"),
-                f"Cause : {_body.get('failure_reason')}" if _body.get("failure_reason") else None,
-                f"À faire : {_body.get('failure_action')}" if _body.get("failure_action") else None,
+                f"Cause: {_body.get('failure_reason')}" if _body.get("failure_reason") else None,
+                f"To do: {_body.get('failure_action')}" if _body.get("failure_action") else None,
             ]))
 
     ss.status = "warning" if ok and app_warning else ("success" if ok else "failed")
@@ -659,10 +659,10 @@ async def _run_step(step, state: RunState) -> None:
             except Exception:
                 pass
         ss.output = (
-            f"Échec de l'étape « {step.label} »\n"
-            f"App : {step.app} {step.method} {step.endpoint}\n"
-            f"Erreur : {detail}\n"
-            f"→ Corrigez le problème (voir logs) et relancez le pipeline."
+            f"Step \"{step.label}\" failed\n"
+            f"App: {step.app} {step.method} {step.endpoint}\n"
+            f"Error: {detail}\n"
+            f"-> Fix the problem (see logs) and restart the pipeline."
         )
     else:
         ss.output = raw_data

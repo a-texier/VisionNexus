@@ -14,6 +14,7 @@
 // ============================================================
 
 import React from 'react'
+import { useT } from '../../i18n/useLang'
 import type { Track } from '../../types/api'
 
 interface TrackLaneProps {
@@ -43,6 +44,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
   onSelectBlock,
   onFrameClick,
 }) => {
+  const t = useT()
   if (windowCount <= 0) return null
 
   // Position en % relative à la fenêtre (séquence). Bornée à [0, 100].
@@ -76,7 +78,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
     <div
       className={`flex items-center gap-1.5 rounded cursor-pointer ${selected ? 'ring-1 ring-amber-300 bg-amber-400/5' : ''}`}
       onClick={(e) => onSelectTrack(e)}
-      title="Clic = sélectionner la piste · Ctrl/Shift+clic = plusieurs (Suppr efface)"
+      title={t('Clic = sélectionner la piste · Ctrl/Shift+clic = plusieurs (Suppr efface)')}
     >
       {/* Colonne label : #uid (gros) + classe/sous/sous-sous (petit) */}
       <div className="flex items-center gap-1 flex-shrink-0" style={{ width: LABEL_WIDTH }}>
@@ -99,7 +101,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
       {/* Barre segmentée */}
       <div
         className="relative h-3.5 flex-1 group cursor-pointer"
-        title={`Track #${track.track_uid} — exploré ${track.start_frame}–${track.end_frame}, ${segments.length} bloc(s) détecté(s).`}
+        title={`Track #${track.track_uid} — ${t('exploré')} ${track.start_frame}–${track.end_frame}, ${segments.length} ${t('bloc(s) détecté(s).')}`}
       >
         {/* Rail de fond (non exploré = normal) */}
         <div className="absolute inset-0 bg-slate-800 rounded" />
@@ -132,7 +134,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
               style={{ left: `${left}%`, width: `${width}%`, backgroundColor: track.color, minWidth: '2px' }}
               onClick={(ev) => { ev.stopPropagation(); onSelectBlock(s, e); onFrameClick(s) }}
               onDoubleClick={(ev) => { ev.stopPropagation(); onSelectBlock(s, e); onFrameClick(e) }}
-              title={`Bloc ${s}–${e} — clic pour sélectionner (Suppr efface CE bloc uniquement)`}
+              title={`${t('Bloc')} ${s}–${e} — ${t('clic pour sélectionner (Suppr efface CE bloc uniquement)')}`}
             />
           )
         })}
@@ -150,7 +152,7 @@ export const TrackLane: React.FC<TrackLaneProps> = ({
       {/* % de frames explorées par le tracker sur cette piste (ex : 10/100 → 10%) */}
       <span
         className="text-[9px] font-mono text-slate-400 w-8 text-right flex-shrink-0"
-        title={`${exploredFrames}/${windowCount} frames explorées`}
+        title={`${exploredFrames}/${windowCount} ${t('frames explorées')}`}
       >
         {donePct}%
       </span>

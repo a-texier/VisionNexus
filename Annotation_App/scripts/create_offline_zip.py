@@ -483,7 +483,7 @@ Exemples :
     print("  Pour deployer sur un nouveau PC :")
     print(f"    1. Copier {zip_name} sur la machine cible")
     print(f"    2. Dezipper dans le dossier souhaite")
-    print(f"    3. Suivre SETUP_STEP_BY_STEP.md")
+    print(f"    3. Suivre docs/configuration.fr.md")
     print()
 
     # Verifier le contenu des dossiers offline plateforme
@@ -497,7 +497,7 @@ Exemples :
                 sz = sum(f.stat().st_size for f in sub.rglob("*") if f.is_file())
                 print(f"    [OK]     {rel_prefix}/{sublabel:<30} {n} fichiers  {format_size(sz)}")
             else:
-                print(f"    [ABSENT] {rel_prefix}/{sublabel:<30} (non genere — voir SETUP_STEP_BY_STEP.md section 3)")
+                print(f"    [ABSENT] {rel_prefix}/{sublabel:<30} (non genere — voir MODEL_WEIGHTS.md a la racine)")
 
     if platform in ("windows", "both") and (ROOT_DIR / "offline_windows").exists():
         report_offline_dir("offline_windows/", ROOT_DIR / "offline_windows", "offline_windows")
@@ -521,7 +521,7 @@ Exemples :
                 tag = "[OK]    " if included else "[EXCLU] "
                 print(f"    {tag} {rel_path:<40} {format_size(sz)}")
             else:
-                print(f"    [ABSENT] {rel_path:<40} (non genere — voir section 3 de SETUP_STEP_BY_STEP.md)")
+                print(f"    [ABSENT] {rel_path:<40} (non genere — voir MODEL_WEIGHTS.md a la racine)")
         print()
     else:
         print("  ATTENTION : le dossier offline/ est absent.")

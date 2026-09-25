@@ -3,6 +3,7 @@
 // Routing + sidebar avec indicateur de statut MLflow.
 // ============================================================
 
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FlaskConical, GitBranch, BarChart2, BookOpen, Workflow } from 'lucide-react'
@@ -14,7 +15,8 @@ import ModelRegistryPage from './pages/ModelRegistryPage'
 import CompareRunsPage  from './pages/CompareRunsPage'
 import DocPage          from './pages/DocPage'
 import LineagePage      from './pages/LineagePage'
-import { mlflowAPI } from './api/client'
+import { mlflowAPI, settingsAPI } from './api/client'
+import { initWorkspaceLanguage } from './i18n/translate'
 
 const NAV_ITEMS = [
   { to: '/',        icon: <Workflow size={18} />,     label: 'Lineage',        exact: true },
@@ -85,6 +87,10 @@ function Sidebar() {
 }
 
 export default function App() {
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => (s as any).ui_language))
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="flex h-screen overflow-hidden bg-gray-950">

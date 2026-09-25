@@ -274,14 +274,18 @@ def export_subset(
     links = session.exec(select(SubsetImage).where(SubsetImage.subset_id == subset_id)).all()
     image_ids = [link.image_id for link in links]
     images = session.exec(select(Image).where(Image.id.in_(image_ids))).all()
-    image_paths = [img.file_path for img in images]
+    # Une image rejetee (doublon) n'est jamais exportee, meme si elle est encore dans le subset.
+    image_paths = [img.file_path for img in images if img.is_duplicate_kept is not False]
 
     # Mode solo : utiliser le chemin personnalisé si fourni
     # Mode orchestrateur : toujours ANNOTATION_APP_IMPORTS (env var)
     is_orch = bool(os.environ.get("LAUNCHED_BY_ORCHESTRATOR"))
     custom_path = None
-    if not is_orch and body and body.custom_export_path:
-        custom_path = body.custom_export_path
+    if not is_orch:
+        # Chemin saisi dans la fenetre d'export, sinon le dossier d'imports des Parametres
+        # (qui vaut ANNOTATION_APP_IMPORTS tant que l'utilisateur ne l'a pas change).
+        from backend.api.settings import load_settings
+        custom_path = (body.custom_export_path if body and body.custom_export_path else None)             or load_settings().annotation_app_imports_path
 
     try:
         target_dir = export_to_annotation_app(subset.name, image_paths, custom_base_dir=custom_path)

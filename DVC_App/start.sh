@@ -14,7 +14,7 @@ cd "$APP_DIR"
 BACKEND_PORT=$BACKEND_PORT \
 DVC_APP_FRONTEND_PORT=$FRONTEND_PORT \
 DVC_REPO_PATH=$DVC_REPO_PATH \
-python -m uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
+python -m uvicorn backend.main:app --host "${CV_BIND_HOST:-127.0.0.1}" --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 for i in $(seq 1 30); do

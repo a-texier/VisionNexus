@@ -20,7 +20,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: frontendPort,
-    host: '0.0.0.0',
+    // Loopback par defaut : sur la VM, 0.0.0.0 exposait l'app a tout le LAN.
+    // Les onglets VisionNexus passent par un tunnel ssh vers 127.0.0.1.
+    // CV_BIND_HOST=0.0.0.0 pour exposer volontairement.
+    host: process.env.CV_BIND_HOST || '127.0.0.1',
     allowedHosts: true,
     proxy: {
       '/api': { target: backendTarget, changeOrigin: true, timeout: 300000 },

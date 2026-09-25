@@ -306,6 +306,40 @@ export const settingsAPI = {
 }
 
 // ------------------------------------------------------------------ //
+// Documentation markdown (docs/ de l'app, page /help)                 //
+// ------------------------------------------------------------------ //
+
+export type DocLang = 'en' | 'fr'
+
+export interface DocPageInfo {
+  name: string
+  title: string
+  order: number
+  audience: 'user' | 'dev' | 'both'
+  doc_type: string
+  langs: DocLang[]
+}
+
+export interface DocPage {
+  name: string
+  lang: DocLang
+  title: string
+  frontmatter: Record<string, string | number | string[]>
+  body: string
+}
+
+export const docsAPI = {
+  list: (lang: DocLang): Promise<DocPageInfo[]> =>
+    http.get('/api/docs', { params: { lang } }).then(r => r.data),
+
+  get: (name: string, lang: DocLang): Promise<DocPage> =>
+    http.get(`/api/docs/${encodeURIComponent(name)}`, { params: { lang } }).then(r => r.data),
+
+  // Chemin relatif au dossier docs/assets/, tel qu'ecrit dans le markdown.
+  getAssetUrl: (path: string) => `${BASE}/api/docs/assets/${path}`,
+}
+
+// ------------------------------------------------------------------ //
 // App mode                                                            //
 // ------------------------------------------------------------------ //
 

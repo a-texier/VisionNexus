@@ -11,6 +11,8 @@ import { TourProvider, TourOverlay, TourLaunchButton, useTour } from './componen
 import { buildDatasetTourSteps, type DatasetTourContext } from './components/help/datasetTourSteps'
 import { readTutorialState, writeTutorialState, type TutorialState } from './utils/tutorialState'
 import { useT } from './i18n/useLang'
+import { initWorkspaceLanguage } from './i18n/translate'
+import { settingsAPI } from './api/client'
 
 import Gallery from './pages/Gallery'
 import Catalog from './pages/Catalog'
@@ -128,6 +130,9 @@ function AppShell() {
   const { start: startTour } = useTour()
   const [tourState, setTourState] = useState<TutorialState | null>(null)
   useEffect(() => { void readTutorialState().then(setTourState) }, [])
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => (s as any).ui_language))
+  }, [])
 
   const handleStartTour = () => {
     setTourState((prev) => ({ completed: prev?.completed ?? false, launchedOnce: true }))

@@ -6,6 +6,7 @@
 
 import { create } from 'zustand'
 import { samImageWS, samVideoWS, WS_URLS } from '../services/websocket'
+import { useSettingsStore } from './settingsStore'
 import type { SAMMask, SAMParams, SAMPoint } from '../types/api'
 
 type SAMStatus = 'idle' | 'connecting' | 'ready' | 'processing' | 'error'
@@ -136,12 +137,15 @@ export const useSAMStore = create<SAMStore>((set, get) => ({
 
     set({ streamedMasks: [], imageStatus: 'processing' })
 
+    // Les reglages SAM2 Auto (Parametres > Algorithmes) sont la valeur par defaut de la grille
+    const algo = useSettingsStore.getState().settings?.algorithms
+
     samImageWS.send({
       type: 'start_auto_segment',
       frame_id: frameId,
       params: {
-        points_per_side: params.points_per_side ?? 32,
-        pred_iou_thresh: params.pred_iou_thresh ?? 0.88,
+        points_per_side: params.points_per_side ?? algo?.sam_points_per_side ?? 32,
+        pred_iou_thresh: params.pred_iou_thresh ?? algo?.sam_pred_iou_thresh ?? 0.88,
         stability_score_thresh: params.stability_score_thresh ?? 0.95,
         min_mask_area: params.min_mask_area ?? 100,
         box_nms_thresh: params.box_nms_thresh ?? 0.7,

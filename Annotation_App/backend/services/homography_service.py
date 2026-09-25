@@ -426,6 +426,7 @@ class HomographyService:
         self,
         frame_a: np.ndarray,
         frame_b: np.ndarray,
+        min_inlier_ratio: Optional[float] = None,
     ) -> dict:
         """
         Calcule l'homographie entre deux frames et retourne des informations de debug :
@@ -433,6 +434,8 @@ class HomographyService:
         et une visualisation des correspondances en base64 JPEG.
         """
         import base64
+
+        eff_min_ratio = min_inlier_ratio if min_inlier_ratio is not None else self.min_inlier_ratio
 
         result: dict = {
             "method": "xfeat" if self._use_xfeat else "sift",
@@ -473,7 +476,7 @@ class HomographyService:
                         inliers = int(mask.sum())
                         result["inliers"] = inliers
                         result["inlier_ratio"] = round(float(inliers / len(mask)), 3)
-                        result["homography_valid"] = result["inlier_ratio"] >= self.min_inlier_ratio
+                        result["homography_valid"] = result["inlier_ratio"] >= eff_min_ratio
                         vis = self._draw_keypoint_matches_debug(
                             frame_a, frame_b, dbg_pts_a, dbg_pts_b, mask
                         )
@@ -508,7 +511,7 @@ class HomographyService:
                             inliers = int(mask.sum())
                             result["inliers"] = inliers
                             result["inlier_ratio"] = round(float(inliers / len(mask)), 3)
-                            result["homography_valid"] = result["inlier_ratio"] >= self.min_inlier_ratio
+                            result["homography_valid"] = result["inlier_ratio"] >= eff_min_ratio
                             vis = self._draw_keypoint_matches_debug(frame_a, frame_b, pts_a, pts_b, mask)
                             _, buf = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 70])
                             result["visualization_b64"] = base64.b64encode(buf.tobytes()).decode()

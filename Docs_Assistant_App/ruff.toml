@@ -1,0 +1,6 @@
+# Style du service : ruff par defaut, lignes un peu plus longues que 88.
+line-length = 110
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]

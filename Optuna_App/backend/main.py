@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api import studies as studies_router
 from backend.api import settings as settings_router
 from backend.api import orchestrator as orchestrator_router
+from backend.api import docs as docs_router
 from backend.config import CORS_ORIGINS, OPTUNA_STORAGE
 
 logging.basicConfig(
@@ -52,10 +53,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # Routes spécifiques avant génériques
 app.include_router(studies_router.router)
 app.include_router(settings_router.router)
 app.include_router(orchestrator_router.router)
+app.include_router(docs_router.router)
 
 
 @app.get("/health")

@@ -21,6 +21,7 @@ import {
   Settings2, Search, Server, CheckCircle2, AlertCircle, Plus,
 } from 'lucide-react'
 import { useImportStore } from '../../stores/importStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { datasetAPI } from '../../services/api'
 import type { SpecificFormatCapability } from '../../types/api'
 import { FileBrowserModal } from './FileBrowserModal'
@@ -144,8 +145,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [showBrowser, setShowBrowser] = useState(false)
   const [browserSlotId, setBrowserSlotId] = useState<number | null>(null)
 
+  const importDefaults = useSettingsStore((s) => s.settings?.import)
+
   useEffect(() => {
     if (isOpen) {
+      // Depart des curseurs = Parametres > Import (modifiables ici pour cet import seulement)
+      if (importDefaults) {
+        setJpegQuality(importDefaults.jpeg_quality)
+        setFrameKeep(importDefaults.frame_keep)
+      }
       datasetAPI.getCapabilities()
         .then((result) => setSpecificFormats(result.specific_formats))
         .catch(() => setSpecificFormats([]))
@@ -158,7 +166,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       abortRef.current = false
       setSpecificFormats([])
     }
-  }, [isOpen])
+  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null
 

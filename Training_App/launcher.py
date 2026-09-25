@@ -12,6 +12,13 @@ import argparse, json, os, signal, socket, subprocess, sys, time
 from datetime import datetime
 from pathlib import Path
 
+# Racine du depot : _lib/session_auth.py (jeton de session par instance).
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+try:
+    from _lib import session_auth
+except ImportError:  # app extraite seule, sans le depot autour
+    session_auth = None
+
 APP_ID   = "training"
 APP_ROOT = Path(__file__).parent.resolve()
 
@@ -237,6 +244,12 @@ def main():
     print("=" * 60)
     print(f"  Training_App — {args.user}")
     print("=" * 60)
+    # Jeton de session de cette instance, annonce avant les ports (le lanceur
+    # Electron ouvre l'onglet des qu'il les a lus).
+    session_env = session_auth.new_session_env() if session_auth else {}
+    env.update(session_env)
+    if session_auth:
+        session_auth.announce(session_env, fp)
     print(f"[config] workspace = {ws}")
     print(f"[config] backend   = http://localhost:{bp}")
     print(f"[config] frontend  = http://localhost:{fp}")
@@ -244,7 +257,7 @@ def main():
     print(f"[config] node      = {node_bin or 'system'}")
 
     backend_cmd = [python_exe, "-m", "uvicorn", "backend.main:app",
-                   "--host", "0.0.0.0", "--port", str(bp)]
+                   "--host", os.environ.get("CV_BIND_HOST", "127.0.0.1"), "--port", str(bp)]
     if not args.access_log: backend_cmd.append("--no-access-log")
     if not args.no_reload: backend_cmd.append("--reload")
 

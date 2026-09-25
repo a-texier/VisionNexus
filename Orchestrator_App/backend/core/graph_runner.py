@@ -221,9 +221,9 @@ def _training_engine(node: dict, parent_nodes: list) -> str:
     for pn in parent_nodes or []:
         if _node_type(pn) == "optuna" and _engine_of(pn.get("data", {})) != engine:
             raise GraphConfigError(
-                f"« {data.get('label') or node.get('id')} » entraîne avec le moteur '{engine}' "
-                f"mais l'étude Optuna amont « {pn.get('data', {}).get('label') or pn.get('id')} » "
-                f"optimise '{_engine_of(pn.get('data', {}))}' : choisissez le même moteur sur les deux nœuds."
+                f'"{data.get("label") or node.get("id")}" trains with engine \'{engine}\' '
+                f'but the upstream Optuna study "{pn.get("data", {}).get("label") or pn.get("id")}" '
+                f"optimizes '{_engine_of(pn.get('data', {}))}': use the same engine on both nodes."
             )
     return engine
 
@@ -264,8 +264,8 @@ def _model_lineage_spec(node: dict, parent_nodes: list) -> tuple[str, str]:
             f"{', '.join(labels)} = {engine}" for engine, labels in sorted(engine_nodes.items())
         )
         raise GraphConfigError(
-            "Pré-contrôle bloquant : les nœuds de cette lignée n'utilisent pas le même "
-            f"moteur ({details}). Alignez le paramètre moteur sur tous les nœuds."
+            "Blocking pre-check: nodes in this lineage do not use the same "
+            f"engine ({details}). Align the engine parameter on all nodes."
         )
 
     engine = next(iter(engine_nodes), DEFAULT_ENGINE)
@@ -280,8 +280,8 @@ def _model_lineage_spec(node: dict, parent_nodes: list) -> tuple[str, str]:
             f"{', '.join(labels)} = {size}" for size, labels in sorted(sizes.items())
         )
         raise GraphConfigError(
-            "Pré-contrôle bloquant : les nœuds de cette lignée n'utilisent pas la même "
-            f"architecture ({details}). Un checkpoint doit être relu avec sa taille d'origine."
+            "Blocking pre-check: nodes in this lineage do not use the same "
+            f"architecture ({details}). A checkpoint must be reloaded with its original size."
         )
 
     return engine, next(iter(sizes), "")
@@ -572,22 +572,22 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         return [
             {
                 "id": sid("verifyembed"),
-                "label": "Vérifier embedding CLIP",
+                "label": "Check CLIP embedding",
                 "app": "Dataset_Explorer_App", "method": "GET",
                 "endpoint": "/health",
                 "params": {},
                 "depends_on": deps, "type": "human_gate",
                 "hint": (
-                    f"Embedding CLIP TERMINÉ sur \"{dataset_name}\" (clusters prêts). "
-                    f"Le dataset est déjà épinglé dans Dataset_Explorer_App → Playground : "
-                    f"vérifiez les clusters d'un coup d'œil, puis cliquez Continuer "
-                    f"(ou modifiez la requête sémantique sur le nœud avant de continuer)."
+                    f"CLIP embedding DONE on \"{dataset_name}\" (clusters ready). "
+                    f"The dataset is already pinned in Dataset_Explorer_App -> Playground: "
+                    f"take a quick look at the clusters, then click Continue "
+                    f"(or edit the semantic query on the node before continuing)."
                 ),
                 "app_link": "Dataset_Explorer_App",
             },
             {
                 "id": sid("subset"),
-                "label": f"Créer subset \"{subset_name}\"",
+                "label": f"Create subset \"{subset_name}\"",
                 "app": "Dataset_Explorer_App", "method": "POST",
                 "endpoint": "/api/orchestrator/create-subset",
                 "params": create_subset_params,
@@ -596,15 +596,15 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
             },
             {
                 "id": sid("validatesubset"),
-                "label": f"Valider subset \"{subset_name}\"",
+                "label": f"Validate subset \"{subset_name}\"",
                 "app": "Dataset_Explorer_App", "method": "GET",
                 "endpoint": "/health",
                 "params": {},
                 "depends_on": [sid("subset")], "type": "human_gate",
                 "hint": (
-                    f"Ouvrez Dataset_Explorer_App → Subsets → \"{subset_name}\". "
-                    f"Vérifiez les images sélectionnées, ajustez la requête si besoin, "
-                    f"puis cliquez Continuer pour exporter vers Annotation_App."
+                    f"Open Dataset_Explorer_App -> Subsets -> \"{subset_name}\". "
+                    f"Check the selected images, adjust the query if needed, "
+                    f"then click Continue to export to Annotation_App."
                 ),
                 "app_link": "Dataset_Explorer_App",
             },
@@ -635,7 +635,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         steps = [
             {
                 "id": sid("project"),
-                "label": f"Créer projet \"{project_name}\"",
+                "label": f"Create project \"{project_name}\"",
                 "app": "Annotation_App", "method": "POST",
                 "endpoint": "/api/orchestrator/create-project",
                 "params": _create_params,
@@ -653,7 +653,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         if full_auto:
             steps.append({
                 "id": sid("auto_annotate"),
-                "label": f"Annotation automatique ({ai_model.upper()})",
+                "label": f"Automatic annotation ({ai_model.upper()})",
                 "app": "Annotation_App", "method": "POST",
                 "endpoint": "/api/orchestrator/auto-annotate",
                 "params": {
@@ -677,15 +677,15 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
             if bool(data.get("review_before_export", False)):
                 steps.append({
                     "id": sid("review"),
-                    "label": "Verifier les annotations auto",
+                    "label": "Check auto annotations",
                     "app": "Annotation_App", "method": "GET",
                     "endpoint": "/health",
                     "params": {},
                     "depends_on": [sid("auto_annotate")], "type": "human_gate",
                     "hint": (
-                        f"Annotation automatique terminee sur \"{project_name}\". "
-                        f"Ouvrez Annotation_App pour verifier/corriger les boites, "
-                        f"puis cliquez Continuer pour exporter."
+                        f"Automatic annotation done on \"{project_name}\". "
+                        f"Open Annotation_App to check/fix the boxes, "
+                        f"then click Continue to export."
                     ),
                     "app_link": "Annotation_App",
                 })
@@ -693,15 +693,15 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         else:
             steps.append({
                 "id": sid("annotate"),
-                "label": "Annoter les images manuellement",
+                "label": "Annotate images manually",
                 "app": "Annotation_App", "method": "GET",
                 "endpoint": "/health",
                 "params": {},
                 "depends_on": [sid("project")], "type": "human_gate",
                 "hint": (
-                    f"Ouvrez Annotation_App → projet \"{project_name}\". "
-                    f"Annotez toutes les images (SAM, Grounding DINO ou dessin manuel). "
-                    f"Revenez ici quand terminé et cliquez Continuer."
+                    f"Open Annotation_App -> project \"{project_name}\". "
+                    f"Annotate all images (SAM, Grounding DINO or manual drawing). "
+                    f"Come back here when done and click Continue."
                 ),
                 "app_link": "Annotation_App",
             })
@@ -772,7 +772,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
                             or _dataset_path_from_ancestors(parent_nodes, ctx))
             return [{
                 "id": sid("hpo"),
-                "label": "Étude Optuna (HPO auto — TPE)",
+                "label": "Optuna study (auto HPO - TPE)",
                 "app": "optuna-app", "method": "POST", "endpoint": "/api/orchestrator/hpo",
                 "params": {
                     "dataset_path": dataset_path,
@@ -788,17 +788,17 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
                     "trace":        _trace_of(node, ctx),
                 },
                 "depends_on": deps, "type": "task",
-                "hint": "Étude Optuna -> best params fusionnés dans le Training aval.",
+                "hint": "Optuna study -> best params merged into the downstream Training.",
                 "app_link": "optuna-app",
             }]
         return [{
             "id": sid("hpo"),
-            "label": "Optimiser les hyperparamètres (manuel)",
+            "label": "Optimize hyperparameters (manual)",
             "app": "optuna-app", "method": "GET", "endpoint": "/health",
             "params": {},
             "depends_on": deps, "type": "human_gate",
-            "hint": ("Lancez une étude Optuna dans Optuna_App, récupérez les meilleurs "
-                     "paramètres et inscrivez-les sur le nœud (best_params), puis Continuer."),
+            "hint": ("Run an Optuna study in Optuna_App, get the best "
+                     "parameters and enter them on the node (best_params), then Continue."),
             "app_link": "optuna-app",
         }]
 
@@ -838,17 +838,17 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
             return [
                 {
                     "id": sid("train"),
-                    "label": f"[Manuel] Entraîner {run_label}",
+                    "label": f"[Manual] Train {run_label}",
                     "app": "Training_App", "method": "POST",
                     "endpoint": "/api/orchestrator/train",
                     "params": {},
                     "depends_on": deps, "type": "human_gate",
                     "hint": (
-                        f"Ouvrez Training App et lancez manuellement l'entraînement "
-                        f"({engine} {model_size} · {epochs} epochs). "
-                        f"Configurez les hyperparamètres selon vos besoins. "
-                        f"Une fois l'entraînement terminé, revenez ici et cliquez "
-                        f"Terminé → Continuer."
+                        f"Open Training App and manually start training "
+                        f"({engine} {model_size} - {epochs} epochs). "
+                        f"Set the hyperparameters as needed. "
+                        f"Once training is done, come back here and click "
+                        f"Done -> Continue."
                     ),
                     "app_link": "Training_App",
                 },
@@ -904,7 +904,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         return [
             {
                 "id": sid("train"),
-                "label": f"Entraîner {run_label} ({epochs} epochs)",
+                "label": f"Train {run_label} ({epochs} epochs)",
                 "app": "Training_App", "method": "POST",
                 "endpoint": "/api/orchestrator/train",
                 "params": _params,
@@ -916,9 +916,9 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
                 },
                 "depends_on": deps, "type": "task",
                 "hint": (
-                    f"Entraînement automatique : {engine} {model_size} · {epochs} epochs. "
-                    f"Dataset : {dataset_path or '(dérivé du nœud annotation parent)'}. "
-                    f"Suivez la progression dans Training App."
+                    f"Automatic training: {engine} {model_size} - {epochs} epochs. "
+                    f"Dataset: {dataset_path or '(derived from the parent annotation node)'}. "
+                    f"Follow the progress in Training App."
                 ),
                 "app_link": "Training_App",
             },
@@ -943,10 +943,10 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         # ── FREE = ouverture manuelle de l'application ──────────────────────────
         if not has_input:
             return [{
-                "id": sid("open"), "label": "Session Inference interactive",
+                "id": sid("open"), "label": "Interactive Inference session",
                 "app": "Inference_App", "method": "GET", "endpoint": "/health", "params": {},
                 "depends_on": deps, "type": "human_gate",
-                "hint": "Ouvrez Inference App, choisissez un fichier média et un fichier de poids.",
+                "hint": "Open Inference App, choose a media file and a weights file.",
                 "app_link": "Inference_App",
             }]
 
@@ -1037,16 +1037,16 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
                     if _full_det.get(_k) is not None:
                         det_overrides[_k] = _full_det[_k]
             return [{
-                "id": sid("evaluate"), "label": "Détection YOLO (model.val — YOLO seul)",
+                "id": sid("evaluate"), "label": "YOLO detection (model.val - YOLO only)",
                 "app": "Inference_App", "method": "POST", "endpoint": "/api/orchestrator/evaluate",
                 "params": {"kind": "detection", "model_path": model_path,
                            "data_yaml": data_yaml, "engine": engine,
                            "model_size": model_size,
                            "overrides": det_overrides, "trace": trace},
                 "depends_on": deps, "type": "task",
-                "hint": ("Évaluation YOLO standard (model.val) sur le split "
-                         f"'{data.get('gt_split', 'val')}' du data.yaml — mAP50/mAP50-95, "
-                         "précision/rappel, courbe PR, F1, matrice de confusion. Aucun tracker."),
+                "hint": ("Standard YOLO evaluation (model.val) on the "
+                         f"'{data.get('gt_split', 'val')}' split of data.yaml - mAP50/mAP50-95, "
+                         "precision/recall, PR curve, F1, confusion matrix. No tracker."),
                 "app_link": "Inference_App",
             }]
 
@@ -1054,7 +1054,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
         tracker_mot = data.get("tracker_mot", "bytetrack")
         tracker_sot = data.get("tracker_sot", "csrt")
         return [{
-            "id": sid("infer"), "label": "Inférence YOLO" + (" + ByteTrack" if tracker_mot == "bytetrack" else " pure"),
+            "id": sid("infer"), "label": "YOLO inference" + (" + ByteTrack" if tracker_mot == "bytetrack" else " only"),
             "app": "Inference_App", "method": "POST", "endpoint": "/api/orchestrator/infer",
             "params": {
                 "sequence_dir": seq_input, "model_path": model_path,
@@ -1067,7 +1067,7 @@ def _steps_for_node(node: dict, deps: list[str], ctx: dict | None = None,
                 "overrides": overrides, "trace": trace,
             },
             "depends_on": deps, "type": "task",
-            "hint": f"Tracking déterministe sur {data.get('sequence_dir') or '(séquence à définir)'}.",
+            "hint": f"Deterministic tracking on {data.get('sequence_dir') or '(sequence to be defined)'}.",
             "app_link": "Inference_App",
         }]
 

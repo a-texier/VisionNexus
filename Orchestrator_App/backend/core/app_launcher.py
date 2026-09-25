@@ -51,6 +51,10 @@ try:
     _SHARED_REGISTRY = True
 except Exception:   # zip ancien sans _lib : on garde l'ancien comportement
     _SHARED_REGISTRY = False
+try:
+    from _lib import session_auth
+except ImportError:
+    session_auth = None
 
 # ── Fallback de compatibilité ─────────────────────────────────────────────────
 # Le registre effectif est reconstruit plus bas depuis _lib.launcher_engine.
@@ -390,6 +394,14 @@ def launch_app(
     # instance Orchestrator (ports dynamiques possibles, multi-utilisateur).
     env["VITE_ORCHESTRATOR_BACKEND_PORT"] = str(BACKEND_PORT)
     env["VITE_ORCHESTRATOR_FRONTEND_PORT"] = str(FRONTEND_PORT)
+    # Chaque sous-app a son propre jeton de session. Pas d'annonce ici : le
+    # sous-backend le publie dans le fichier prive de l'utilisateur, d'ou
+    # /api/apps le relit pour VisionNexus et d'ou nos appels httpx le prennent.
+    # Retirer d'abord le jeton de l'Orchestrator lui-meme, herite de os.environ.
+    env.pop("CV_SESSION_TOKEN", None)
+    env.pop("CV_BOOTSTRAP_CODE", None)
+    if session_auth is not None:
+        env.update(session_auth.new_session_env())
 
     if annotation_imports:
         env["ANNOTATION_APP_IMPORTS"] = annotation_imports
@@ -424,9 +436,13 @@ def launch_app(
     # fermeture de VisionNexus) soit dangereux (tape sur le groupe d'Orchestrator
     # lui-meme s'il n'a pas divergé). Avec start_new_session, killpg cible
     # exactement l'arbre de cette sous-app, rien d'autre.
+    # Bind loopback (backend ET frontend) : en 0.0.0.0 les sous-apps etaient
+    # joignables par tout le LAN sur l'IP de la VM (rapport 2026-09-24).
+    # VisionNexus y accede par tunnel ssh, qui cible 127.0.0.1.
+    bind_host = os.environ.get("CV_BIND_HOST", "127.0.0.1")
     backend_proc = subprocess.Popen(
         [python_exe, "-m", "uvicorn", cfg["backend_module"],
-         "--host", "0.0.0.0", "--port", str(bp)],
+         "--host", bind_host, "--port", str(bp)],
         cwd=str(app_root),
         env=env,
         stdout=backend_log_f,
@@ -439,7 +455,7 @@ def launch_app(
     frontend_dir = app_root / "frontend"
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
     frontend_proc = subprocess.Popen(
-        [npm_cmd, "run", "dev", "--", "--port", str(fp)],
+        [npm_cmd, "run", "dev", "--", "--port", str(fp), "--host", bind_host],
         cwd=str(frontend_dir),
         env=env,
         stdout=frontend_log_f,

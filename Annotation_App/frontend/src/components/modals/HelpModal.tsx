@@ -19,17 +19,17 @@ interface HelpModalProps {
 
 type Tab = 'shortcuts' | 'modes' | 'models' | 'workflow'
 
-const TABS: { id: Tab; label: string; Icon: React.FC<{ size: number }> }[] = [
-  { id: 'shortcuts', label: 'Raccourcis', Icon: Keyboard },
-  { id: 'modes', label: 'Modes & Fonctions', Icon: Info },
-  { id: 'models', label: 'Modèles', Icon: Cpu },
-  { id: 'workflow', label: 'Workflow', Icon: Video },
-]
-
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onStartTour }) => {
   const t = useT()
   const [tab, setTab] = useState<Tab>('shortcuts')
   if (!isOpen) return null
+
+  const TABS: { id: Tab; label: string; Icon: React.FC<{ size: number }> }[] = [
+    { id: 'shortcuts', label: t('Raccourcis'), Icon: Keyboard },
+    { id: 'modes', label: t('Modes & Fonctions'), Icon: Info },
+    { id: 'models', label: t('Modèles'), Icon: Cpu },
+    { id: 'workflow', label: t('Workflow'), Icon: Video },
+  ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -67,14 +67,14 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onStartTo
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               {SHORTCUT_GROUPS.map(({ group, items }) => (
                 <div key={group}>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">{group}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">{t(group)}</p>
                   <div className="space-y-1">
                     {items.map(({ key, desc }, i) => (
                       <div key={`${key}-${i}`} className="flex items-center gap-2">
                         <kbd className="bg-slate-700 text-slate-200 text-xs px-1.5 py-0.5 rounded font-mono min-w-[66px] text-center flex-shrink-0">
-                          {key}
+                          {t(key)}
                         </kbd>
-                        <span className="text-xs text-slate-400">{desc}</span>
+                        <span className="text-xs text-slate-400">{t(desc)}</span>
                       </div>
                     ))}
                   </div>
@@ -102,9 +102,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onStartTo
                       : status === 'Auto' ? 'bg-blue-900/50 text-blue-400'
                       : status === 'Inclus' ? 'bg-emerald-900/50 text-emerald-400'
                       : 'bg-yellow-900/50 text-yellow-400'
-                    }`}>{status}</span>
+                    }`}>{t(status)}</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
                 </div>
               ))}
             </div>
@@ -130,7 +130,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onStartTo
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 text-xs flex items-center justify-center font-medium">
                     {i + 1}
                   </span>
-                  <p className="text-xs text-slate-300 leading-relaxed">{step}</p>
+                  <p className="text-xs text-slate-300 leading-relaxed">{t(step)}</p>
                 </div>
               ))}
             </div>
@@ -141,16 +141,19 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onStartTo
   )
 }
 
-const ModeGrid: React.FC<{ title: string; items: { name: string; desc: string }[] }> = ({ title, items }) => (
+const ModeGrid: React.FC<{ title: string; items: { name: string; desc: string }[] }> = ({ title, items }) => {
+  const t = useT()
+  return (
   <div>
     <p className="text-[10px] uppercase tracking-wide text-slate-500 mb-1.5">{title}</p>
     <div className="grid grid-cols-2 gap-2">
       {items.map(({ name, desc }) => (
         <div key={name} className="p-2 bg-slate-800/60 rounded border border-slate-700/50">
-          <p className="text-xs font-medium text-slate-200 mb-0.5">{name}</p>
-          <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+          <p className="text-xs font-medium text-slate-200 mb-0.5">{t(name)}</p>
+          <p className="text-xs text-slate-400 leading-relaxed">{t(desc)}</p>
         </div>
       ))}
     </div>
   </div>
-)
+  )
+}

@@ -278,6 +278,8 @@ export interface AppSettings {
   // ---- Tutoriel interactif (repli hors VisionNexus, cf. utils/tutorialState.ts) ----
   tutorial_launched_once: boolean
   tutorial_completed: boolean
+  // ---- Langue de l'interface (repli hors VisionNexus) ----
+  ui_language: string
 }
 
 // ---- Datasets d'exemple livres avec la suite (data_tuto/) ----

@@ -33,9 +33,8 @@ from yolox.data.datasets.datasets_wrapper import Dataset  # noqa: E402
 
 _IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
-# Meme mapping que _VER_CLASS_MAP dans annotation_loader.py (Inference_App) :
-# garantit les memes class id pour un .ver utilise a la fois comme verite
-# terrain d'evaluation (tracker) et comme labels d'entrainement (ici).
+# Classes historiques du format .ver : la colonne classe (texte) devient cet
+# id ; une classe absente de la table devient 0.
 VER_CLASS_MAP: dict[str, int] = {
     "drone": 0,
     "bird": 1,
@@ -165,8 +164,7 @@ def load_ver_file(path: Path) -> dict[int, list[tuple[int, int, int, int, int]]]
 
     Format long (8+ colonnes) : frame_id visibility x1 y1 x2 y2 track_id class [...]
     Format court (6+ colonnes) : frame_id visibility x1 y1 x2 y2 (pas de classe -> 0)
-    Memes regles que _load_ver() dans annotation_loader.py (Inference_App),
-    y compris la conversion frame 1-based -> 0-based.
+    Les numeros de frame du fichier sont 1-based, convertis ici en 0-based.
     """
     annotations: dict[int, list[tuple[int, int, int, int, int]]] = {}
     with open(path, encoding="utf-8") as f:

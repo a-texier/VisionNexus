@@ -1,9 +1,8 @@
 # ============================================================
 # detection_metrics.py -- moteur mAP maison (sans ultralytics/pycocotools),
-# duplique depuis Inference_App/backend/services/detection_metrics.py
-# (meme moteur, garde en synchronisation manuelle -- voir la note dans le
-# fichier source cote Inference_App). Utilise ici par yolox_trainer.py pour
-# l'evaluation periodique pendant l'entrainement (evaluate_and_save_model).
+# utilise par yolox_trainer.py pour l'evaluation periodique pendant
+# l'entrainement (evaluate_and_save_model). Inference_App a sa propre
+# evaluation (inference_core/evaluation.py), aux conventions differentes.
 #
 # Calcule mAP50 / mAP50-95 / precision / recall / F1 + les 5 plots
 # classiques (confusion_matrix, PR_curve, P_curve, R_curve, F1_curve) avec

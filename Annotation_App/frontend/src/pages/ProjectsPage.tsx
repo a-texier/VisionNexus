@@ -15,7 +15,6 @@ import { CreateProjectModal } from '../components/modals/CreateProjectModal'
 import { SettingsModal } from '../components/modals/SettingsModal'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
-import { LanguageToggle } from '../components/common/LanguageToggle'
 import { useT } from '../i18n/useLang'
 import { UserBadge } from '../components/UserBadge'
 import { TourLaunchButton, useTour } from '../components/tour'
@@ -93,7 +92,7 @@ export const ProjectsPage: React.FC = () => {
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success(`${label} copié : ${text}`)
+      toast.success(`${label} ${t('copié')} : ${text}`)
     } catch {
       // Fallback : clipboard indisponible (contexte non sécurisé http)
       const ta = document.createElement('textarea')
@@ -102,7 +101,7 @@ export const ProjectsPage: React.FC = () => {
       ta.select()
       document.execCommand('copy')
       document.body.removeChild(ta)
-      toast.success(`${label} copié : ${text}`)
+      toast.success(`${label} ${t('copié')} : ${text}`)
     }
     setShowWorkspaceMenu(false)
   }
@@ -124,9 +123,9 @@ export const ProjectsPage: React.FC = () => {
     try {
       const cur = await settingsAPI.get()
       await settingsAPI.update({ paths: { ...(cur.paths ?? {}), native_share_host: host } })
-      toast.success(host ? `Hôte du partage enregistré : ${host}` : 'Lecture réseau native désactivée')
+      toast.success(host ? `${t('Hôte du partage enregistré')} : ${host}` : t('Lecture réseau native désactivée'))
     } catch {
-      toast.error('Échec de l\'enregistrement de l\'hôte du partage')
+      toast.error(t('Échec de l\'enregistrement de l\'hôte du partage'))
     }
   }
 
@@ -230,7 +229,6 @@ export const ProjectsPage: React.FC = () => {
             <Plus size={16} />
             {t('Nouveau projet')}
           </button>
-          <LanguageToggle />
         </div>
       </header>
 
@@ -322,10 +320,10 @@ export const ProjectsPage: React.FC = () => {
                           <span className={`text-xs font-medium ${
                             isTemplate ? 'text-orange-400/80' : isVideo ? 'text-purple-400/70' : 'text-blue-400/70'
                           }`}>
-                            {isVideo ? 'Séquence Image' : 'Image Random'}
+                            {isVideo ? t('Séquence Image') : t('Image Random')}
                             {isTemplate && (
                               <span className="ml-1.5 text-[10px] uppercase tracking-wide bg-orange-500/20 text-orange-300 border border-orange-500/40 rounded px-1 py-px">
-                                Démo tutoriel
+                                {t('Démo tutoriel')}
                               </span>
                             )}
                           </span>
@@ -354,7 +352,7 @@ export const ProjectsPage: React.FC = () => {
                       <div className="flex justify-between text-xs">
                         <span className="flex items-center gap-1 text-slate-400">
                           <BarChart2 size={11} />
-                          {project.annotated_count} / {project.frame_count} frames annotées
+                          {project.annotated_count} / {project.frame_count} {t('frames annotées')}
                         </span>
                         <span className={`font-semibold ${
                           annotationRate >= 80 ? 'text-emerald-400' :
@@ -376,7 +374,7 @@ export const ProjectsPage: React.FC = () => {
                     {sequences.length > 0 && (
                       <div className="mt-3 pt-2.5 border-t border-slate-700/60 space-y-1.5">
                         <p className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">
-                          {sequences.length} séquence{sequences.length > 1 ? 's' : ''}
+                          {sequences.length} {t('séquence')}{sequences.length > 1 ? 's' : ''}
                         </p>
                         {visibleSequences.map((seq) => {
                           const seqRate = seq.frame_count > 0
@@ -415,8 +413,8 @@ export const ProjectsPage: React.FC = () => {
                             className="text-[11px] text-blue-400/80 hover:text-blue-300 transition-colors"
                           >
                             {isExpanded
-                              ? 'Réduire'
-                              : `+ ${sequences.length - 3} autre${sequences.length - 3 > 1 ? 's' : ''} séquence${sequences.length - 3 > 1 ? 's' : ''}`}
+                              ? t('Réduire')
+                              : `+ ${sequences.length - 3} ${t('autre')}${sequences.length - 3 > 1 ? 's' : ''} ${t('séquence')}${sequences.length - 3 > 1 ? 's' : ''}`}
                           </button>
                         )}
                       </div>
@@ -472,35 +470,35 @@ export const ProjectsPage: React.FC = () => {
         </div>
         {showWorkspaceMenu && (
           <div className="absolute left-0 bottom-full mb-1 w-80 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 p-2 space-y-1">
-            <p className="text-[11px] text-slate-500 px-2 pt-1 break-all">{workspacePath ?? 'Chemin inconnu'}</p>
+            <p className="text-[11px] text-slate-500 px-2 pt-1 break-all">{workspacePath ?? t('Chemin inconnu')}</p>
             <button
               onClick={handleRevealWorkspace}
               className="w-full flex items-center gap-2 text-left text-xs text-slate-300 hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors"
             >
-              <ExternalLink size={12} /> Ouvrir sur le serveur (app locale uniquement)
+              <ExternalLink size={12} /> {t('Ouvrir sur le serveur (app locale uniquement)')}
             </button>
             {workspacePath && (
               <button
-                onClick={() => void copyToClipboard(workspacePath, 'Chemin serveur')}
+                onClick={() => void copyToClipboard(workspacePath, t('Chemin serveur'))}
                 className="w-full flex items-center gap-2 text-left text-xs text-slate-300 hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors"
               >
-                <Copy size={12} /> Copier le chemin serveur
+                <Copy size={12} /> {t('Copier le chemin serveur')}
               </button>
             )}
             {mappedWindowsPath && (
               <button
-                onClick={() => void copyToClipboard(mappedWindowsPath, 'Chemin Windows')}
+                onClick={() => void copyToClipboard(mappedWindowsPath, t('Chemin Windows'))}
                 className="w-full flex items-center gap-2 text-left text-xs text-emerald-300 hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors"
               >
-                <Copy size={12} /> Copier le chemin Windows (montage)
+                <Copy size={12} /> {t('Copier le chemin Windows (montage)')}
               </button>
             )}
             {/* Montage Windows (usage SSH) : seul l'hôte du partage est requis.
                 /home/… → \\{hôte}\\… (1er segment retiré, / → \\). */}
             <div className="border-t border-slate-700 mt-1 pt-2 px-2 pb-1 space-y-1.5">
-              <p className="text-[10px] uppercase tracking-wide text-slate-500">Montage Windows - hôte du partage</p>
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('Montage Windows - hôte du partage')}</p>
               <p className="text-[10px] text-slate-500 leading-snug">
-                Exemple : <code className="text-slate-300">/srv/datasets/...</code> devient <code className="text-emerald-300">{`\\\\${nativeShareHost.trim() || '<share-host>'}\\datasets\\...`}</code>.
+                {t('Exemple')} : <code className="text-slate-300">/srv/datasets/...</code> {t('devient')} <code className="text-emerald-300">{`\\\\${nativeShareHost.trim() || '<share-host>'}\\datasets\\...`}</code>.
               </p>
               <input
                 type="text"
@@ -516,7 +514,7 @@ export const ProjectsPage: React.FC = () => {
                 onClick={() => void saveNativeShareHost()}
                 className="w-full text-[11px] text-blue-300 hover:text-blue-200 bg-blue-900/30 hover:bg-blue-900/50 rounded py-1 transition-colors"
               >
-                Enregistrer l'hôte du partage
+                {t("Enregistrer l'hôte du partage")}
               </button>
             </div>
           </div>

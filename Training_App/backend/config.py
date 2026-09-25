@@ -30,7 +30,7 @@ CURRENT_USER = os.environ.get("TRAINING_APP_USER", "unknown")
 # ---- Moteur d'entrainement ----
 # Moteur retenu quand une requete n'en precise aucun : "yolox" (moteur du
 # coeur) ou le nom d'un moteur fourni par un plugin de <racine>/plugins/ --
-# voir services/trainer_backend.py et docs/plugins/README.md a la racine.
+# voir services/trainer_backend.py et docs/architecture.md a la racine.
 TRAINER_BACKEND = os.environ.get("TRAINING_APP_TRAINER_BACKEND", "yolox")
 
 # ---- Reseau ----

@@ -41,7 +41,7 @@ Standalone:
 ```bash
 bash start.sh
 # or manually
-BACKEND_PORT=8001 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
+BACKEND_PORT=8001 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
 cd frontend && VITE_BACKEND_PORT=8001 npm run dev -- --port 3001
 ```
 
@@ -49,4 +49,4 @@ Frontend: http://localhost:3001
 Backend: http://localhost:8001
 Store: `<workspace>/mlflow_data/mlflow.db` (sqlite, serverless, no dedicated port)
 
-See also [docs/ECOSYSTEM.md](../docs/ECOSYSTEM.md) for this app's place in the suite.
+See also [docs/README.md](../docs/README.md) for this app's place in the suite.

@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "doc_set": [
+    {
+      "name": "README",
+      "doc_type": "readme",
+      "audience": "both",
+      "order": 0
+    },
+    {
+      "name": "user-guide",
+      "doc_type": "user-guide",
+      "audience": "user",
+      "order": 10
+    },
+    {
+      "name": "workflows",
+      "doc_type": "workflows",
+      "audience": "user",
+      "order": 20
+    },
+    {
+      "name": "concepts",
+      "doc_type": "concepts",
+      "audience": "user",
+      "order": 30
+    },
+    {
+      "name": "configuration",
+      "doc_type": "configuration",
+      "audience": "both",
+      "order": 40
+    },
+    {
+      "name": "troubleshooting",
+      "doc_type": "troubleshooting",
+      "audience": "both",
+      "order": 50
+    },
+    {
+      "name": "architecture",
+      "doc_type": "architecture",
+      "audience": "dev",
+      "order": 60
+    },
+    {
+      "name": "api-reference",
+      "doc_type": "api-reference",
+      "audience": "dev",
+      "order": 70
+    },
+    {
+      "name": "code-map",
+      "doc_type": "code-map",
+      "audience": "dev",
+      "order": 80
+    }
+  ],
+  "sources": [
+    {
+      "id": "suite",
+      "dir": ".",
+      "docs_path": "docs",
+      "indexed": true,
+      "extra_docs": [
+        {
+          "name": "security",
+          "doc_type": "security",
+          "audience": "both",
+          "order": 55
+        }
+      ]
+    },
+    {
+      "id": "annotation",
+      "dir": "Annotation_App",
+      "indexed": true
+    },
+    {
+      "id": "explorer",
+      "dir": "Dataset_Explorer_App",
+      "indexed": true
+    },
+    {
+      "id": "orchestrator",
+      "dir": "Orchestrator_App",
+      "indexed": true
+    },
+    {
+      "id": "training",
+      "dir": "Training_App",
+      "indexed": true
+    },
+    {
+      "id": "inference",
+      "dir": "Inference_App",
+      "indexed": true
+    },
+    {
+      "id": "optuna",
+      "dir": "Optuna_App",
+      "indexed": true
+    },
+    {
+      "id": "mlflow",
+      "dir": "MLflow_App",
+      "indexed": true
+    },
+    {
+      "id": "dvc",
+      "dir": "DVC_App",
+      "indexed": true
+    },
+    {
+      "id": "docs",
+      "dir": "Docs_Assistant_App",
+      "indexed": true
+    }
+  ]
+}

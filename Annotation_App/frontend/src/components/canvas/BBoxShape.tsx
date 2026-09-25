@@ -23,6 +23,7 @@ interface BBoxShapeProps {
   showLabel?: boolean         // Afficher l'étiquette de classe (depuis settings)
   showConfidence?: boolean    // Afficher le score de confiance (depuis settings)
   borderWidth?: number        // Épaisseur des bordures (depuis settings)
+  fillOpacity?: number        // Opacité du remplissage 0-1 (depuis settings)
   trackColor?: string         // Couleur de la track associée (badge coin haut-droit)
   trackUid?: number | null    // Numéro de track affiché dans le badge
   onSelect: (id: number, multiSelect: boolean) => void
@@ -40,6 +41,7 @@ export const BBoxShape: React.FC<BBoxShapeProps> = ({
   showLabel = true,
   showConfidence = false,
   borderWidth = 2,
+  fillOpacity = 0.2,
   trackColor,
   trackUid,
   onSelect,
@@ -64,10 +66,11 @@ export const BBoxShape: React.FC<BBoxShapeProps> = ({
   const strokeColor = color
 
   // Couleur de fond selon le score de confiance
+  const alpha = Math.round(Math.min(1, Math.max(0, fillOpacity)) * 255).toString(16).padStart(2, '0')
   const getConfidenceColor = () => {
-    if (annotation.confidence >= 0.8) return `${color}22`  // Vert = haute confiance
-    if (annotation.confidence >= 0.5) return '#F59E0B22'   // Orange = confiance moyenne
-    return '#EF444422'                                       // Rouge = basse confiance
+    if (annotation.confidence >= 0.8) return `${color}${alpha}`  // Vert = haute confiance
+    if (annotation.confidence >= 0.5) return `#F59E0B${alpha}`   // Orange = confiance moyenne
+    return `#EF4444${alpha}`                                      // Rouge = basse confiance
   }
 
   // Attacher le transformer quand sélectionné

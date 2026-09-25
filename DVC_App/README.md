@@ -52,4 +52,4 @@ An initialized git+DVC repo (`git init && dvc init`) is recommended in the targe
 but the backend still starts without one (the routes then return a "repo not found"
 status) and the orchestrator route can initialize it itself if needed.
 
-See also [docs/ECOSYSTEM.md](../docs/ECOSYSTEM.md) for this app's place in the suite.
+See also [docs/README.md](../docs/README.md) for this app's place in the suite.

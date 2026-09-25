@@ -14,10 +14,18 @@ import { ConvertPage } from './pages/ConvertPage'
 import { MonitoringPage } from './pages/MonitoringPage'
 import { useSettingsStore } from './stores/settingsStore'
 import { TourProvider, TourOverlay } from './components/tour'
+import { settingsAPI } from './services/api'
+import { initWorkspaceLanguage } from './i18n/translate'
+import type { Lang } from './i18n/translate'
 
 const App: React.FC = () => {
   const fetchSettings = useSettingsStore((s) => s.fetch)
   useEffect(() => { void fetchSettings() }, [fetchSettings])
+  // Repli langue workspace : ne s'applique que si VisionNexus n'a pas deja
+  // impose la langue via ?lang= (cf. i18n/translate.ts).
+  useEffect(() => {
+    void initWorkspaceLanguage(() => settingsAPI.get().then((s) => (s as unknown as { ui_language?: Lang }).ui_language))
+  }, [])
   return (
   <BrowserRouter>
     <TourProvider>

@@ -372,8 +372,9 @@ async def stream_events(run_name: str):
     """
     SSE stream des evenements de progression.
     Le frontend se connecte ici et recoit des events:
+      { type: "status", status, message? }
       { type: "epoch", epoch, total_epochs, progress_pct, metrics }
-      { type: "done", best_model_path, map50, map5095 }
+      { type: "done", engine, best_model_path, map50, map5095 }
       { type: "error", message }
       { type: "stopped" }
     """

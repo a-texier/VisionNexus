@@ -2,7 +2,7 @@
 // App.tsx — Routing + sidebar avec indicateur repo + branche
 // ============================================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Database, GitCompare, RefreshCw, GitBranch, CheckCircle, XCircle, Info, BookOpen, Workflow } from 'lucide-react'
@@ -14,7 +14,9 @@ import DiffPage     from './pages/DiffPage'
 import SyncPage     from './pages/SyncPage'
 import DocPage      from './pages/DocPage'
 import LineagePage  from './pages/LineagePage'
-import { datasetsAPI, repoAPI } from './api/client'
+import { datasetsAPI, repoAPI, settingsAPI } from './api/client'
+import { initWorkspaceLanguage } from './i18n/translate'
+import type { Lang } from './i18n/translate'
 
 const NAV_ITEMS = [
   { to: '/',        icon: <Workflow   size={18} />, label: 'Lineage',     exact: true },
@@ -130,6 +132,14 @@ function Sidebar() {
 }
 
 export default function App() {
+  // Repli hors lanceur : si l'app n'est pas pilotee par VisionNexus (?lang=
+  // absent), on applique la langue persistee cote workspace au boot.
+  useEffect(() => {
+    void initWorkspaceLanguage(() =>
+      settingsAPI.get().then(s => s.ui_language as Lang | null | undefined)
+    )
+  }, [])
+
   return (
     <BrowserRouter>
       <div className="flex h-screen overflow-hidden bg-gray-950">

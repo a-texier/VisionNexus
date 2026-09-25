@@ -106,3 +106,34 @@ export const settingsAPI = {
   update: (data: Partial<AppSettings>): Promise<AppSettings> =>
     http.put('/api/settings', data).then(r => r.data),
 }
+
+// ------------------------------------------------------------------ //
+// Documentation (pages markdown de MLflow_App/docs/)                    //
+// ------------------------------------------------------------------ //
+export type DocLang = 'en' | 'fr'
+
+export interface DocPageInfo {
+  name: string
+  title: string
+  order: number
+  audience: string
+  doc_type: string
+  langs: DocLang[]
+}
+
+export interface DocPage {
+  name: string
+  lang: DocLang
+  title: string
+  frontmatter: Record<string, unknown>
+  body: string
+}
+
+export const docsAPI = {
+  list: (lang: DocLang): Promise<DocPageInfo[]> =>
+    http.get('/api/docs', { params: { lang } }).then(r => r.data),
+  get: (name: string, lang: DocLang): Promise<DocPage> =>
+    http.get(`/api/docs/${encodeURIComponent(name)}`, { params: { lang } }).then(r => r.data),
+  // Chemin relatif au dossier docs/assets/, tel qu'ecrit dans le markdown.
+  getAssetUrl: (path: string): string => `/api/docs/assets/${path}`,
+}

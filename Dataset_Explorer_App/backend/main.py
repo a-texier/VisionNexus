@@ -7,6 +7,7 @@
 # ============================================================
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from backend.api import datasets as datasets_router
+from backend.api import docs as docs_router
 from backend.api import folders as folders_router
 from backend.api import explore as explore_router
 from backend.api import filter as filter_router
@@ -141,7 +143,7 @@ async def lifespan(app: FastAPI):
                 except Exception as exc:
                     logger.warning("Index FAISS non rechargé pour dataset %d : %s", ds.id, exc)
 
-    logger.info("Dataset Explorer prêt sur port 8001")
+    logger.info("Dataset Explorer prêt sur port %s", os.environ.get("BACKEND_PORT", "8001"))
     yield
 
     logger.info("Arrêt Dataset Explorer")
@@ -167,6 +169,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # Routers
 app.include_router(datasets_router.router)
 app.include_router(folders_router.router)
@@ -178,6 +203,7 @@ app.include_router(settings_router.router)
 app.include_router(orchestrator_router.router)
 app.include_router(metadata_router.router)
 app.include_router(samples_router.router)
+app.include_router(docs_router.router)
 
 # Fichiers statiques : thumbnails workspace
 app.mount("/thumbs", StaticFiles(directory=str(THUMBS_DIR)), name="thumbs")

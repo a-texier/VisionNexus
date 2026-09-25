@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from _lib import session_auth
+
 # ------------------------------------------------------------------ #
 # Root paths — deux layouts supportes :                               #
 #   DEV     : App/Launchers/_lib/launcher_engine.py                   #
@@ -173,10 +175,10 @@ APP_REGISTRY: dict = {
         "workspace_env":      "MESHY_WORKSPACE",
         "user_env":           "MESHY_USER",
         "frontend_port_env":  None,
-        "extra_env":          {"HOST": "0.0.0.0"},
+        "extra_env":          {"HOST": os.environ.get("CV_BIND_HOST", "127.0.0.1")},
     },
     # App AUTONOME (comme Meshy) : hors Computer_Vision_App, PAS dans le bundle
-    # CV, PAS dans CV_APPS_ORDER, PAS cablee a l'Orchestrator. Reconstruction 3D.
+    # CV, PAS cablee a l'Orchestrator. Reconstruction 3D.
     "recon3d": {
         "label":              "Recon3D_App",
         "app_root":           _AUTONOMOUS_BASE / "Recon3D_App",
@@ -277,22 +279,26 @@ APP_REGISTRY: dict = {
         "frontend_port_env":  "INFERENCE_APP_FRONTEND_PORT",
         "extra_env":          {},
     },
-}
-
-# ── All 7 Computer-Vision apps in launch order (orchestrator last so
-#    URLs of peer apps can be wired before it starts).
-CV_APPS_ORDER = ["annotation", "explorer", "training", "inference", "dvc", "mlflow", "optuna", "orchestrator"]
-
-# Env-var names that the orchestrator reads to reach peer backends/frontends.
-# Keys = app_id in APP_REGISTRY. Values = (backend_env, frontend_env).
-ORCHESTRATOR_URL_MAP: dict[str, tuple[str, str]] = {
-    "annotation": ("ANNOTATION_APP_URL",   "ANNOTATION_APP_FRONTEND_URL"),
-    "explorer":       ("DATASET_EXPLORER_APP_URL",      "DATASET_EXPLORER_APP_FRONTEND_URL"),
-    "training":   ("TRAINING_APP_URL",      "TRAINING_APP_FRONTEND_URL"),
-    "inference":  ("INFERENCE_APP_URL",     "INFERENCE_APP_FRONTEND_URL"),
-    "dvc":        ("DVC_APP_URL",           "DVC_APP_FRONTEND_URL"),
-    "mlflow":     ("MLFLOW_APP_URL",        "MLFLOW_APP_FRONTEND_URL"),
-    "optuna":     ("OPTUNA_APP_URL",        "OPTUNA_APP_FRONTEND_URL"),
+    # Service de calcul backend seul : pas de frontend (frontend_dir None), hors ligne.
+    "docs": {
+        "label":              "Docs_Assistant_App",
+        "app_root":           _CV / "Docs_Assistant_App",
+        "backend_module":     "backend.main:app",
+        "backend_cwd":        None,
+        "frontend_dir":       None,
+        "base_backend_port":  8068,
+        "base_frontend_port": None,
+        "default_workspace":  str(_WS_DEFAULT / "default_docs"),
+        "workspace_env":      "DOCS_ASSISTANT_WORKSPACE",
+        "user_env":           "DOCS_ASSISTANT_USER",
+        "frontend_port_env":  None,
+        "extra_env": {
+            "HF_HUB_OFFLINE":          "1",
+            "TRANSFORMERS_OFFLINE":    "1",
+            "HF_HUB_DISABLE_TELEMETRY": "1",
+            "DO_NOT_TRACK":            "1",
+        },
+    },
 }
 
 # ------------------------------------------------------------------ #
@@ -313,6 +319,7 @@ _WS_SUBDIRS: dict = {
     "optuna":       ["logs"],
     "training":     ["runs", "exports"],
     "inference":    ["runs"],
+    "docs":         [],
 }
 
 # ------------------------------------------------------------------ #
@@ -417,7 +424,7 @@ def _save_instances(entries: list) -> None:
 
 
 def register_instance(
-    app_id: str, user: str, backend_port: int, frontend_port: int, workspace: str
+    app_id: str, user: str, backend_port: int, frontend_port: Optional[int], workspace: str
 ) -> None:
     key = f"{app_id}:{user}"
     entries = load_instances()
@@ -666,7 +673,7 @@ class LaunchSession:
     user:          str
     workspace:     str
     backend_port:  int
-    frontend_port: int
+    frontend_port: Optional[int]      # None = service backend seul
     backend_proc:  subprocess.Popen
     frontend_proc: Optional[subprocess.Popen] = None
     _shutdown_called: bool = field(default=False, init=False)
@@ -752,9 +759,12 @@ def launch_app(
     else:
         backend_cwd = app_root
 
-    # Resolve frontend dir
+    # Resolve frontend dir (None = service backend seul, sans frontend ni port frontend)
     fd_raw = cfg["frontend_dir"]
-    if os.path.isabs(fd_raw):
+    if fd_raw is None:
+        frontend_dir = None
+        backend_only = True
+    elif os.path.isabs(fd_raw):
         frontend_dir = Path(fd_raw)
     else:
         frontend_dir = app_root / fd_raw
@@ -813,7 +823,10 @@ def launch_app(
             backend_port = find_free_port(bp_start, claimed)
         claimed.add(backend_port)
 
-        if fixed_frontend_port is not None:
+        frontend_port: Optional[int]
+        if frontend_dir is None:
+            frontend_port = None
+        elif fixed_frontend_port is not None:
             if fixed_frontend_port in claimed or not is_port_free(fixed_frontend_port):
                 raise RuntimeError(f"Frontend port {fixed_frontend_port} is already in use.")
             frontend_port = fixed_frontend_port
@@ -828,7 +841,8 @@ def launch_app(
     env = os.environ.copy()
     env["BACKEND_PORT"]      = str(backend_port)
     env["VITE_BACKEND_PORT"] = str(backend_port)
-    env["VITE_FRONTEND_PORT"] = str(frontend_port)
+    if frontend_port is not None:
+        env["VITE_FRONTEND_PORT"] = str(frontend_port)
     env["IA_USER"]           = user
     env["VITE_IA_USER"]      = user            # lisible côté frontend via import.meta.env.VITE_IA_USER
     env["IA_APP_ID"]              = app_id          # lu par /api/workspace/users pour filtrer par app
@@ -839,12 +853,15 @@ def launch_app(
         env[cfg["workspace_env"]] = ws
     if cfg["user_env"]:
         env[cfg["user_env"]] = user
-    if cfg["frontend_port_env"]:
+    if cfg["frontend_port_env"] and frontend_port is not None:
         env[cfg["frontend_port_env"]] = str(frontend_port)
     for k, v in cfg.get("extra_env", {}).items():
         env[k] = v
     for k, v in (extra_env_overrides or {}).items():
         env[k] = v
+    # Jeton de session de CETTE instance (cf. _lib/session_auth.py).
+    session_env = session_auth.new_session_env()
+    env.update(session_env)
 
     # Also set PORT for meshy
     if app_id == "meshy":
@@ -868,20 +885,27 @@ def launch_app(
     print("=" * 60, flush=True)
     print(f"  {label} -- {user}", flush=True)
     print("=" * 60, flush=True)
+    # Avant les lignes [config] : le lanceur Electron considere l'app prete a
+    # etre ouverte des qu'il a lu les deux ports, le jeton doit etre deja la.
+    session_auth.announce(session_env, frontend_port)
     print(f"[config] app_id    = {app_id}", flush=True)
     print(f"[config] workspace = {ws}", flush=True)
     print(f"[config] backend   = http://localhost:{backend_port}", flush=True)
-    print(f"[config] frontend  = http://localhost:{frontend_port}", flush=True)
+    if frontend_port is None:
+        print("[config] frontend  = none", flush=True)
+    else:
+        print(f"[config] frontend  = http://localhost:{frontend_port}", flush=True)
     print(f"[config] conda     = {conda_path or f'(env par nom: {conda_env})'}", flush=True)
     print(f"[config] python    = {python_exe}", flush=True)
     print(f"[config] node      = {node_bin or 'systeme (PATH)'}", flush=True)
     print(f"[config] layout    = {'BUNDLE' if _BUNDLE else 'DEV'}", flush=True)
 
-    # Start backend
+    # Start backend. Loopback par defaut comme le frontend : en 0.0.0.0 l'API
+    # (qui lit les fichiers du user) etait joignable par tout le LAN.
     backend_cmd = [
         python_exe, "-m", "uvicorn",
         cfg["backend_module"],
-        "--host", "0.0.0.0",
+        "--host", os.environ.get("CV_BIND_HOST", "127.0.0.1"),
         "--port", str(backend_port),
     ]
     if not no_reload:
@@ -921,7 +945,7 @@ def launch_app(
     if frontend_proc:
         print(f"  Frontend : http://localhost:{frontend_port}")
     print(f"  API docs : http://localhost:{backend_port}/docs")
-    print(f"  Press Ctrl+C to stop")
+    print("  Press Ctrl+C to stop")
     print("=" * 60 + "\n")
 
     return LaunchSession(

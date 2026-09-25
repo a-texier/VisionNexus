@@ -311,14 +311,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               />
             </ParamRow>
 
-            <ParamRow label={t('Hauteur timeline (px)')}>
-              <NumberInput
-                value={settings.interface.timeline_height}
-                min={40} max={200} step={10}
-                onChange={(v) => patch('interface', 'timeline_height', v)}
-              />
-            </ParamRow>
-
             <ParamRow label={t('Afficher les étiquettes')} hint={t('Nom de classe sur chaque annotation')}>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input

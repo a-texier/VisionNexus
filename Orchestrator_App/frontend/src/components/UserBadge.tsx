@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Users, FolderOpen, History } from 'lucide-react'
 import { useT } from '../i18n/useLang'
+import { LanguageToggle } from './common/LanguageToggle'
 
 interface WorkspaceUser {
   user: string
@@ -121,6 +122,9 @@ export function UserBadge() {
       >
         <Users size={13} className={panel === 'users' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'} />
       </button>
+
+      {/* Language toggle */}
+      <LanguageToggle />
 
       {/* Panel — fixed, opens upward */}
       {panel && (

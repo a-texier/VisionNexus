@@ -37,6 +37,8 @@ interface RightPanelProps {
   onDeleteAllAnnotations: () => Promise<void>
   onApplyNMS: (iouThreshold: number) => Promise<void>
   onAssignTrack?: (annotationId: number, action: 'new' | 'assign' | 'detach', trackId?: number) => Promise<void>
+  // Sortie SAM choisie dans la barre d'outils (BBox ou Seg) : appliquee aussi a la validation des propositions
+  samOutputMode?: 'bbox' | 'segmentation'
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -50,6 +52,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onDeleteAllAnnotations,
   onApplyNMS,
   onAssignTrack,
+  samOutputMode,
 }) => {
   const t = useT()
   const [tab, setTab] = useState<RightTab>('classes')
@@ -119,6 +122,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               onDeleteAllAnnotations={onDeleteAllAnnotations}
               onApplyNMS={onApplyNMS}
               onAssignTrack={onAssignTrack}
+              samOutputMode={samOutputMode}
             />
           )}
           {tab === 'help' && <HelpPanel />}

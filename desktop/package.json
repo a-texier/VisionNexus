@@ -7,8 +7,9 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/tunnelClassify.test.js",
+    "test": "node --test dist/tunnelClassify.test.js dist/docFiles.test.js dist/sshLauncher.test.js dist/services.test.js dist/sessionTokens.test.js dist/askRender.test.js && node scripts/check-heading-ids.js",
     "copy-docs": "node scripts/copy-docs.js",
+    "vendor-marked": "node -e \"const fs=require('fs');fs.writeFileSync('ui/vendor/marked.min.js',fs.readFileSync('node_modules/marked/lib/marked.umd.js','utf8').replace(/\\n\\/\\/# sourceMappingURL=.*\\s*$/,'\\n'))\"",
     "start": "npm run build && electron .",
     "dist:win": "npm run build && npm test && npm run copy-docs && electron-builder --win portable --x64",
     "dist:linux": "npm run build && npm test && npm run copy-docs && electron-builder --linux AppImage --x64"
@@ -17,6 +18,7 @@
     "@types/node": "^22.10.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "marked": "^18.0.14",
     "typescript": "~5.9.3"
   },
   "build": {
@@ -32,9 +34,18 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "ui", "to": "ui" },
-      { "from": "assets", "to": "assets" },
-      { "from": "docs-bundle", "to": "appdocs" }
+      {
+        "from": "ui",
+        "to": "ui"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      },
+      {
+        "from": "docs-bundle",
+        "to": "appdocs"
+      }
     ],
     "win": {
       "target": "portable",

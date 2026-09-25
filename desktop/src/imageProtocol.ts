@@ -25,6 +25,7 @@
 import { protocol } from 'electron'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { authFetch } from './sessionTokens'
 
 const FETCH_TIMEOUT_MS = 2000
 const NATIVE_READ_TIMEOUT_MS = 1500
@@ -142,7 +143,7 @@ function isProvisional(res: Response): boolean {
 
 async function respondFallback(fallbackUrl: string, key: string): Promise<Response> {
   try {
-    const res = await fetch(fallbackUrl)
+    const res = await authFetch(fallbackUrl)
     if (!res.ok || !res.body) return new Response('Not Found', { status: res.status || 404 })
     const buf = Buffer.from(await res.arrayBuffer())
     const contentType = res.headers.get('content-type') ?? 'image/jpeg'
@@ -198,7 +199,7 @@ export function registerImageProtocol(onTransport?: (event: ImageTransportEvent)
     try {
       let nativePath = directNativePath
       if (!nativePath) {
-        const pathRes = await withTimeout(fetch(imagePathUrl as string), FETCH_TIMEOUT_MS)
+        const pathRes = await withTimeout(authFetch(imagePathUrl as string), FETCH_TIMEOUT_MS)
         if (!pathRes.ok) throw new Error(`image-path HTTP ${pathRes.status}`)
         const data = (await pathRes.json()) as { native_path: string | null }
         // Pas d'erreur : soit aucun partage ne couvre ce chemin, soit

@@ -307,9 +307,16 @@ def create_subset_orchestrator(body: CreateSubsetRequest, session: Session = Dep
         )
     ).first()
     if existing_subset:
+        from backend.db.models import SubsetExport
+        from backend.core.subset_manager import delete_subset_dir
         links = session.exec(select(SubsetImage).where(SubsetImage.subset_id == existing_subset.id)).all()
         for lnk in links:
             session.delete(lnk)
+        # Sans ces lignes, chaque relance du meme pipeline laissait des exports orphelins et un dossier obsolete.
+        for exp in session.exec(select(SubsetExport).where(SubsetExport.subset_id == existing_subset.id)).all():
+            session.delete(exp)
+        if existing_subset.symlink_dir:
+            delete_subset_dir(existing_subset.symlink_dir)
         session.delete(existing_subset)
         session.commit()
         logger.info("Orchestrator: ancien subset '%s' supprimé", body.subset_name)

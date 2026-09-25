@@ -1,430 +1,233 @@
-*[Lire en francais](architecture.fr.md)*
+---
+app: explorer
+doc_type: architecture
+audience: dev
+lang: en
+title: Architecture
+order: 60
+tags: [fastapi, sqlite, faiss, job runner, sse, react, global registry]
+sources: [Dataset_Explorer_App/backend/main.py, Dataset_Explorer_App/backend/config.py, Dataset_Explorer_App/backend/db/models.py, Dataset_Explorer_App/backend/db/database.py, Dataset_Explorer_App/backend/api/datasets.py, Dataset_Explorer_App/backend/api/folders.py, Dataset_Explorer_App/backend/api/export.py, Dataset_Explorer_App/backend/api/orchestrator.py, Dataset_Explorer_App/backend/core/job_runner.py, Dataset_Explorer_App/backend/core/indexer.py, Dataset_Explorer_App/backend/core/metadata_index.py, Dataset_Explorer_App/backend/core/subset_manager.py, Dataset_Explorer_App/frontend/src/App.tsx, Dataset_Explorer_App/frontend/src/api/client.ts, Dataset_Explorer_App/frontend/src/hooks/useDataset.ts, Dataset_Explorer_App/frontend/vite.config.ts]
+---
 
 # Architecture
 
-Narrative overview of the backend, the frontend, the data flow and the DB schema.
-For the file/endpoint/route correspondence table, see
-[code-navigation.md](code-navigation.md).
+## Components overview of Dataset Explorer
 
----
+Dataset Explorer is a two-tier web application: a FastAPI backend that owns the data, the models and the computations, and a React frontend that runs in a browser or in the VisionNexus Electron shell.
 
-## FastAPI Backend
+```text
+Frontend (React 18 + TypeScript + Vite 6 + Tailwind + TanStack Query + Zustand + Plotly)
+  |-- HTTP /api (axios, 30 s timeout; longer for Catalog calls)  --+
+  |-- progress streams: fetch POST + ReadableStream (SSE format)  --+--> Vite proxy --> FastAPI backend
+  `-- images: /thumbs, /gallery-thumbs, /api/images/*; app-image:// native read in VisionNexus
 
-Singleton pattern per domain, instantiated once at module load:
-
-- `clip_embedder` (`core/embedder.py`, class `CLIPEmbedder`) - CLIP model loaded once at startup
-- `faiss_indexer` (`core/indexer.py`, class `FAISSIndexer`) - in-memory FAISS index per `dataset_id`
-- `umap_reducer` (`core/reducer.py`, class `UMAPReducer`) - stateless, reads settings on each call
-- `clusterer` (`core/clusterer.py`, class `Clusterer`) - stateless
-
-### Lifespan (`main.py`)
-
-1. `create_db_and_tables()` - creates the SQLite tables
-2. `THUMBS_DIR`, `FAISS_DIR`, `SUBSETS_DIR` - creates the workspace folders
-3. `clip_embedder.load()` - loads ViT-B-32 on GPU/CPU
-4. For each dataset with `status=="ready"`: `faiss_indexer.load()` (reloads the disk index into memory)
-
-### Core modules - ML logic (no FastAPI dependency)
-
-```
-core/
-|-- embedder.py        - CLIPEmbedder: embed_images(), embed_text(), compute_md5(), generate_thumbnail()
-|-- indexer.py          - FAISSIndexer: build(), load(), search(), find_duplicates()
-|-- reducer.py          - UMAPReducer: reduce() -> reads settings at execution time (UMAP/t-SNE/PCA + hyperparams)
-|-- clusterer.py         - Clusterer: kmeans(), hdbscan_cluster(), compute_rarity_scores()
-|-- semantic_filter.py   - semantic_search() -> ranked results
-|-- scorer.py             - re-exports compute_rarity_scores
-|-- subset_manager.py    - create_subset_symlinks(), export_to_annotation_app()
-`-- format specialise_converter.py      - read_format specialise(), convert_format specialise_to_png(), convert_path()
+Backend (FastAPI + SQLModel + SQLite, one uvicorn process per workspace)
+  |-- api/     one router per domain
+  |-- core/    ML and business logic without FastAPI: CLIP, FAISS, reduction, clustering, jobs
+  |-- db/      SQLModel tables and the SQLite engine
+  |-- utils/   Windows share paths and optional format adapters
+  `-- storage: workspace (database, thumbnails, indexes, subsets, settings) + shared gallery folder
 ```
 
----
-
-## Embedding pipeline
-
-Endpoint: `POST /api/datasets/{id}/embed`. Non-blocking: launches a background task and
-returns `202 {status:"started"|"already_running"}` immediately. Lock
-`_embedding_ids` (in-memory dict in `api/datasets.py`) prevents a double-trigger
-on a re-click. Progress is tracked by **polling** `list_datasets`
-(`embed_progress` / `embed_total` / `embed_phase`), not by SSE - robust over an
-SSH connection or a buffering proxy.
-
-Successive phases: `embedding` -> `indexing` -> `umap` -> `clustering` -> `scoring`.
-
-```
-CLIPEmbedder.embed_images() -> Embedding rows (float32 blob, L2-normalized)
-FAISSIndexer.build()         -> index.faiss on disk
-UMAPReducer.reduce()          -> Image.umap_x, umap_y
-Clusterer.kmeans()             -> Image.cluster_id, ClusterCentroid rows
-Clusterer.compute_rarity_scores() -> Image.rarity_score
-```
-
-### FAISS + CLIP
-
-```
-embed_images([path1, path2, ...])
-  -> PILImage -> preprocess (224x224, normalize) -> torch.Tensor
-  -> model.encode_image() -> (N, 512) float32
-  -> F.normalize(dim=-1) -> L2-normalized
-
-IndexFlatIP(512).add(embeddings)
-  -> dot product = cosine_similarity (L2-normalized vectors)
+Main technologies: FastAPI and uvicorn, SQLModel on SQLAlchemy with SQLite in WAL mode, PyTorch with `open_clip` (ViT-B/32), FAISS, `umap-learn`, scikit-learn (t-SNE, PCA, KMeans), `hdbscan`, Pillow and OpenCV, pandas for metadata tables. On the frontend: React 18, React Router 6, TanStack Query 5, Zustand 5, `react-plotly.js`, `react-hot-toast` and `marked` for the in-app documentation.
 
-faiss.write_index(index, path)  # disk persistence
-faiss.read_index(path)          # reload
-```
-
-### UMAP / t-SNE / PCA (2D reduction)
-
-**Independent** block from the embedding pipeline: `POST /api/datasets/{id}/reduce` only
-recomputes the 2D coordinates, without touching CLIP or the clustering. Runs in the
-background (`_reduce_progress`, poll). Applied config stored in `Dataset.reduction_method` /
-`reduction_params_json`, shown in the Playground and on the Map. "Reduction" button
-separate from the "Clustering" button (Dashboard + Map).
-
-```python
-umap.UMAP(
-    n_components=2,
-    n_neighbors=min(15, n-1),  # adaptive if few images
-    min_dist=0.1,
-    metric="cosine",            # consistent with the CLIP space
-    random_state=42,
-).fit_transform(embeddings)     # -> (N, 2) float32
-```
-
-Automatic fallback: UMAP -> t-SNE (sklearn, if UMAP errors) -> PCA (if < 4 images).
-
-Configurable in **Settings -> Dimensionality reduction**, saved in
-`settings.json`:
-
-| Settings field | Default | Description |
-|---|---|---|
-| `reduction_method` | `"umap"` | Method: `"umap"` \| `"tsne"` \| `"pca"` |
-| `umap_n_neighbors` | `15` | UMAP: neighbors considered per point |
-| `umap_min_dist` | `0.1` | UMAP: minimum distance between points |
-| `tsne_perplexity` | `30` | t-SNE: local/global balance |
-| `tsne_learning_rate` | `200.0` | t-SNE: learning speed |
-
-`UMAPReducer.reduce()` calls `load_settings()` on every execution, so the parameters
-are always up to date. `reduce(embeddings, params)` also accepts explicit
-hyperparameters passed by the caller (otherwise it reads the settings).
-
-### Clustering (KMeans / HDBSCAN) + rarity
-
-`POST /api/datasets/{id}/recluster` accepts `{method, n_clusters, min_cluster_size}`
-(`kmeans` | `hdbscan`), runs in the background (`_recluster_progress`). Applied config stored
-in `Dataset.cluster_method` / `cluster_params_json`, shown in the Playground + Map.
-Defaults in Settings (`cluster_method`, `hdbscan_min_cluster_size`).
-
-**Clustering is always computed on the 512D CLIP embeddings
-(`_apply_clustering`), never on the 2D coordinates** (distances are distorted there
-by the projection).
-
-```python
-KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(embeddings)
-# -> labels (N,), cluster_centers_ (k, 512)
-
-# Rarity score per cluster:
-dists = ||embedding - centroid||_2  # for each image
-score = (dist - min_dist) / (max_dist - min_dist + 1e-8)  # -> [0, 1]
-```
-
-### Duplicate detection (BFS)
-
-```python
-# For each vector: find the neighbors above the threshold
-for i in range(n):
-    scores, indices = index.search(embedding[i:i+1], top_50)
-    adjacency[i] = {j for j, s in zip(indices, scores) if s >= threshold}
-
-# BFS -> connected components = duplicate groups
-```
-
-### Thumbnails
-
-The initial scan is **fast**: md5 + dimensions read from the header only, no
-thumbnail generated. 5 previews are generated immediately, the rest in the
-**background** (`_thumb_progress`, `PIL.Image.draft()`). On-demand fallback via
-`GET /api/images/{id}/thumb`. **Embeddings always read the base image
-(`img.file_path`), never a thumbnail.** For `.optional` files, the `_to_png`
-conversion (see below) remains the source of the images and thumbnails.
-
----
-
-## Semantic search
-
-Endpoint: `POST /api/datasets/{id}/semantic-search`
-
-```json
-{ "query": "person walking", "top_k": 20, "min_score": 0.35 }
-```
-
-- `top_k` alone (`min_score` absent): returns the N best images.
-- `min_score` (0.0-1.0): returns **all** the images with a score >= threshold (`top_k`
-  ignored server-side, search across the whole dataset).
-- The two parameters are mutually exclusive on the frontend (Top-K / Threshold % toggle).
-
-Frontend: `SemanticSearch.tsx`, `useThreshold` toggle -> sends `min_score = thresholdPct / 100`.
-Backend: `api/filter.py`, if `min_score` is set, `effective_k = max(dataset.image_count, 1)`.
-
-### Multi-dataset CLIP filtering
-
-`POST /api/datasets/filter-by-text` ranks the **already embedded** datasets by
-relevance against one or more text queries. Multi-query (`queries`
-comma-separated), adjustable threshold (`threshold` 0-1), union mode (OR) or
-intersection (AND). For each dataset: `matched_count` / `total_count` / `percent` +
-the 5 best images (`top_images`, CLIP score). Sorting (absolute = matched count, relative =
-%) is done client-side.
-
-Computation: `_load_dataset_embeddings` loads the dataset's 512D matrix, `E @ term_vecs.T`
-gives the cosine per image/term, `_match_scores` applies the threshold and the mode. The
-results panel is shown in the Gallery (ranked cards + thumbs on the right, offset view on
-the left).
-
----
-
-## Database
-
-**Engine**: synchronous SQLite, WAL mode + `busy_timeout` enabled (`db/database.py`) to
-support parallel background tasks.
-**ORM**: SQLModel (Pydantic + SQLAlchemy).
-**File**: `WORKSPACE/dataset_explorer.db`.
-
-| Table | Primary key | Relations |
-|-------|-------------|-----------|
-| `Dataset` | id | -> Image[], Subset[], ClusterCentroid[] |
-| `Image` | id | -> Dataset, Embedding, SubsetImage[] |
-| `Embedding` | id (unique image_id) | -> Image |
-| `ClusterCentroid` | id | -> Dataset |
-| `Subset` | id | -> Dataset, SubsetImage[] |
-| `SubsetImage` | id | -> Subset, Image |
-
-Key fields:
-- `Dataset(id, name, root_path, status, umap_cached, faiss_index_path, cluster_method,
-  cluster_params_json, reduction_method, reduction_params_json, folder_id, ...)`
-- `Image(id, dataset_id, file_path, md5, umap_x, umap_y, cluster_id, rarity_score,
-  duplicate_group_id, is_duplicate_kept, annotation_*, ...)`
-- `Embedding(id, image_id, vector_blob bytes, dim, model_name)`
-- `ClusterCentroid(id, dataset_id, cluster_id, centroid_blob bytes, size)`
-- `Subset(id, dataset_id, name, symlink_dir, exported_to_annotation_app, ...)`
-- `SubsetImage(id, subset_id, image_id)`
-- `SubsetExport(id, subset_id, target_path, use_symlinks, created_at, ...)` - a subset can
-  be exported several times to different paths
-
-**FAISS <-> DB invariant**: position `i` in the FAISS index corresponds to the image
-ranked `i` when images are sorted by `Image.id` ascending. Always use
-`ORDER BY image.id` when building the index and when interpreting the results.
-
----
-
-## User workspace
-
-All persistent data lives outside the source code:
-
-```
-{WORKSPACE}/               # default: Dataset_Explorer_App/data/
-|-- dataset_explorer.db            # SQLite - all tables
-|-- settings.json          # user settings (playground_dataset_ids, use_symlinks...)
-|-- thumbs/                # 256px thumbnails, named {md5}.jpg
-|-- faiss/
-|   `-- {dataset_id}/
-|       `-- index.faiss    # persisted FAISS index
-`-- subsets/
-    `-- {subset_name}/     # symlinks to original images
-```
-
-Environment variable: `EXPLORER_WORKSPACE` (default: `<app-root>/data`).
-
-### Global gallery (independent of the workspace)
-
-```
-data/dataset_gallery/       # FIXED path in the app, independent of EXPLORER_WORKSPACE
-|-- registry.json           # minimal registry: name, root_path, image_count, n_clusters, created_at, gallery_thumb_urls, basic_stats
-`-- {dataset_name}/          # REAL folder (never a symlink)
-    `-- thumbs/
-        |-- 0.jpg           # 5 fixed thumbnails (copied at scan time, always accessible)
-        `-- ...4.jpg
-```
-
-A dataset created with `share_dataset=True` is registered in `registry.json` and its 5
-thumbs are copied into `thumbs/`. Served via
-`/gallery-thumbs/{name}/thumbs/{idx}.jpg` (StaticFiles on `DATASET_GALLERY_DIR`).
-
-Display flow in the Gallery:
-
-1. **Datasets in the workspace** (`in_workspace=True`) -> "My workspace" section ->
-   Pin badge -> Playground.
-2. **Global datasets not yet imported** (`is_global=True, in_workspace=False`) ->
-   "Global gallery" section -> "Import" button (re-scans the `root_path`, without pinning
-   into the Playground) -> then appears in "My workspace".
-3. **After a workspace change**: the global datasets remain visible via
-   `registry.json` (fixed path, merged with the current workspace's DB in
-   `list_datasets`).
-
-Deletion (owner only): `DELETE /api/datasets/global?root_path=...` deletes it from the
-registry AND from the current workspace if present. Internal helper
-`_delete_dataset_from_session(dataset_id, session)` factors out the cascade (images,
-embeddings, subsets, centroids, orphan thumbnails). A non-owner user sees the icon
-disabled in the Gallery.
-
-Helpers in `api/datasets.py`: `_load_global_registry()` / `_save_global_registry()`,
-`_upsert_global_registry(summary, gallery_thumb_urls, basic_stats)` (a `None` argument
-keeps the existing value), `_copy_gallery_thumbnails(dataset, session)`,
-`POST /api/datasets/{id}/refresh-gallery` (regenerates the thumbnails manually).
-
-### Folders (dataset organization)
-
-`api/folders.py` manages a `Folder` tree (personal or shared via `uid` +
-`folders_registry.json`, resynced per workspace). `Dataset.folder_id` attaches a
-dataset to a folder, `PATCH /api/datasets/{id}/folder` moves it. Shown as an expandable
-tree in the Gallery, per section.
-
----
-
-## Dataset addition flow
-
-Statuses: `scanning -> pending -> embedding -> ready` (or `-> error`).
-
-- `scanning`: background scan, thumbnails being generated.
-- `pending`: scan finished, embeddings not yet started.
-- `embedding`: CLIP+FAISS+UMAP+KMeans+scoring pipeline in progress.
-- `ready`: dataset explorable.
-
-The frontend polls every 2s while a dataset is `scanning` or `embedding`. Tracked in
-memory: `_scan_progress_map: dict[int, dict]` in `api/datasets.py`.
-
-```
-[Files on disk]
-       |
-POST /api/datasets                      -> scan -> Image rows + MD5 + thumbnails
-       |
-POST /api/datasets/{id}/embed (background task, poll)
-       |
-       |-- CLIPEmbedder.embed_images() -> Embedding rows (float32 blob)
-       |-- FAISSIndexer.build()        -> index.faiss on disk
-       |-- UMAPReducer.reduce()        -> Image.umap_x, umap_y
-       |-- Clusterer.kmeans()          -> Image.cluster_id, ClusterCentroid rows
-       `-- Clusterer.compute_rarity_scores() -> Image.rarity_score
-       |
-GET /api/datasets/{id}/map              -> points [{image_id, x, y, cluster_id, rarity_score}]
-       |
-[ScatterPlot.tsx]                       -> Plotly scatter -> lasso -> useSelectionStore
-       |
-POST /api/subsets                       -> Subset + symlinks in WORKSPACE/subsets/
-       |
-POST /api/subsets/{id}/export-to-annotation-app
-       -> symlinks in Annotation_App/data/imports/{name}/
-```
-
----
-
-## .optional format - conversion
-
-The format specialise format (Optical Tile Image) is a big-endian binary:
-- 48-byte header (fixed 4-byte magic) + 80 bytes of padding -> data starts at byte 128.
-- Key fields: `n_img`, `n_row`, `n_col`, `deg_mult` (channels), `type_img` (dtype).
-- Data: `[n_img, deg_mult, n_row, n_col]` (big-endian) -> transposed into
-  `[n_img, n_row, n_col, deg_mult]`.
-
-The generated PNGs go into `{parent}/{stem}_to_png/`. A `.optional` file can contain N images
-(frames): `sequence_0000.png`, `sequence_0001.png`, etc.
-
-If a scanned folder contains only `.optional` files (no JPG/PNG), `create_dataset`
-converts automatically before scanning. For a single `.optional` file, it is converted
-then the converted folder is scanned. Implementation: `backend/utils/format specialise.py`.
-
----
-
-## Subsets
-
-- **Create**: lasso on the map, semantic search, or the Subsets page (current
-  selection).
-- **Duplicate**: `POST /api/subsets/{id}/duplicate`, auto-numbered name `{base}_n`,
-  possible even if already exported.
-- **Map button**: direct link to `/datasets/{dataset_id}/map` from the
-  Subsets page (visible only if UMAP has been computed).
-- **Duplicates button**: active only if the subset has not yet been exported, disabled
-  after export.
-- **Exclude from dataset**: button in the Map's selection panel, marks
-  `is_duplicate_kept=False` (reject) without going through the duplicates flow.
-
-### Duplicates and subsets
-
-Duplicate decisions made within a subset affect the **main dataset**:
-
-- `Save` (SubsetDuplicatesModal) -> `PATCH /api/datasets/{id}/duplicates/decision`
-  -> updates `Image.is_duplicate_kept` in the main dataset. These images are
-  counted as "rejected" everywhere in the Playground.
-- `Apply to subset` -> removes the images from the subset (`SubsetImage` rows deleted) without
-  touching the dataset.
-- To undo the decisions on the dataset: `Reset` button in the Playground
-  (`POST /api/datasets/{id}/reset-duplicate-filter`).
-
-The UI shows a warning in the modal to recall this impact.
-
-### Merge
-
-- **Classic manual merge**: `POST /api/datasets/merge` (Dashboard).
-- **Smart merge** (SSE): `POST /api/datasets/merge-filtered` merges
-  only the matched images (score > threshold) from several sources into a new
-  dataset. Auto tags removed (redundant with the embeddings). `.ver`/YOLO annotations
-  preserved (`core/annotation_ref.py`, `annotation_*` columns, badge, "With
-  annotations" filter).
-
-### Exports
-
-A subset can be exported several times to different paths; each export
-creates a `SubsetExport` record (`subset_export` table), shown with a blue badge
-(symlink) or a purple one (copy). Symlink or physical copy configurable in
-Settings -> `use_symlinks`, read at runtime by
-`backend/core/subset_manager.py::_make_symlink()` (uses only `os.symlink`, no
-hardlink fallback; physical copy if `use_symlinks=False`).
-
----
-
-## Frontend
-
-### Stack
-
-- React 18 + TypeScript 5
-- Vite 6 + proxy to the backend (`:8001` by default)
-- Tailwind CSS 3 (dark mode by default)
-- TanStack Query v5 - server cache, invalidation
-- Zustand v5 - global image selection state (`useSelectionStore`)
-- Plotly.js - interactive UMAP scatter, lasso select
-- React Router v6 - SPA routing
-- react-hot-toast - notifications
-
-### Global state
-
-`useSelectionStore` (Zustand): a `Set` of selected `image_id`s, persisted across
-pages.
-- Fed by the lasso select in `ScatterPlot`.
-- Fed by the checkboxes in `ImageGrid`.
-- Consumed by `SubsetManager` and `DatasetMap` to create subsets.
-
-### Vite proxy
-
-```typescript
-// vite.config.ts
-proxy: {
-  '/api': { target: 'http://localhost:8001', timeout: 300000 },
-  '/thumbs': { target: 'http://localhost:8001' },
-}
-```
-
-300s timeout to cover long operations. For very large datasets, if the
-proxy buffers, connect the frontend directly to `http://localhost:8001/api/...`.
-
-The remaining SSE endpoints (remap/rebuild/reset/merge) go through the **same-origin
-proxy** (`SSE_BASE=''` in `client.ts`) rather than a direct connection.
-
----
-
-## Integration with Annotation App
-
-Exporting a subset creates symlinks (or copies) in
-`Annotation_App/data/imports/{subset_name}/`, consumable via "Import a folder"
-in Annotation App. The two apps remain independent (separate SQLite workspaces),
-connected only by these export links. Full detail, environment variables and
-flow diagram: [developer-guide.md](developer-guide.md#integration-with-annotation-app).
+State shared between requests lives in SQLite (persistent) or in module-level singletons (CLIP model, FAISS indexes, job pool, progress dictionaries). This is why exactly one backend process must serve a workspace.
+
+## Backend application startup
+
+`backend/config.py` is evaluated first: it sets `HF_HUB_OFFLINE` and `TRANSFORMERS_OFFLINE`, resolves the workspace from `EXPLORER_WORKSPACE` and creates `thumbs/`, `faiss/`, `subsets/` and `data/dataset_gallery/` at import time, because the static mounts need them.
+
+The lifespan in `backend/main.py` then:
+
+1. Creates the SQLite tables (`create_db_and_tables`).
+2. Runs the column migrations with `ALTER TABLE ... ADD COLUMN` for columns added over time: on `dataset` the reduction and clustering configuration, `folder_id`, the mean embedding, the annotation reference, the metadata reference and `error_message`; `subset.locked`; `image.metadata_json`. They must run before any ORM query on `Dataset`, which selects every mapped column. Tables are never dropped.
+3. Resets datasets left in `embedding` by a crash to `pending`.
+4. Loads CLIP (`clip_embedder.load()`); a failure is logged and the app starts without the model.
+5. Reloads the FAISS index file of every `ready` dataset into memory.
+
+Routers are included in `main.py`, then two static mounts are declared after them: `/thumbs` on the workspace `thumbs/` folder and `/gallery-thumbs` on `data/dataset_gallery/`. CORS allows the frontend origins computed in `config.py`.
+
+Application-level endpoints of `main.py`: `/health` (CLIP state, device, active jobs), `/api/capabilities` (optional format adapters), `/api/audit` (recent audit entries), `/api/workspace/users`, `/api/workspace/open`, `/api/workspace/history` and `/api/app-mode` (standalone or Orchestrator, with the export folder).
+
+## Routers and core modules
+
+Routers live in `backend/api/`, one file per domain:
+
+| Router | Domain |
+|---|---|
+| `datasets.py` | Dataset creation and scan, list with progress, details, statistics, images and thumbnails, embeddings pipeline, recluster, reduce, remap, rebuild and reset of decisions, exclusion, merges, CLIP filter of the Gallery, global registry, deletion, format specialise conversion, metadata preview |
+| `folders.py` | Personal and shared folder tree |
+| `explore.py` | Map points and cluster summary |
+| `filter.py` | Text search in one dataset and in the global index |
+| `duplicates.py` | Duplicate groups per dataset and across datasets, keep or reject decisions |
+| `export.py` | Subsets: create, duplicate, lock, delete, export, per-subset duplicates |
+| `metadata.py` | Metadata search, columns, facets, column mapping suggestions, reindex |
+| `settings.py` | Workspace settings (`settings.json`) |
+| `orchestrator.py` | Contract with the Orchestrator App |
+| `samples.py` | Tutorial sample folders |
+| `docs.py` | Markdown documentation of the in-app help page |
+
+Modules in `backend/core/` have no FastAPI dependency:
+
+| Module | Role |
+|---|---|
+| `embedder.py` | `clip_embedder`: CLIP loading, image and text embeddings, MD5, thumbnails |
+| `indexer.py` | `faiss_indexer`: per-dataset indexes, global index, duplicate graph |
+| `reducer.py` | `umap_reducer`: UMAP, t-SNE, PCA with fallbacks |
+| `clusterer.py`, `scorer.py` | `clusterer`: KMeans, HDBSCAN, rarity scores |
+| `semantic_filter.py` | Text search and FAISS position to image id mapping |
+| `job_runner.py` | Bounded, deduplicated pool of background jobs |
+| `subset_manager.py` | Subset and export folders, link or copy |
+| `metadata_loader.py`, `metadata_index.py` | CSV and Excel reading, key matching, column mapping, FTS5 index |
+| `annotation_ref.py` | Format detection and counting of `.ver` and YOLO files |
+| `image_io.py` | 8-bit conversion of 16-bit, infrared and float images |
+| `audit.py` | JSONL audit log |
+| `format_registry.py` | Discovery of optional format adapters in `backend/utils/` |
+
+## Data model and database
+
+The database is SQLite at `<workspace>/dataset_explorer.db`, opened with `check_same_thread=False` and, on every connection, `journal_mode=WAL`, `busy_timeout=10000` and `synchronous=NORMAL`, so that background jobs can write while requests read. Models are SQLModel classes in `backend/db/models.py`.
+
+| Table | Key fields |
+|---|---|
+| `folder` | `name`, `parent_id`, `is_global`, `uid` (stable id of a shared folder), `added_by` |
+| `dataset` | `name`, `root_path` (resolved path, or `merged:<ids>`), `status`, `error_message`, `image_count`, `embedded_count`, `n_clusters`, `umap_cached`, `faiss_index_path`, `is_global`, `added_by`, `folder_id`, `cluster_method`, `cluster_params_json`, `reduction_method`, `reduction_params_json`, `reduction_settings_hash`, `mean_embedding_blob`, `annotation_*`, `metadata_path`, `metadata_key_column`, `metadata_columns_json` |
+| `image` | `dataset_id`, `file_path`, `filename`, `md5`, `width`, `height`, `file_size_bytes`, `thumbnail_path`, `umap_x`, `umap_y`, `cluster_id`, `rarity_score`, `duplicate_group_id`, `is_duplicate_kept`, `metadata_json` |
+| `embedding` | `image_id` (unique), `vector_blob` (512 float32, normalized), `dim`, `model_name` |
+| `cluster_centroid` | `dataset_id`, `cluster_id`, `centroid_blob`, `size` |
+| `subset` | `dataset_id`, `name`, `symlink_dir`, `image_count`, `exported_to_annotation_app`, `export_path` (first export), `locked` |
+| `subset_image` | `subset_id`, `image_id` |
+| `subset_export` | `subset_id`, `export_path`, `export_type` (`symlink` or `copy`) |
+
+`is_duplicate_kept` is `None` (undecided), `True` or `False` (rejected). `umap_cached` means "the pipeline completed and a map exists"; `reduction_settings_hash` is the MD5 of the reduction settings at the last map computation and drives `map_method_outdated`. The virtual table `image_metadata_fts` (FTS5) is created on demand by `metadata_index.py`.
+
+Deletion is a manual cascade in `_delete_dataset_from_session`: FAISS index in memory and on disk, FTS rows, subset links, embeddings, images, subsets and their exports, centroids, the dataset, then thumbnails no other image references. Subset folders on disk are not removed.
+
+## Embeddings pipeline
+
+`POST /api/datasets/{id}/embed` sets the status to `embedding`, takes the in-memory lock `_embedding_ids` and submits `_run_embed_pipeline` to the job pool; a second call while it runs returns `already_running`. The pipeline:
+
+1. Loads the images ordered by `Image.id`.
+2. Encodes, by batches of 64, only the images without an embedding (all of them with `force=true`), reading the original files with six parallel decoding threads, and stores the normalized vectors.
+3. Assembles the full matrix in id order and builds the FAISS index (phase `indexing`).
+4. Computes the 2D coordinates with the reduction settings (phase `umap`) and stores the applied configuration.
+5. Runs the clustering of the settings on the 512-dimension matrix, stores centroids and rarity scores (phases `clustering`, `scoring`).
+6. Stores the normalized mean vector, sets `ready`, `umap_cached`, the index path and the settings hash; for a global dataset, adds the mean vector and the annotation summary to the registry.
+
+Progress is written to `_embed_progress[dataset_id]` and returned by `GET /api/datasets`; any exception sets the status to `error` and the lock is released in a `finally`.
+
+The scan (`_scan_dataset`, submitted by `POST /api/datasets`) creates image records with MD5 and header-only dimensions by batches of 100, sets `pending`, attaches metadata rows and indexes them, generates five thumbnails immediately (copied to the gallery for a shared dataset), then the remaining thumbnails with six threads. Optional formats are converted before listing.
+
+## Background jobs and progress reporting
+
+Heavy work runs in `core/job_runner.py`: a `ThreadPoolExecutor` of `EXPLORER_JOB_WORKERS` threads (3 by default), separate from the threadpool that serves synchronous endpoints, with deduplication by key (`scan:<id>`, `embed:<id>`, `recluster:<id>`, `reduce:<id>`). `active_jobs()` feeds `/health`.
+
+Progress of these jobs lives in module-level dictionaries of `api/datasets.py` (`_scan_progress_map`, `_embed_progress`, `_thumb_progress`, `_recluster_progress`, `_reduce_progress`) and is merged into every `DatasetSummary` of `GET /api/datasets`. The frontend hook `useDatasets` polls that list every 2 seconds while a dataset is `scanning` or `embedding` or has thumbnails, reclustering or reduction in progress. Polling needs no direct connection to the backend, which keeps it working over SSH through the Vite proxy.
+
+Five operations still stream their progress as `data: {json}` events on a `POST` response: `/api/datasets/merge`, `/api/datasets/merge-filtered`, `/{id}/remap`, `/{id}/rebuild-without-duplicates` and `/{id}/reset-duplicate-filter`. `EventSource` cannot send a POST, so the client reads them with `fetch` and a `ReadableStream` (`_startSSE` in `api/client.ts`), always through the same-origin proxy. The Playground keeps their last event in module-level maps so that a bar survives navigation. These generators run inside the request, not in the job pool.
+
+## FAISS indexes and the position invariant
+
+Each dataset has an exact `IndexFlatIP` over its normalized vectors, saved as `<workspace>/faiss/<id>/index.faiss`. The index stores no image id: position `i` is the image of rank `i` when the dataset images are sorted by `Image.id` ascending at build time. Every consumer (`semantic_filter.py`, `duplicates.py`, the global duplicates) rebuilds the ordered id list to translate positions.
+
+The global index (`ensure_global`) concatenates the vectors of every loaded index with a table `global position -> (dataset id, local position)`. It is cached by a signature of dataset ids and sizes, invalidated by every `build`, `load` and `remove`, never persisted, and switches from `IndexFlatIP` to `IndexHNSWFlat` above 200,000 vectors. It serves `POST /api/search/global` and `GET /api/duplicates/global`; with a dataset filter the search over-samples five times before filtering.
+
+Duplicate detection searches the 50 nearest neighbors of every vector by batches of 256, links pairs above the threshold and returns the connected components with at least two members. The per-dataset endpoint also writes `duplicate_group_id` (id of the representative) on the images.
+
+## Recomputation paths of maps and clusters
+
+Several endpoints recompute part of the analysis; they differ in what they read and store:
+
+| Operation | Images used | Reduction | Clustering | Stored configuration |
+|---|---|---|---|---|
+| `embed` | all | settings | settings method | reduction and clustering config, settings hash |
+| `recluster` | all with an embedding | unchanged | requested method | clustering config |
+| `reduce` | not rejected | requested parameters | unchanged | reduction config, hash of the current settings |
+| `remap` | not rejected | settings | unchanged | reduction config, settings hash |
+| `rebuild-without-duplicates` | not rejected; rejected lose coordinates, cluster and rarity | settings | the dataset's own method (KMeans with `n_clusters`, or HDBSCAN) | settings hash only |
+| `reset-duplicate-filter` | all, decisions cleared | settings | the dataset's own method (KMeans with `n_clusters`, or HDBSCAN) | none |
+| `merge` | all embedded images of the sources | settings | settings method | none |
+| `merge-filtered` | images above the CLIP threshold | settings | settings method | reduction and clustering config, settings hash |
+
+Consequences to keep in mind: `reduce` stores the hash of the settings rather than of the parameters it used, and `recluster` and `rebuild` do not handle rejected images the same way. The map endpoint, the text searches (dataset and Catalog) and the subset export always skip rejected images: the similarity index still holds them, so a search asks the index for a few more results and filters them out.
+
+## Global gallery and shared folders
+
+The global gallery is file-based so that it survives workspace changes and is visible to every workspace of the installation: `data/dataset_gallery/registry.json` (datasets) and `folders_registry.json` (shared folders), in the application folder. Both are written atomically (temporary file then `replace`) because the dataset list is polled every 2 seconds.
+
+`GET /api/datasets` merges the workspace datasets with the registry entries that have no global copy in the workspace; those are returned with `id = -1` and `in_workspace = false`. For global datasets of the workspace that are `ready` or `error`, missing gallery thumbnails and basic statistics are regenerated during the listing. The gallery folder of a dataset must be a real folder: an old symbolic link at that place is removed before thumbnails are copied.
+
+Ownership is the `added_by` field (the `EXPLORER_USER` of the publisher). `DELETE /api/datasets/global` checks it, removes the registry entry and the gallery folder, and deletes the dataset from the current workspace only.
+
+Shared folders carry a stable `uid`. `sync_shared_folders`, called by the folder and dataset lists, materializes the registry folders missing from the workspace database, parents first. A shared dataset records the `uid` of its folder in the registry so that importing it files it in the same folder.
+
+## Subsets, exports and links
+
+A subset is created in the database first, then its folder `<workspace>/subsets/<name>/` is filled by `create_subset_symlinks`; a link failure is logged and leaves `symlink_dir` empty. `_make_symlink` reads `use_symlinks` from the settings at each call: a relative symbolic link, then an absolute one, or `shutil.copy2` when copies are chosen. Links are named after the file name, so equal names overwrite each other.
+
+`export_to_annotation_app` writes `<base>/<subset name>/`, where the base is the custom path of the request (standalone only), otherwise the `annotation_app_imports_path` setting (initially `ANNOTATION_APP_IMPORTS`). Images marked as rejected are never copied. The endpoint then refuses (409) a second export record with the same path and records the export type from the current settings.
+
+The subset duplicates endpoint computes the similarity matrix of the subset embeddings directly in NumPy (no FAISS), which is fine for subsets of a few thousand images. `apply-duplicate-filter` removes the links of rejected images from the database and the folder.
+
+## Metadata tables and the FTS5 index
+
+A metadata table is attached at dataset creation: `metadata_loader.build_key_map` reads the file with pandas (separator and encoding sniffing for text files), indexes each row under the key value, its base name and its stem, and `match_image` finds the row of each image name. The row is stored as JSON in `image.metadata_json` and the column list in `dataset.metadata_columns_json`.
+
+`metadata_index.py` keeps a standalone FTS5 table `image_metadata_fts(content, image_id, dataset_id)` where `content` concatenates the file name and `column value` pairs, so that both column names and values are searchable. User input is split into tokens, each token quoted, the last one with a prefix `*`, joined with `AND` or `OR`. Facets use `json_extract` on `metadata_json` for exact counts. The search endpoint indexes on the fly any dataset that has metadata but no FTS rows. Column mapping suggestions combine a canonical form, `difflib` and an inclusion rule; they are never applied automatically.
+
+## Images, thumbnails and native paths
+
+Thumbnails are 256-pixel JPEG files named `<md5>.jpg` in the workspace, served statically under `/thumbs`. `generate_thumbnail` uses `PIL.Image.draft` for fast JPEG decoding and the 3-sigma conversion of `image_io.py` for high bit-depth files. `GET /api/images/{id}/thumb` generates a missing thumbnail on demand.
+
+Embeddings always read `Image.file_path`, never a thumbnail. `image_io.load_pil_rgb` reads through OpenCV (`IMREAD_UNCHANGED`) when available, with a PIL fallback.
+
+In VisionNexus, `utils/nativeImage.ts` rewrites the costly image URLs (on-demand thumbnail, full resolution) to the `app-image://` protocol of the shell, which asks the twin endpoints `.../thumb-path` and `.../full-path` for a native path and reads the file directly from the Windows share; the HTTP endpoint stays as fallback. `utils/native_share.py` translates server paths to UNC paths with the configured share host, and UNC paths typed by the user back to server paths.
+
+## Orchestrator integration
+
+`api/orchestrator.py` exposes the contract used by the Orchestrator App; it does not change standalone behavior.
+
+- `load-dataset` reuses the first dataset with the same resolved path (unless `allow_duplicate`), otherwise calls `create_dataset` with `allow_duplicate=True`, waits for the end of the scan when asked, and pins the dataset in the settings.
+- `start-embed` returns `already_ready` for a ready dataset, otherwise triggers `/embed` on its own port with `httpx` and waits for `ready` or `error` (timeout 1800 s by default).
+- `create-subset` runs a text search (Top-K or threshold), optionally restricted to a source subset, replaces a subset with the same name and creates the links.
+- `export-subset` removes a previous export folder of the same name, then writes the export into the given path or `ANNOTATION_APP_IMPORTS`. It does not create a `subset_export` record.
+- `status` reports a dataset status by name.
+
+Ids take priority over names everywhere, because dataset and subset names are not unique; ambiguous names return 409. When `LAUNCHED_BY_ORCHESTRATOR` is set, the normal export endpoint ignores custom paths.
+
+## Frontend structure and state
+
+The frontend is a single-page application (`frontend/src/App.tsx`) with a sidebar and nine routes: `/` (Gallery), `/catalog`, `/playground`, `/datasets/:id/map`, `/datasets/:id/search`, `/datasets/:id/duplicates`, `/subsets`, `/help` and `/settings`.
+
+- Server state goes through TanStack Query (`hooks/useDataset.ts`, keys `datasets`, `dataset`, `dataset-map`, `dataset-clusters`, `subsets`...), with the 2-second polling of the dataset list described above.
+- The image selection is a global Zustand store (`useSelectionStore` in `hooks/useSubset.ts`), shared by the map, the search page and the Subsets page; the Catalog keeps its own local selection.
+- The API client (`api/client.ts`) uses relative URLs only, so everything goes through the Vite proxy.
+- Texts are French in the code and translated at display time by `i18n/translate.ts` (`t()`); the language comes from `?lang=` given by VisionNexus, then the browser storage, then the workspace settings.
+- The theme is applied by `ThemeProvider` as a generated style element from the settings.
+- The help page renders the Markdown files of `docs/` served by `/api/docs` (`components/docs/`), with heading anchors `h-<n>` shared with the suite documentation viewer.
+- The interactive tutorial uses the generic tour engine of `components/tour/` and the script `components/help/datasetTourSteps.ts`; its state is stored by VisionNexus, with the workspace settings as fallback.
+
+## Invariants that must not be broken
+
+- FAISS position `i` equals the image of rank `i` sorted by `Image.id` at build time. Always order by `Image.id` when building an index or reading its results; rebuild the index (run `/embed`) after adding images.
+- Embeddings are float32, 512 values, normalized: cosine similarity equals the dot product, and `IndexFlatIP` relies on it. Keep `CLIP_MODEL = "ViT-B-32"` to stay compatible with stored vectors.
+- Embeddings are computed from the original file, never from a thumbnail.
+- Clustering runs on the 512-dimension embeddings, never on the 2D coordinates; reduction and clustering stay independent operations.
+- Heavy jobs go through `submit_job`, not FastAPI `BackgroundTasks`, so they are bounded and deduplicated.
+- The column migrations of the lifespan run before any ORM query on `Dataset`; add a new column to the model and to the migration list together.
+- Routes with a fixed segment (`/datasets/merge`, `/datasets/filter-by-text`, `/datasets/check-path`, `/datasets/global`) are declared before `/datasets/{dataset_id}`.
+- The static mounts are declared after the routers; the gallery folder of a dataset is a real folder, never a link.
+- Writes to `registry.json` and `folders_registry.json` stay atomic.
+- Audit writes never raise: an audit failure must not fail the audited operation.
+- `POST /api/datasets` answers 409 for a known path unless `allow_duplicate` is true; the Orchestrator arbitrates duplicates itself.
+- A locked subset is refused by `DELETE /api/subsets/{id}` on the server side.
+
+## Performance notes
+
+- Scans read only file headers and MD5; thumbnails come afterwards with six threads, and image decoding before CLIP uses six threads too, because network shares are I/O-bound.
+- Embedding lookups are done in one query per 900 ids (SQLite parameter limit) rather than one query per image.
+- `GET /api/datasets` aggregates rejected counts in one query; it is polled every 2 seconds only while something runs.
+- The global index is rebuilt only when the signature of loaded indexes changes; over 200,000 vectors it uses HNSW.
+- `GET /api/datasets/{id}/images` paginates in SQL (500 images per page at most).
+- UMAP on tens of thousands of images and HDBSCAN on 512 dimensions can take minutes; they run in the job pool without blocking requests.
+- The production build of the frontend is a single large bundle (Plotly); code splitting has not been done.

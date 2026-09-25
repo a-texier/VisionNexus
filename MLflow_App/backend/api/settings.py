@@ -32,6 +32,13 @@ class AppSettings(BaseModel):
     theme:               str = "dark"
     auto_refresh_ms:     int = 10000
 
+    # ---- Langue de l'interface (repli uniquement) ----
+    # La source de verite est VisionNexus (reglage centralise "Langue des apps"
+    # dans son panneau Settings) : quand l'app est lancee depuis le launcher,
+    # ?lang= impose la langue au chargement et rien n'est ecrit ici. Ce champ
+    # ne sert que hors du lanceur (navigateur, dev, ligne de commande).
+    ui_language: str = "en"
+
 
 # ------------------------------------------------------------------ #
 # Helpers                                                             #

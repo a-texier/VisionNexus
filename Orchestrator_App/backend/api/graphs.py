@@ -337,7 +337,7 @@ async def run_graph(graph_id: str):
     if not g:
         raise HTTPException(404, "Graphe introuvable")
     if g.get("status") == "running":
-        raise HTTPException(409, "Ce graphe est déjà en cours d'exécution")
+        raise HTTPException(409, "This graph is already running")
 
     try:
         result = await graph_runner.run_graph(graph_id)
@@ -463,7 +463,7 @@ async def resume_graph_run(graph_id: str):
 
     run_id = g.get("active_run_id")
     if not run_id:
-        raise HTTPException(400, "Aucun run actif sur ce graphe")
+        raise HTTPException(400, "No active run on this graph")
 
     # If the run is not in memory the server was restarted — pipeline state is lost.
     # Auto-reset the graph to idle so the user can simply re-run it.
@@ -471,7 +471,7 @@ async def resume_graph_run(graph_id: str):
         graph_store.reset_graph_execution(graph_id)
         raise HTTPException(
             410,
-            "État du pipeline perdu (serveur redémarré). Le graphe a été réinitialisé — relancez le pipeline.",
+            "Pipeline state lost (server restarted). The graph was reset - restart the pipeline.",
         )
 
     # Rebuild pipeline from current graph state (may include new nodes added while waiting)
@@ -486,7 +486,7 @@ async def resume_graph_run(graph_id: str):
 
     ok = await pipeline_runner.resume_run(run_id)
     if not ok:
-        raise HTTPException(409, "Le run est en mémoire mais n'est plus en attente (déjà terminé ou repris).")
+        raise HTTPException(409, "The run is in memory but is no longer waiting (already done or resumed).")
 
     return {"ok": True, "run_id": run_id, "step_node_map": step_node_map}
 
@@ -503,11 +503,11 @@ def get_app_urls():
 # panneau de settings du node Inference avec TOUS les champs, groupés. Les champs
 # fournis par un branchement (modèle, séquence, GT) sont marqués « override » côté UI.
 _INFERENCE_GROUPS = [
-    ("Détecteur", ["engine", "model_size", "confidence", "iou", "imgsz", "device", "class_names"]),
+    ("Detector", ["engine", "model_size", "confidence", "iou", "imgsz", "device", "class_names"]),
     ("Mode", ["mode", "tracker"]),
     ("ByteTrack", ["track_high_thresh", "track_low_thresh", "new_track_thresh",
                     "match_thresh", "track_buffer"]),
-    ("Sortie", ["save_output", "max_frames"]),
+    ("Output", ["save_output", "max_frames"]),
 ]
 # Enums connus (rendu en select côté UI)
 _INFERENCE_ENUMS = {
@@ -792,8 +792,8 @@ def _gather_graph_artifacts(g: dict, requested_run_id: str | None = None) -> lis
     hpo_error = hpo.get("error")
     if not hpo_error and hpo.get("ok") is True and hpo.get("n_trials") and not (hpo.get("best_params") or hpo.get("params")):
         hpo_error = (
-            f"ÉCHEC HPO — 0/{hpo.get('n_trials')} trial abouti. Aucun best_params Optuna produit. "
-            "Le Training historique a continué avec les paramètres configurés/défauts, sans optimisation Optuna."
+            f"HPO FAILED - 0/{hpo.get('n_trials')} trial completed. No Optuna best_params produced. "
+            "Training fell back to the configured/default parameters, without Optuna optimization."
         )
 
     dataset_path = yolo.get("zip_path") or yolo.get("export_path")
@@ -823,25 +823,25 @@ def _gather_graph_artifacts(g: dict, requested_run_id: str | None = None) -> lis
 
     arts: list[dict] = []
     # `present` decrit le plan du graphe ; `exists` dit si CE run l'a produit.
-    arts.append({"kind": "dataset", "label": "Dataset YOLO (images + labels)",
+    arts.append({"kind": "dataset", "label": "YOLO dataset (images + labels)",
                  "artifact_type": "dataset", "format": "yolo", "schema": "yolo-dataset-v1",
                  "producer_step_id": next((sid for sid in (experiment.steps if experiment else {}) if sid.endswith("__exportyolo")), None),
                  "present": bool(types & {"annotation", "explorer", "dataset_source"}),
                  **fileinfo(dataset_path if has_run else None)})
-    arts.append({"kind": "annotations", "label": "Annotations GT (.ver)",
+    arts.append({"kind": "annotations", "label": "GT annotations (.ver)",
                  "artifact_type": "annotations", "format": "ver", "schema": "vision-ver-v1",
                  "producer_step_id": next((sid for sid in (experiment.steps if experiment else {}) if sid.endswith("__exportver")), None),
                  "present": "annotation" in types, **fileinfo(annotations_path if has_run else None)})
     arts.append({"kind": "model", "label": "Best model (.pt)",
                  "present": "training" in types, **fileinfo(model_path if has_run else None)})
-    arts.append({"kind": "optuna", "label": "Meilleurs params Optuna",
+    arts.append({"kind": "optuna", "label": "Best Optuna params",
                  "present": "optuna" in types, "value": best_params or None,
                  "exists": bool(has_run and best_params), "download": None,
                  "error": hpo_error})
-    arts.append({"kind": "metrics", "label": "Métriques finales (metrics.json)",
+    arts.append({"kind": "metrics", "label": "Final metrics (metrics.json)",
                  "present": bool(types & {"inference", "training", "optuna"}),
                  **(fileinfo(metrics_json) if has_run else {"path": None, "exists": False, "download": None})})
-    arts.append({"kind": "graph", "label": "Snapshot du graphe (JSON)",
+    arts.append({"kind": "graph", "label": "Graph snapshot (JSON)",
                  "present": True, "exists": has_run,
                  "download": f"/api/graphs/{g.get('graph_id')}/download-graph" if has_run else None})
     for art in arts:
@@ -901,7 +901,7 @@ def download_file(path: str):
             media_type="application/zip",
             background=BackgroundTask(shutil.rmtree, temp_root, ignore_errors=True),
         )
-    raise HTTPException(404, "Artefact non téléchargeable")
+    raise HTTPException(404, "Artifact not downloadable")
 
 
 @router.get("/{graph_id}/download-graph")
@@ -1006,7 +1006,7 @@ async def dvc_commit_selected(graph_id: str, body: DvcCommitBody):
         if isinstance(h, dict) and h.get("status") in ("done", "success")
     }
     if run_id not in completed:
-        raise HTTPException(409, "Le run doit être terminé avant de créer une version DVC")
+        raise HTTPException(409, "The run must be finished before creating a DVC version")
     arts = {a["kind"]: a for a in _gather_graph_artifacts(g, run_id)}
 
     dataset_name = None
@@ -1051,12 +1051,12 @@ async def dvc_commit_selected(graph_id: str, body: DvcCommitBody):
         params["params_json"] = _json.dumps(arts["optuna"]["value"], ensure_ascii=False)
     if "graph" in body.kinds:
         params["graph_json"] = _json.dumps(g, ensure_ascii=False)
-    if len(params) == 1:  # rien de versionnable sélectionné (que "message")
-        return {"ok": False, "error": "Aucun artefact existant sélectionné à versionner."}
+    if len(params) == 1:  # nothing versionable selected (only "message")
+        return {"ok": False, "error": "No existing artifact selected to version."}
 
     result = await proxy_client.request("dvc-app", "POST", "/api/orchestrator/commit", params, timeout=600.0)
     if not result.get("ok"):
-        return {"ok": False, "error": str(result.get("data", "échec commit"))[:300]}
+        return {"ok": False, "error": str(result.get("data", "commit failed"))[:300]}
 
     # Reponse commit (JSON string) -> hash + fichiers versionnes.
     commit_hash, dvc_versioned = "", []

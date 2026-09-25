@@ -32,6 +32,7 @@ interface AnnotationListProps {
   onApplyNMS: (iouThreshold: number) => Promise<void>
   // Assigner (ou créer/détacher) la track d'une annotation — MOT
   onAssignTrack?: (annotationId: number, action: 'new' | 'assign' | 'detach', trackId?: number) => Promise<void>
+  samOutputMode?: 'bbox' | 'segmentation'
 }
 
 // Labels lisibles pour chaque algorithme source
@@ -51,6 +52,8 @@ const ALGO_LABEL: Record<NonNullable<SourceAlgorithm>, string> = {
   interpolation: 'Interpolation',
   guided_tracking: 'Guided',
   resnet_tracking: 'ResNet',
+  homography: 'Homog.',
+  optical_flow: 'Flux opt.',
 }
 
 // Couleurs badge par algorithme
@@ -68,6 +71,8 @@ const ALGO_COLOR: Record<NonNullable<SourceAlgorithm>, string> = {
   guided_tracking: 'bg-blue-900/40 text-blue-400',
   resnet_tracking: 'bg-cyan-900/40 text-cyan-400',
   sam2_tracking: 'bg-teal-900/40 text-teal-300',
+  homography: 'bg-lime-900/40 text-lime-400',
+  optical_flow: 'bg-sky-900/40 text-sky-400',
 }
 
 export const AnnotationList: React.FC<AnnotationListProps> = ({
@@ -78,6 +83,7 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   onDeleteAllAnnotations,
   onApplyNMS,
   onAssignTrack,
+  samOutputMode = 'bbox',
 }) => {
   const t = useT()
   // track.id → track (pour afficher #uid + couleur)
@@ -200,16 +206,18 @@ export const AnnotationList: React.FC<AnnotationListProps> = ({
   const maskToAnnotation = useCallback((mask: SAMMask) => {
     const [cx, cy, w, h] = mask.bbox_yolo
     const classId = activeClassId ?? classes[0]?.id ?? 0
+    // Meme regle que le canvas : un polygone seulement si la sortie choisie est Seg.
+    const usePolygon = samOutputMode === 'segmentation' && mask.polygon.length > 0
     return {
       class_id: classId,
-      annotation_type: (mask.polygon.length > 0 ? 'polygon' : 'bbox') as 'polygon' | 'bbox',
+      annotation_type: (usePolygon ? 'polygon' : 'bbox') as 'polygon' | 'bbox',
       cx, cy, width: w, height: h,
-      points: mask.polygon.length > 0 ? mask.polygon : null,
+      points: usePolygon ? mask.polygon : null,
       confidence: mask.score,
       is_auto: true,
       source_algorithm: 'sam_auto' as const,
     }
-  }, [activeClassId, classes])
+  }, [activeClassId, classes, samOutputMode])
 
   const handleValidateMask = useCallback(async (mask: SAMMask, index: number) => {
     await addAnnotation(maskToAnnotation(mask))

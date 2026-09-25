@@ -354,13 +354,13 @@ function TemplateCard({ tpl, onUse }: { tpl: SandgraphTemplate; onUse: () => voi
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-gray-800 text-gray-400 shrink-0">{icon}</div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-200 truncate">{tpl.name}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{tpl.description}</p>
+          <p className="text-sm font-semibold text-gray-200 truncate">{t(tpl.name)}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{t(tpl.description)}</p>
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        {tpl.tags.map(t => (
-          <span key={t} className="px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-500">{t}</span>
+        {tpl.tags.map(tag => (
+          <span key={tag} className="px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-500">{t(tag)}</span>
         ))}
       </div>
       <button

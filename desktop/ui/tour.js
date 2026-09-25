@@ -205,7 +205,10 @@
       const step = this.steps[this.index]
       if (!step || !this._root) return
       const b = this._root.querySelector('#cvTourBubble')
-      b.querySelector('.chap').textContent = step.chapter || 'Tutoriel'
+      b.querySelector('.chap').textContent = step.chapter || L('Tutoriel', 'Tutorial')
+      b.querySelector('.x').title = L('Fermer le tutoriel', 'Close the tutorial')
+      b.querySelector('.quit').textContent = L('Quitter', 'Quit')
+      b.querySelector('.prev').textContent = L('Precedent', 'Previous')
       b.querySelector('.count').textContent = (this.index + 1) + ' / ' + this.steps.length
       b.querySelector('.bar i').style.width = ((this.index + 1) / this.steps.length * 100) + '%'
       b.querySelector('h3').textContent = step.title
@@ -213,13 +216,13 @@
       b.querySelector('.bodyTxt').innerHTML = body
         .map((t) => '<p>' + escapeHtml(t) + '</p>').join('')
       b.querySelector('.hintWrap').innerHTML = step.hint
-        ? '<div class="hint"><b>A vous de jouer : </b>' + escapeHtml(step.hint) + '</div>'
+        ? '<div class="hint"><b>' + L('A vous de jouer : ', 'Your turn: ') + '</b>' + escapeHtml(step.hint) + '</div>'
         : ''
       b.querySelector('.prev').style.display = this.index === 0 ? 'none' : ''
       const nextBtn = b.querySelector('.next')
       nextBtn.textContent = this.index === this.steps.length - 1
-        ? 'Terminer'
-        : (step.nextLabel || 'Suivant')
+        ? L('Terminer', 'Finish')
+        : (step.nextLabel || L('Suivant', 'Next'))
       nextBtn.disabled = this.busy
       this._reposition()
     },
@@ -274,6 +277,10 @@
       bubble.style.left = clamp(left, 8, window.innerWidth - bw - 8) + 'px'
     },
   }
+
+  // Langue de l'interface : CV_LANG est defini par i18n.js (page catalog).
+  function isFr() { return typeof CV_LANG === 'undefined' || CV_LANG === 'fr' }
+  function L(fr, en) { return isFr() ? fr : en }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)) }
 
@@ -332,7 +339,8 @@
         // Le bandeau affiche depend de la validite : on cible celui qui est visible.
         const warn = document.getElementById('warnBar')
         const visible = warn && warn.classList.contains('show')
-        NEXUS_STEPS.find((s) => s.id === 'bars').target = visible ? '#warnBar' : '#okBar'
+        const bars = CvTour.steps.find((st) => st.id === 'bars')
+        if (bars) bars.target = visible ? '#warnBar' : '#okBar'
       },
     },
     {
@@ -341,7 +349,7 @@
       title: 'Utilisateur',
       body: [
         "Votre identifiant dans la suite. Il nomme votre workspace, signe vos exports et vos runs, et c'est lui qui apparait dans la liste des utilisateurs connectes d'Annotation App.",
-        "En mode VM, c'est aussi le compte utilise pour la connexion SSH.",
+        "Ce n'est pas le compte SSH : la connexion SSH utilise le nom de la VM tel qu'il est saisi dans la liste (par exemple utilisateur@hote).",
       ],
       target: '#fUser',
       placement: 'left',
@@ -522,7 +530,7 @@
       chapter: '4. Un lancement en vrai',
       title: 'Ces logs sont enregistres sur le disque',
       body: [
-        "La console n'est qu'un reflet : tout est ecrit en continu dans des fichiers .txt, un par application. Ce bouton ouvre le dossier qui les contient (il est aussi dans le menu Aide).",
+        "La console n'est qu'un reflet : tout est ecrit en continu dans des fichiers .log, un par lancement d'application. Ce bouton ouvre le dossier qui les contient (il est aussi dans le menu Aide).",
         "En cas de bug, c'est CE fichier qu'il faut recuperer et transmettre au createur de l'application : il porte la trace complete, bien au-dela des dernieres lignes visibles ici.",
       ],
       target: '#logsBtn',
@@ -554,6 +562,185 @@
     },
   ]
 
+  // Version anglaise du script : meme id d'etape, seuls les textes changent.
+  const EN_STEPS = {
+    welcome: {
+      chapter: 'Welcome',
+      title: 'VisionNexus in two minutes',
+      body: [
+        'VisionNexus is the launcher of the suite: it keeps your settings once and for all, starts each application (locally or on a VM over SSH), and shows them in its own tabs.',
+        'This tour covers the settings panel on the right, field by field, then the application grid, the launch console and the buttons of the top bar.',
+      ],
+      hint: 'Esc closes the tutorial at any time. The page stays usable during the tour.',
+    },
+    'settings-panel': {
+      chapter: '1. Settings',
+      title: 'The right panel: fill it in once',
+      body: [
+        'These five or six fields are ALL that VisionNexus needs to know. They are saved in your Windows profile and read again at every start.',
+        'Until they are complete, no application can be launched: the tiles on the left stay greyed out.',
+      ],
+    },
+    bars: {
+      chapter: '1. Settings',
+      title: 'The status banner',
+      body: [
+        'Orange banner: at least one required field is missing (user, workspace, root, conda). Green banner: everything is set, applications can be launched.',
+        'This is the first place to look when a tile does not react to a click.',
+      ],
+    },
+    'f-user': {
+      chapter: '1. Settings',
+      title: 'User',
+      body: [
+        'Your identifier in the suite. It names your workspace, signs your exports and runs, and it is the name shown in the list of connected users of Annotation App.',
+        'It is not the SSH account: the SSH connection uses the VM name as typed in the list (for example user@host).',
+      ],
+    },
+    'f-ws': {
+      chapter: '1. Settings',
+      title: 'Workspace',
+      body: [
+        'The folder where ALL applications write: projects, databases, exports, training runs, settings of each app.',
+        'Changing workspace changes the whole working context: it is the right way to keep two projects apart. Two people can also share one workspace.',
+        'Mind the direction of the path: Windows (D:\\ws) when working locally, Linux path (/data/ws) when targeting a VM.',
+      ],
+    },
+    'f-root': {
+      chapter: '1. Settings',
+      title: 'Computer_Vision_App root',
+      body: [
+        'The folder of the suite source code, as seen by the MACHINE THAT RUNS IT. Locally it is a Windows path; on a VM, the Linux path of the repository deployed there.',
+        'This is the most common mix-up: the help message under the field changes depending on whether a VM is selected, trust it.',
+      ],
+    },
+    'f-conda': {
+      chapter: '1. Settings',
+      title: 'Conda path',
+      body: [
+        'The Python environment that holds the dependencies (PyTorch, FastAPI, SAM2...). VisionNexus activates it before starting a backend.',
+        'Same rule as the other paths: the one on the machine that runs the code, not the one on your PC when you launch on a VM.',
+      ],
+    },
+    'f-vm': {
+      chapter: '1. Settings',
+      title: 'Target VM and known VMs',
+      body: [
+        '"(local, no VM)" runs everything on your PC. Choosing a VM sends every launch through SSH: the computation happens there, on its GPU, and the interface is displayed here.',
+        'The field below is the list of your machines: one name, or several separated by commas. They feed the drop-down menu.',
+        'Reminder: switching between local and VM means checking workspace, root and conda again, because they are not the same paths.',
+      ],
+    },
+    'f-mount': {
+      chapter: '1. Settings',
+      title: 'Native network share (optional)',
+      body: [
+        'A performance field, for VM work only. When it is filled in, compatible applications read images DIRECTLY from this network share instead of sending them through the SSH connection, which is much faster on large datasets.',
+        'The Test button checks that the host answers and lists the reachable areas. If it fails nothing breaks: applications fall back to the usual HTTP transport.',
+        "Leave it empty if you are unsure: it is a pure bonus.",
+      ],
+    },
+    save: {
+      chapter: '1. Settings',
+      title: 'Save',
+      body: [
+        'Writes the settings to your Windows user profile (Roaming folder). They are tied to you and to this PC, and survive application updates.',
+        'The status banner refreshes right after saving.',
+      ],
+    },
+    tiles: {
+      chapter: '2. Launching an application',
+      title: 'The application grid',
+      body: [
+        'The diagram shows the real chain: the Orchestrator and the seven applications that follow one another, plus the standalone application on its own.',
+        'One click on a tile starts the application: VisionNexus allocates the ports, starts the backend then the frontend, waits for them to answer, and opens a tab. A launch console then opens right below; we will see it in action at the end of this tour.',
+        'A tile marked "native" can use the network share from the previous setting.',
+      ],
+    },
+    tabstrip: {
+      chapter: '3. The top bar',
+      title: 'Tabs and layouts',
+      body: [
+        'Each open application becomes a tab next to the VisionNexus tab. A tab can be dragged out of the bar to become an independent window, and dropped back on the bar to return.',
+        'The four small icons on the right split the window: one view, two side by side, two stacked, or four in a grid, enough to annotate and watch training at the same time.',
+        'Right-click a tab: copy its URL, or open it in a real browser.',
+      ],
+    },
+    ports: {
+      chapter: '3. The top bar',
+      title: 'Ports',
+      body: [
+        'Lists the TCP ports in listening state, locally and on the VM, with the process holding them. It is the housekeeping tool: spot a backend lingering after an abrupt close and kill it before they pile up.',
+        '"Stop all" stops everything the suite has started in one go.',
+      ],
+    },
+    'sidebar-btn': {
+      chapter: '3. The top bar',
+      title: 'Sidebar',
+      body: 'Hides or shows the sidebar of the displayed application (Ctrl+B): a few dozen pixels gained on a tight screen, without closing anything.',
+    },
+    'logs-doc-btn': {
+      chapter: '3. The top bar',
+      title: 'Logs and Documentation',
+      body: [
+        'Logs opens the folder of the log files on disk, useful to attach a full trace to a bug report.',
+        'Documentation opens the embedded documentation of the suite, application by application, in its own window.',
+      ],
+    },
+    menus: {
+      chapter: '3. The top bar',
+      title: 'The menus',
+      body: 'File to quit cleanly (launched applications are stopped with it), Help for the documentation, the logs folder and the developer tools in case of a display problem.',
+    },
+    'example-launch': {
+      chapter: '4. A real launch',
+      title: "Let's launch Annotation App",
+      body: [
+        'Enough theory: click Next and the tutorial really starts Annotation App, as if you clicked its tile.',
+        'The colored dot on the tile follows the state: blinking blue while starting, green when the application answers.',
+      ],
+    },
+    'example-logs': {
+      chapter: '4. A real launch',
+      title: 'The launch console',
+      body: [
+        'This is the raw output of the backend and the frontend, live. Each launched application has its own tab here, with its status line (starting, online, stopped) and its Stop button, which closes it cleanly instead of leaving an orphan.',
+        'This is where a real problem shows up: port already in use, missing Python module, SSH refusal, wrong conda path.',
+      ],
+    },
+    'example-logs-file': {
+      chapter: '4. A real launch',
+      title: 'These logs are saved on disk',
+      body: [
+        'The console is only a mirror: everything is written continuously to .log files, one per application launch. This button opens the folder that holds them (it is also in the Help menu).',
+        'In case of a bug, THIS file is the one to collect and send to the application author: it holds the full trace, far beyond the last lines visible here.',
+      ],
+    },
+    'example-tab': {
+      chapter: '4. A real launch',
+      title: 'The application tab, next to VisionNexus',
+      body: [
+        'As soon as the application answers, its tab appears here, right of the VisionNexus tab: one click switches to it, one click on the VisionNexus tab brings you back to this screen.',
+        'Annotation App has its OWN interactive tutorial: an orange button on its home page that builds a demo project end to end. So does Dataset Explorer.',
+        'Click its tab whenever you like: this tour is over.',
+      ],
+    },
+    done: {
+      chapter: 'Done',
+      title: 'You know how to launch the suite',
+      body: [
+        'Settings filled in once, tile clicked, tab opened, logs at hand: that is the whole VisionNexus cycle.',
+        'Each application has its own interactive tutorial, available from its orange button once opened.',
+        'This tour can be replayed with the Tutorial button of the top bar.',
+      ],
+    },
+  }
+
+  function localizedSteps() {
+    if (isFr()) return NEXUS_STEPS.map((st) => Object.assign({}, st))
+    return NEXUS_STEPS.map((st) => Object.assign({}, st, EN_STEPS[st.id] || {}))
+  }
+
   // ---- Bouton d'entree --------------------------------------------------
   const TUTORIAL_KEY = 'nexus'
 
@@ -574,12 +761,12 @@
     const state = await readState()
     if (state && !state.launchedOnce) btn.classList.add('glow')
     btn.title = state && !state.launchedOnce
-      ? 'Decouvrir VisionNexus : reglages, lancement, onglets'
-      : 'Relancer le tutoriel de VisionNexus'
+      ? L('Decouvrir VisionNexus : reglages, lancement, onglets', 'Discover VisionNexus: settings, launching, tabs')
+      : L('Relancer le tutoriel de VisionNexus', 'Replay the VisionNexus tutorial')
     btn.addEventListener('click', () => {
       btn.classList.remove('glow')
       void writeState({ launchedOnce: true })
-      CvTour.start(NEXUS_STEPS, {
+      CvTour.start(localizedSteps(), {
         onFinish: () => { void writeState({ completed: true }) },
       })
     })

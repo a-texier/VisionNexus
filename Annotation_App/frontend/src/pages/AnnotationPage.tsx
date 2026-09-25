@@ -125,13 +125,15 @@ const readAnnotationFolder = async (dirEntry: unknown): Promise<File[]> => {
 
 // ---- Définition des outils ----
 
-const TOOLS: { id: ToolType; label: string; icon: React.ReactNode; shortcut: string }[] = [
-  { id: 'select', label: 'Sélection', icon: <MousePointer size={15} />, shortcut: 'V' },
-  { id: 'pan', label: 'Panorama', icon: <Hand size={15} />, shortcut: 'Space' },
+// `shortcut` doit rester celui de useKeyboardShortcuts.ts (A = Sélection, V = mode review) ;
+// le pan se fait au clic milieu, SAM Auto n'a pas de raccourci.
+const TOOLS: { id: ToolType; label: string; icon: React.ReactNode; shortcut: string | null }[] = [
+  { id: 'select', label: 'Sélection', icon: <MousePointer size={15} />, shortcut: 'A' },
+  { id: 'pan', label: 'Panorama', icon: <Hand size={15} />, shortcut: 'Clic milieu' },
   { id: 'bbox', label: 'Rectangle', icon: <RectangleHorizontal size={15} />, shortcut: 'R' },
   { id: 'polygon', label: 'Polygone', icon: <Hexagon size={15} />, shortcut: 'P' },
   { id: 'sam_point', label: 'SAM Point', icon: <Crosshair size={15} />, shortcut: 'S' },
-  { id: 'sam_auto', label: 'SAM Auto', icon: <Wand2 size={15} />, shortcut: 'A' },
+  { id: 'sam_auto', label: 'SAM Auto', icon: <Wand2 size={15} />, shortcut: null },
 ]
 
 export const AnnotationPage: React.FC = () => {
@@ -857,7 +859,9 @@ export const AnnotationPage: React.FC = () => {
     preferBulkUndo: () => { const b = useBulkUndoStore.getState(); return b.lastActionWasBulk && b.canUndo },
     preferBulkRedo: () => { const b = useBulkUndoStore.getState(); return b.lastActionWasBulk && b.canRedo },
   }), [])
-  useKeyboardShortcuts(undefined, bulkKbd)
+  // Les touches 1-9 choisissent la classe dont `shortcut_key` correspond (sans effet sinon).
+  const kbdClasses = useMemo(() => currentProject?.classes ?? [], [currentProject?.classes])
+  useKeyboardShortcuts(kbdClasses, bulkKbd)
 
   // ---- Touche Echap : annuler SAM point ----
   useEffect(() => {
@@ -1743,9 +1747,9 @@ export const AnnotationPage: React.FC = () => {
   const currentFrame = getCurrentFrame()
   const classes = currentProject?.classes ?? []
   const textDetectionWarning = classes.length === 0
-    ? 'Creez une classe avant de lancer GD ou SAM3.'
+    ? t('Créez une classe avant de lancer GD ou SAM3.')
     : !activeClassId
-      ? 'Selectionnez une classe active avant de lancer GD ou SAM3.'
+      ? t('Sélectionnez une classe active avant de lancer GD ou SAM3.')
       : null
 
   if (!currentProject) {
@@ -1810,7 +1814,7 @@ export const AnnotationPage: React.FC = () => {
                   ? 'bg-blue-600 text-white'
                   : 'hover:bg-slate-700 text-slate-400 hover:text-white'
               }`}
-              title={`${t(label)} (${shortcut})`}
+              title={shortcut ? `${t(label)} (${t(shortcut)})` : t(label)}
             >
               {icon}
             </button>
@@ -1990,17 +1994,19 @@ export const AnnotationPage: React.FC = () => {
             {/* Panneau plage de frames */}
             {showBatchRange && (
               <div className="flex items-center gap-1.5 bg-slate-700/80 rounded px-2 py-1 flex-shrink-0">
-                <span className="text-slate-400 text-xs">{t('De F')}</span>
+                <span className="text-slate-400 text-xs" title={t('Indices de frame du projet entier, à partir de 0 (toutes séquences confondues).')}>{t('De F')}</span>
                 <input
                   type="number" min={0} max={totalFrameCount - 1}
+                  title={t('Indices de frame du projet entier, à partir de 0 (toutes séquences confondues).')}
                   value={batchStartIndex}
                   onChange={(e) => setBatchStartIndex(e.target.value)}
                   placeholder={String(currentFrameIndex)}
                   className="w-14 bg-slate-600 border border-slate-500 text-white text-xs px-1 py-0.5 rounded outline-none"
                 />
-                <span className="text-slate-400 text-xs">{t('à F')}</span>
+                <span className="text-slate-400 text-xs" title={t('Indices de frame du projet entier, à partir de 0 (toutes séquences confondues).')}>{t('à F')}</span>
                 <input
                   type="number" min={0} max={totalFrameCount - 1}
+                  title={t('Indices de frame du projet entier, à partir de 0 (toutes séquences confondues).')}
                   value={batchEndIndex}
                   onChange={(e) => setBatchEndIndex(e.target.value)}
                   placeholder={String(totalFrameCount - 1)}
@@ -2497,6 +2503,7 @@ export const AnnotationPage: React.FC = () => {
 
         {/* Panneau droit : Classes / Annots / Aide (largeur redimensionnable, non persistée) */}
         <RightPanel
+          samOutputMode={samOutputMode}
           classes={classes}
           annotations={annotations}
           tracks={sequenceTracks}

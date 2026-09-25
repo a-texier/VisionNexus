@@ -1,11 +1,14 @@
 import { MouseEvent, useEffect, useMemo, useState } from 'react'
+import { useT } from './i18n/useLang'
+import { initWorkspaceLanguage } from './i18n/translate'
+import { LanguageToggle } from './components/LanguageToggle'
 
 type Tab = 'run' | 'evaluate' | 'config'
 type Detector = { name: string; label: string; available: boolean; reason?: string }
 type MediaInfo = { kind: string; width: number; height: number; frames: number; fps: number }
 type ConfigValues = Record<string, any>
 
-const api = async <T,>(url: string, options?: RequestInit): Promise<T> => {
+export const api = async <T,>(url: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(url, options)
   const body = await response.json()
   if (!response.ok) throw new Error(body.detail ?? body.error ?? `HTTP ${response.status}`)
@@ -13,6 +16,7 @@ const api = async <T,>(url: string, options?: RequestInit): Promise<T> => {
 }
 
 export default function App() {
+  const t = useT()
   const [tab, setTab] = useState<Tab>('run')
   const [detectors, setDetectors] = useState<Detector[]>([])
   const [source, setSource] = useState('')
@@ -51,6 +55,10 @@ export default function App() {
       setYamlText(r.yaml_text)
       applyConfig(r.values)
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    initWorkspaceLanguage(() => api<{ ui_language?: string }>('/api/settings').then((s) => s.ui_language as any))
   }, [])
 
   useEffect(() => {
@@ -115,43 +123,46 @@ export default function App() {
 
   return <div className="app">
     <header>
-      <div><span className="mark">VN</span><strong>Inference</strong><small>média · YOLO · tracking</small></div>
-      <nav>{(['run','evaluate','config'] as Tab[]).map(value => <button className={tab === value ? 'active' : ''} onClick={() => setTab(value)} key={value}>{value === 'run' ? 'Inférence' : value === 'evaluate' ? 'Évaluation' : 'Config YAML'}</button>)}</nav>
+      <div><span className="mark">VN</span><strong>Inference</strong><small>{t('média · YOLO · tracking')}</small></div>
+      <nav>
+        {(['run','evaluate','config'] as Tab[]).map(value => <button className={tab === value ? 'active' : ''} onClick={() => setTab(value)} key={value}>{value === 'run' ? t('Inférence') : value === 'evaluate' ? t('Évaluation') : t('Config YAML')}</button>)}
+        <LanguageToggle />
+      </nav>
     </header>
     <main>
       <section className="sidebar">
-        <h2>Entrées</h2>
-        <Field label="Source image, vidéo ou dossier"><input value={source} onChange={e => setSource(e.target.value)} placeholder="C:\data\video.mp4" /></Field>
-        <button className="secondary" onClick={inspect}>Lire le média</button>
-        <Field label="Fichier de poids"><input value={modelPath} onChange={e => setModelPath(e.target.value)} placeholder="C:\models\best.pth" /></Field>
+        <h2>{t('Entrées')}</h2>
+        <Field label={t('Source image, vidéo ou dossier')}><input value={source} onChange={e => setSource(e.target.value)} placeholder="C:\data\video.mp4" /></Field>
+        <button className="secondary" onClick={inspect}>{t('Lire le média')}</button>
+        <Field label={t('Fichier de poids')}><input value={modelPath} onChange={e => setModelPath(e.target.value)} placeholder="C:\models\best.pth" /></Field>
         <div className="grid2">
-          <Field label="Moteur"><select value={engine} onChange={e => setEngine(e.target.value)}>{detectors.map(d => <option key={d.name} value={d.name}>{d.label}</option>)}</select></Field>
-          <Field label="Architecture"><input value={modelSize} onChange={e => setModelSize(e.target.value)} /></Field>
+          <Field label={t('Moteur')}><select value={engine} onChange={e => setEngine(e.target.value)}>{detectors.map(d => <option key={d.name} value={d.name}>{d.label}</option>)}</select></Field>
+          <Field label={t('Architecture')}><input value={modelSize} onChange={e => setModelSize(e.target.value)} /></Field>
         </div>
-        <div className="grid2"><Field label="Confiance"><input type="number" min="0" max="1" step="0.05" value={confidence} onChange={e => setConfidence(Number(e.target.value))} /></Field><Field label="NMS IoU"><input type="number" min="0" max="1" step="0.05" value={iou} onChange={e => setIou(Number(e.target.value))} /></Field></div>
+        <div className="grid2"><Field label={t('Confiance')}><input type="number" min="0" max="1" step="0.05" value={confidence} onChange={e => setConfidence(Number(e.target.value))} /></Field><Field label={t('NMS IoU')}><input type="number" min="0" max="1" step="0.05" value={iou} onChange={e => setIou(Number(e.target.value))} /></Field></div>
       </section>
 
       <section className="content">
         {error && <div className="error">{error}</div>}
         {tab === 'run' && <>
           <div className="modebar">
-            <Mode value="infer" current={mode} set={setMode} title="Inférence pure" sub="YOLO uniquement" />
-            <Mode value="mot" current={mode} set={setMode} title="Multi-objet" sub="YOLO + tracker optionnel" />
-            <Mode value="sot" current={mode} set={setMode} title="SOT par clic" sub="YOLO initialise CSRT" />
+            <Mode value="infer" current={mode} set={setMode} title={t('Inférence pure')} sub={t('YOLO uniquement')} />
+            <Mode value="mot" current={mode} set={setMode} title={t('Multi-objet')} sub={t('YOLO + tracker optionnel')} />
+            <Mode value="sot" current={mode} set={setMode} title={t('SOT par clic')} sub={t('YOLO initialise CSRT')} />
           </div>
-          {mode === 'mot' && <div className="tracker"><span>Tracker</span><button className={tracker === 'none' ? 'selected' : ''} onClick={() => setTracker('none')}>Aucun</button><button className={tracker === 'bytetrack' ? 'selected' : ''} onClick={() => setTracker('bytetrack')}>ByteTrack</button></div>}
+          {mode === 'mot' && <div className="tracker"><span>{t('Tracker')}</span><button className={tracker === 'none' ? 'selected' : ''} onClick={() => setTracker('none')}>{t('Aucun')}</button><button className={tracker === 'bytetrack' ? 'selected' : ''} onClick={() => setTracker('bytetrack')}>{t('ByteTrack')}</button></div>}
           <div className="viewer">
-            {media ? <div className="imagewrap"><img src={previewUrl} onClick={chooseTarget} className={mode === 'sot' ? 'targetable' : ''} />{click && <span className="cross" style={{left: `${click.x*100}%`, top: `${click.y*100}%`}}>+</span>}</div> : <div className="empty">Indique une source puis clique « Lire le média ».</div>}
+            {media ? <div className="imagewrap"><img src={previewUrl} onClick={chooseTarget} className={mode === 'sot' ? 'targetable' : ''} />{click && <span className="cross" style={{left: `${click.x*100}%`, top: `${click.y*100}%`}}>+</span>}</div> : <div className="empty">{t('Indique une source puis clique « Lire le média ».')}</div>}
             {media && <div className="mediaInfo">{media.kind} · {media.width}×{media.height} · {media.frames} frame(s) · {media.fps.toFixed(1)} fps</div>}
           </div>
-          <button className="primary" disabled={busy || !media || !modelPath || (mode === 'sot' && !click)} onClick={run}>{busy ? 'Traitement…' : 'Lancer'}</button>
+          <button className="primary" disabled={busy || !media || !modelPath || (mode === 'sot' && !click)} onClick={run}>{busy ? t('Traitement…') : t('Lancer')}</button>
           {job?.status === 'done' && <Result result={job} />}
         </>}
         {tab === 'evaluate' && <>
-          <div className="panel"><h2>Évaluation détection</h2><p>Validation YOLO sur le split <code>val</code>, avec mAP50, mAP50–95, PR, F1 et matrice de confusion.</p><Field label="data.yaml"><input value={dataYaml} onChange={e => setDataYaml(e.target.value)} placeholder="C:\dataset\data.yaml" /></Field><button className="primary" disabled={busy || !dataYaml || !modelPath} onClick={evaluate}>{busy ? 'Évaluation…' : 'Évaluer'}</button></div>
+          <div className="panel"><h2>{t('Évaluation détection')}</h2><p>{t('Validation YOLO sur le split ')}<code>val</code>{t(', avec mAP50, mAP50–95, PR, F1 et matrice de confusion.')}</p><Field label="data.yaml"><input value={dataYaml} onChange={e => setDataYaml(e.target.value)} placeholder="C:\dataset\data.yaml" /></Field><button className="primary" disabled={busy || !dataYaml || !modelPath} onClick={evaluate}>{busy ? t('Évaluation…') : t('Évaluer')}</button></div>
           {evalResult && <EvalResult result={evalResult} />}
         </>}
-        {tab === 'config' && <div className="panel"><h2>Configuration YAML</h2><p>Cette copie est enregistrée dans le workspace utilisateur. Après enregistrement, ses valeurs sont appliquées au prochain run et restent disponibles au nœud Orchestrator.</p><textarea value={yamlText} onChange={e => setYamlText(e.target.value)} spellCheck={false}/><button className="primary" onClick={saveConfig}>Enregistrer et appliquer</button></div>}
+        {tab === 'config' && <div className="panel"><h2>{t('Configuration YAML')}</h2><p>{t("Cette copie est enregistrée dans le workspace utilisateur. Après enregistrement, ses valeurs sont appliquées aux prochains runs lancés depuis cette interface.")}</p><textarea value={yamlText} onChange={e => setYamlText(e.target.value)} spellCheck={false}/><button className="primary" onClick={saveConfig}>{t('Enregistrer et appliquer')}</button></div>}
       </section>
     </main>
   </div>
@@ -160,5 +171,13 @@ export default function App() {
 function Field({label, children}: {label: string; children: React.ReactNode}) { return <label className="field"><span>{label}</span>{children}</label> }
 function Mode({value,current,set,title,sub}: {value:'infer'|'mot'|'sot';current:string;set:(v:'infer'|'mot'|'sot')=>void;title:string;sub:string}) { return <button className={current === value ? 'mode selected' : 'mode'} onClick={() => set(value)}><strong>{title}</strong><small>{sub}</small></button> }
 function outputUrl(path: string) { return `/api/output?path=${encodeURIComponent(path)}` }
-function Result({result}: {result: Record<string, any>}) { const video = String(result.output_path || '').toLowerCase().endsWith('.mp4'); return <div className="result"><div className="stats"><b>{result.frames}</b><span>frames</span><b>{result.fps.toFixed(1)}</b><span>fps global</span><b>{result.detector_ms_per_frame.toFixed(1)} ms</b><span>détecteur</span><b>{result.tracker_ms_per_frame.toFixed(2)} ms</b><span>tracker</span></div>{result.output_path && (video ? <video controls src={outputUrl(result.output_path)} /> : <img src={outputUrl(result.output_path)} />)}</div> }
-function EvalResult({result}: {result: Record<string, any>}) { const m=result.metrics; return <div className="result"><div className="stats"><b>{(m.map50*100).toFixed(1)}%</b><span>mAP50</span><b>{(m.map50_95*100).toFixed(1)}%</b><span>mAP50–95</span><b>{m.images}</b><span>images</span><b>{m.fps.toFixed(1)}</b><span>fps</span></div><div className="plots">{['pr_curve.png','f1_curve.png','confusion_matrix.png'].map(name => <img key={name} src={outputUrl(`${result.run_dir}/${name}`)} />)}</div></div> }
+function Result({result}: {result: Record<string, any>}) {
+  const t = useT()
+  const video = String(result.output_path || '').toLowerCase().endsWith('.mp4')
+  return <div className="result"><div className="stats"><b>{result.frames}</b><span>{t('frames')}</span><b>{result.fps.toFixed(1)}</b><span>{t('fps global')}</span><b>{result.detector_ms_per_frame.toFixed(1)} ms</b><span>{t('détecteur')}</span><b>{result.tracker_ms_per_frame.toFixed(2)} ms</b><span>{t('tracker')}</span></div>{result.output_path && (video ? <video controls src={outputUrl(result.output_path)} /> : <img src={outputUrl(result.output_path)} />)}</div>
+}
+function EvalResult({result}: {result: Record<string, any>}) {
+  const t = useT()
+  const m = result.metrics
+  return <div className="result"><div className="stats"><b>{(m.map50*100).toFixed(1)}%</b><span>{t('mAP50')}</span><b>{(m.map50_95*100).toFixed(1)}%</b><span>{t('mAP50–95')}</span><b>{m.images}</b><span>{t('images')}</span><b>{m.fps.toFixed(1)}</b><span>{t('fps')}</span></div><div className="plots">{['pr_curve.png','f1_curve.png','confusion_matrix.png'].map(name => <img key={name} src={outputUrl(`${result.run_dir}/${name}`)} />)}</div></div>
+}

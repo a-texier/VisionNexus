@@ -26,7 +26,6 @@ running in offline mode.
 | SAM3.1 multiplex | `Annotation_App/backend/checkpoints/sam3.1/sam3.1_multiplex.pt` and the JSON/tokenizer files from the same snapshot | gated HF repo `facebook/sam3.1` |
 | XFeat | `Annotation_App/backend/models/xfeat/weights/xfeat.pt` | `verlab/accelerated_features` repo |
 | LightGlue for XFeat | `Annotation_App/backend/models/xfeat/weights/xfeat-lighterglue.pt` | `verlab/accelerated_features` repo |
-| Optional YOLO detector | path configured in Settings, or a `.pt/.onnx/.engine` file placed in the workspace | model trained by Training App |
 
 Assisted download from `Annotation_App/`:
 
@@ -76,6 +75,36 @@ For Mask2Former, CLIP and BLIP-2, download the indicated snapshot on a
 connected machine, then copy the whole folder to keep the configs,
 tokenizers and weights together.
 
+## Docs Assistant
+
+The source of truth for paths is `Docs_Assistant_App/backend/model_paths.py`.
+The embedding model is loaded offline (`HF_HUB_OFFLINE=1`); nothing is
+downloaded when the service runs.
+
+| Purpose | Expected file or folder | Source |
+|---|---|---|
+| Multilingual embeddings (default, 384 dim, about 470 MB) | full folder `Docs_Assistant_App/backend/models/multilingual-e5-small/` (`config.json`, tokenizer files, `model.safetensors`) | HF repo `intfloat/multilingual-e5-small` (MIT) |
+| Optional larger model (768 dim, about 1.1 GB) | full folder `Docs_Assistant_App/backend/models/multilingual-e5-base/` | HF repo `intfloat/multilingual-e5-base` (MIT) |
+
+Assisted download from `Docs_Assistant_App/`, only the needed files (no ONNX,
+OpenVINO or TensorFlow copies):
+
+```bash
+python scripts/download_model.py            # multilingual-e5-small
+python scripts/download_model.py --all      # small and base
+```
+
+`DOCS_ASSISTANT_MODEL` selects the model and `DOCS_ASSISTANT_MODEL_DIR`
+overrides the folder. Without weights the service still answers, with keyword
+search only.
+
+The search index (passages and embeddings) is neither published nor shipped in
+the bundles: the service builds it on first launch from the docs present on the
+machine, in a few tens of seconds on GPU, and refreshes it when a page changes.
+`python scripts/build_seed.py` can still produce a prebuilt index
+(`Docs_Assistant_App/data/seed_index.sqlite`) for an internal deployment; it is
+a build artifact, not a weight file.
+
 ## Training and Optuna
 
 In-house YOLOX training engine (`Training_App/backend/services/yolox_trainer.py`,
@@ -96,6 +125,7 @@ Orchestrator, DVC and MLflow have no model weights of their own.
 ```bash
 python Annotation_App/backend/tests/download_all_models.py --skip-sam3
 python -c "from pathlib import Path; assert Path('Dataset_Explorer_App/models/ViT-B-32-openai.safetensors').is_file()"
+python -c "from pathlib import Path; assert Path('Docs_Assistant_App/backend/models/multilingual-e5-small/model.safetensors').is_file()"
 python -c "from pathlib import Path; assert Path(r'<YOUR_YOLO_CHECKPOINT>').is_file()"
 ```
 

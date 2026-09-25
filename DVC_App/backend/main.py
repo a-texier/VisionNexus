@@ -17,6 +17,7 @@ from backend.api import commits as commits_router
 from backend.api import sync as sync_router
 from backend.api import settings as settings_router
 from backend.api import orchestrator as orchestrator_router
+from backend.api import docs as docs_router
 from backend.config import CORS_ORIGINS, DVC_REPO_PATH
 from backend.core.dvc_runner import repo_exists
 
@@ -58,12 +59,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Jeton de session par instance (cf. _lib/session_auth.py). Installe apres le
+# CORS pour l'envelopper : une requete sans jeton s'arrete avant toute route.
+def _install_session_auth() -> None:
+    import os
+    import sys
+    from pathlib import Path
+
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.append(root)
+    try:
+        from _lib.session_auth import install_session_auth
+    except ImportError:
+        # App extraite seule : toleree sans jeton, jamais avec (backend ouvert).
+        if os.environ.get("CV_SESSION_TOKEN"):
+            raise
+        return
+    install_session_auth(app)
+
+
+_install_session_auth()
+
+
 # Routers — routes spécifiques avant génériques
 app.include_router(datasets_router.router)
 app.include_router(commits_router.router)
 app.include_router(sync_router.router)
 app.include_router(settings_router.router)
 app.include_router(orchestrator_router.router)
+app.include_router(docs_router.router)
 
 
 @app.get("/health")
